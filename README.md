@@ -25,7 +25,7 @@ Every team has three ratings from 40 to 99:
 Simulated games play out every plate appearance. Hitting (OFF) faces pitching (PIT) and fielding (DEF), and each plate appearance ends in a strikeout, walk, hit-by-pitch, single, double, triple, home run, error or out. Runners advance, double plays happen and sacrifice flies score runs.
 
 - **NCAA rules:** 7 innings, the home team skips its last at-bat when already ahead, walk-offs, the **8-run rule after 5 innings**, and extra innings starting with a **runner on second** from the 8th inning. Both rules can be turned off in Settings.
-- **Pitching staffs:** each team has four pitchers: Friday, Saturday and Sunday starters plus a midweek arm who also relieves. Starters get pulled when they tire or get hit hard. Each sim records pitching lines and the **winning, losing and saving pitchers**. Pitcher names can be edited on the team page.
+- **Pitching staffs:** each team has four pitchers: Friday, Saturday and Sunday starters plus a midweek arm who also relieves. Starters get pulled when they tire or get hit hard. Each sim records a pitching line for everyone who pitched. Pitcher names can be edited on the team page.
 - **Results:** a full line score (runs by inning, R/H/E). Teams average about 4 runs, 7 hits and 1 error a game. A team 10 points better wins about 73% of the time, and one 20 points better about 88%. Settings has an **Upsets** option (Fewer, Realistic, More, Chaos).
 - **Simulations are suggestions:** in the game editor you can simulate, change anything, and then save. You can also type in a line score by hand.
 

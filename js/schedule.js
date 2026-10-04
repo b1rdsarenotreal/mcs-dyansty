@@ -13,7 +13,7 @@ export function blankGame(season, fields) {
   return {
     id: season.nextId++, type: 'regular', week: 1, day: 'Fri', order: DAY_ORDER.Fri,
     home: null, away: null, neutral: false, confGame: false, series: null, label: '',
-    final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, wp: null, lp: null, sv: null,
+    final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null,
     pitching: null, source: null, ...fields,
   };
 }

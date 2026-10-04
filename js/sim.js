@@ -1,7 +1,6 @@
 // Softball game simulator. Plays every plate appearance from the teams'
 // OFF (hitting), PIT (pitching) and DEF (fielding) ratings and returns a full
-// line score: runs by inning, R/H/E, pitching lines, and the winning, losing
-// and saving pitchers. NCAA rules: 7 innings, 8-run rule after 5, and from
+// line score: runs by inning, R/H/E, and pitching lines. NCAA rules: 7 innings, 8-run rule after 5, and from
 // the 8th inning each half starts with a runner on second.
 // A simulation is only a suggestion — the commissioner reviews and saves it.
 
@@ -96,7 +95,6 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
     st.lines.push(st.cur);
   }
 
-  let goAhead = null;
   let gameOver = false, runRuleEnd = false;
   const score = () => ({ home: sides.home.R, away: sides.away.R });
 
@@ -110,9 +108,7 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
 
     const scoreRuns = n => {
       for (let i = 0; i < n; i++) {
-        const before = bat.R - fld.R;
         bat.R++; runs++; fld.cur.r++;
-        if (before === 0) goAhead = { side: batSide, winP: bat.cur, loseP: fld.cur };
         if (batSide === 'home' && inning >= 7 && bat.R > fld.R) gameOver = true; // walk-off
         if (runRule && batSide === 'home' && inning >= 5 && bat.R - fld.R >= 8) { gameOver = true; runRuleEnd = true; }
       }
@@ -184,28 +180,12 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
     if (inning >= 7 && t.home !== t.away) break;
   }
 
-  // Pitchers of record.
-  const winSide = sides.home.R > sides.away.R ? 'home' : 'away';
-  const loseSide = winSide === 'home' ? 'away' : 'home';
-  const W = sides[winSide], L = sides[loseSide];
-  const ga = goAhead && goAhead.side === winSide ? goAhead : { winP: W.lines[0], loseP: L.lines[0] };
-  let wp = ga.winP;
-  const fullGame = sides.away.innings.length >= 5;
-  if (wp.starter && wp.outs < 12 && fullGame && W.lines.length > 1) {
-    // A starter needs 4 innings for the win; otherwise the most effective reliever gets it.
-    wp = W.lines.slice(1).sort((a, b) => (b.outs - b.r * 3) - (a.outs - a.r * 3))[0];
-  }
-  const last = W.lines[W.lines.length - 1];
-  const margin = W.R - L.R;
-  const sv = last !== wp && margin <= 3 && last.outs >= 1 ? last.name : null;
-
   const line = st => st.lines.map(({ name, outs, h, r: runs, bb, k }) => ({ name, outs, h, r: runs, bb, k }));
   return {
     homeLine: sides.home.innings, awayLine: sides.away.innings,
     home: { R: sides.home.R, H: sides.home.H, E: sides.home.E },
     away: { R: sides.away.R, H: sides.away.H, E: sides.away.E },
     pitching: { home: line(sides.home), away: line(sides.away) },
-    wp: wp.name, lp: ga.loseP.name, sv,
     innings: sides.away.innings.length, runRule: runRuleEnd,
   };
 }

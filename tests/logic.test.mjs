@@ -48,7 +48,7 @@ console.log('Big Ten', confStandings(s, 'Big Ten').map(x => `${x.team} ${x.cw}-$
 const g = s.games.filter(x => x.type === 'regular');
 const avg = k => (g.reduce((a, x) => a + x['home' + k] + x['away' + k], 0) / g.length / 2).toFixed(2);
 console.log('per team per game: R', avg('R'), 'H', avg('H'), 'E', avg('E'), 'run-rule', (g.filter(x => x.runRule).length / g.length).toFixed(3), 'extras', (g.filter(x => x.awayLine.length > 7).length / g.length).toFixed(3));
-for (const x of s.games) { assert.ok(x.wp && x.lp, 'pitchers of record'); assert.equal(x.homeLine.reduce((a, b) => a + (b || 0), 0), x.homeR); }
+for (const x of s.games) { assert.equal(x.homeLine.reduce((a, b) => a + (b || 0), 0), x.homeR); }
 
 // Commissioner edits and a second season
 addConference(league, 'Summit');

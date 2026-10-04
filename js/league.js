@@ -43,13 +43,12 @@ export function applyResult(g, res, source = 'sim') {
   g.homeLine = res.homeLine; g.awayLine = res.awayLine;
   g.homeR = res.home.R; g.homeH = res.home.H; g.homeE = res.home.E;
   g.awayR = res.away.R; g.awayH = res.away.H; g.awayE = res.away.E;
-  g.wp = res.wp ?? null; g.lp = res.lp ?? null; g.sv = res.sv ?? null;
   g.pitching = res.pitching ?? null; g.runRule = !!res.runRule;
   g.final = true; g.source = source;
 }
 
 export function clearResult(g) {
-  Object.assign(g, { final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, wp: null, lp: null, sv: null, pitching: null, source: null, runRule: false });
+  Object.assign(g, { final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, pitching: null, source: null, runRule: false });
 }
 
 export function simResult(season, g, seed) {

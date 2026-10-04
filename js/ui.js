@@ -160,7 +160,6 @@ export function gameCard(g) {
   if (fin) {
     const inn = Math.max(g.homeLine.length, g.awayLine.length);
     meta += `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>${g.source ? `<span class="badge ${g.source}">${g.source}</span>` : ''}`;
-    if (g.wp) meta += `<span class="pit">W: ${esc(g.wp)}${g.lp ? ` · L: ${esc(g.lp)}` : ''}${g.sv ? ` · S: ${esc(g.sv)}` : ''}</span>`;
   } else if (g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
     const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
     const fav = wp >= 0.5 ? g.home : g.away;
@@ -193,7 +192,7 @@ export function bindGameCards(root = app) {
 export function openGame(id, { isNew = false } = {}) {
   const s = S(), g = s.games.find(x => x.id === id);
   if (!g) return;
-  let source = g.source, pitching = g.pitching, simPicks = null;
+  let source = g.source, pitching = g.pitching;
   let n = Math.max(7, g.homeLine.length, g.awayLine.length);
   const regular = g.type === 'regular';
   const cellVal = (arr, i) => (isFinal(g) && i < arr.length ? (arr[i] === null ? '' : arr[i]) : '');
@@ -213,7 +212,6 @@ export function openGame(id, { isNew = false } = {}) {
       <div class="table-wrap"><div class="lsgrid" id="m-grid"></div></div>
       <div class="row"><button class="btn sm" id="m-addinn">+ Extra inning</button><button class="btn sm" id="m-delinn">− Inning</button>
         <span class="small muted">Leave the home team's last inning blank for an "X" (they didn't need to bat).</span></div>
-      <div class="row" id="m-pitchers"></div>
       <div id="m-preview"></div>
       <div id="m-box"></div>
     </div>
@@ -231,7 +229,6 @@ export function openGame(id, { isNew = false } = {}) {
     away: regular ? $('#m-away', modal).value : g.away,
     neutral: regular ? $('#m-neutral', modal).checked : g.neutral,
   });
-  const staffOpts = (t, sel, blank = true) => (blank ? '<option value="">—</option>' : '') + (s.teams[t]?.staff || []).map(p => `<option ${p === sel ? 'selected' : ''}>${esc(p)}</option>`).join('');
 
   // Line score grid. Values are kept across redraws (adding innings).
   const values = { away: g.awayLine.map((_, i) => cellVal(g.awayLine, i)), home: g.homeLine.map((_, i) => cellVal(g.homeLine, i)), awayH: g.awayH ?? '', awayE: g.awayE ?? '', homeH: g.homeH ?? '', homeE: g.homeE ?? '' };
@@ -268,11 +265,6 @@ export function openGame(id, { isNew = false } = {}) {
     $('#m-starters', modal).innerHTML = pick('away') + pick('home');
     $$('[data-starter]', modal).forEach(sel => (sel.onchange = () => { const v = sel.value === '' ? null : Number(sel.value); if (sel.dataset.starter === 'home') g.homeStarter = v; else g.awayStarter = v; refresh(); }));
   };
-  const drawPitchers = (picks = { wp: g.wp, lp: g.lp, sv: g.sv }) => {
-    const t = cur();
-    const both = sel => `<option value="">—</option>${[t.away, t.home].filter(Boolean).map(tm => `<optgroup label="${esc(tm)}">${staffOpts(tm, sel, false)}</optgroup>`).join('')}`;
-    $('#m-pitchers', modal).innerHTML = ['wp', 'lp', 'sv'].map(k => `<label class="field" style="flex:1;min-width:130px">${{ wp: 'Winning pitcher', lp: 'Losing pitcher', sv: 'Save' }[k]} <select id="m-${k}">${both(picks[k])}</select></label>`).join('');
-  };
   const refresh = () => {
     const t = cur(), prev = $('#m-preview', modal);
     if (t.home && t.away && s.teams[t.home] && s.teams[t.away] && t.home !== t.away) {
@@ -293,13 +285,13 @@ export function openGame(id, { isNew = false } = {}) {
     box.innerHTML = `<div class="box-grid">${tbl('away')}${tbl('home')}</div>`;
   };
 
-  drawGrid(); drawStarters(); drawPitchers(); refresh();
+  drawGrid(); drawStarters(); refresh();
 
   if (regular) {
     const onTeams = () => {
       const t = cur();
       if (t.home && t.away && s.teams[t.home] && s.teams[t.away]) $('#m-conf', modal).checked = s.teams[t.home].conference === s.teams[t.away].conference;
-      drawGrid(); drawStarters(); drawPitchers(); refresh();
+      drawGrid(); drawStarters(); refresh();
     };
     $('#m-home', modal).onchange = onTeams; $('#m-away', modal).onchange = onTeams;
     $('#m-neutral', modal).onchange = refresh;
@@ -320,8 +312,8 @@ export function openGame(id, { isNew = false } = {}) {
     values.away = res.awayLine.map(v => (v === null ? '' : v));
     values.home = res.homeLine.map(v => (v === null ? '' : v));
     Object.assign(values, { awayH: res.away.H, awayE: res.away.E, homeH: res.home.H, homeE: res.home.E });
-    pitching = res.pitching; source = 'sim'; simPicks = { wp: res.wp, lp: res.lp, sv: res.sv };
-    drawGrid(); drawPitchers(simPicks); refresh();
+    pitching = res.pitching; source = 'sim';
+    drawGrid(); refresh();
   };
   if ($('#m-clear', modal)) $('#m-clear', modal).onclick = () => { clearResult(g); modal.close(); changed(); toast('Result cleared.'); };
   if ($('#m-del', modal)) $('#m-del', modal).onclick = () => {
@@ -350,14 +342,10 @@ export function openGame(id, { isNew = false } = {}) {
       g.week = Math.max(1, Math.min(14, Number($('#m-week', modal).value) || g.week));
       g.day = $('#m-day', modal).value; g.order = DAY_ORDER[g.day];
     }
-    const winSide = hr > ar ? 'home' : 'away', loseSide = winSide === 'home' ? 'away' : 'home';
-    const starter = side => slotName(t[side], side);
-    const pick = k => $(`#m-${k}`, modal).value || null;
     applyResult(g, {
       homeLine, awayLine,
       home: { R: hr, H: Number(values.homeH || 0), E: Number(values.homeE || 0) },
       away: { R: ar, H: Number(values.awayH || 0), E: Number(values.awayE || 0) },
-      wp: pick('wp') || starter(winSide), lp: pick('lp') || starter(loseSide), sv: pick('sv'),
       pitching: source === 'sim' ? pitching : null,
       runRule: n < 7,
     }, source === 'sim' ? 'sim' : 'manual');

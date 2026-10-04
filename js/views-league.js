@@ -78,16 +78,12 @@ function teamForm() {
 function pitcherStats(s, school) {
   const out = {};
   const t = s.teams[school];
-  for (const name of t?.staff || []) out[name] = { w: 0, l: 0, sv: 0, outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0 };
+  for (const name of t?.staff || []) out[name] = { outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0 };
   for (const g of s.games) {
     if (!isFinal(g) || (g.home !== school && g.away !== school)) continue;
     const side = g.home === school ? 'home' : 'away';
-    const won = winnerOf(g) === school;
-    const ensure = n => (out[n] ||= { w: 0, l: 0, sv: 0, outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0, former: true });
+    const ensure = n => (out[n] ||= { outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0, former: true });
     for (const p of g.pitching?.[side] || []) { const x = ensure(p.name); x.outs += p.outs; x.h += p.h; x.r += p.r; x.bb += p.bb; x.k += p.k; x.app++; }
-    if (won && g.wp) ensure(g.wp).w++;
-    if (!won && g.lp) ensure(g.lp).l++;
-    if (won && g.sv) ensure(g.sv).sv++;
   }
   return out;
 }
@@ -142,21 +138,20 @@ export function renderTeamPage(name) {
         ${pollRow.length ? `<div class="small muted">Poll: ${pollRow.map(([w, k]) => `<span title="${w === 'final' ? 'Final' : w === '0' ? 'Preseason' : 'Week ' + w}">${w === 'final' ? 'F' : w === '0' ? 'P' : w}:<b>${k ?? '–'}</b></span>`).join(' ')}</div>` : ''}
       </div>
     </div>
-    <div class="card" style="margin-top:16px"><h2>Schedule & results</h2><div class="table-wrap"><table><thead><tr><th>Wk</th><th>Day</th><th>Opponent</th><th>Result</th><th class="small">Decision</th></tr></thead><tbody>
+    <div class="card" style="margin-top:16px"><h2>Schedule & results</h2><div class="table-wrap"><table><thead><tr><th>Wk</th><th>Day</th><th>Opponent</th><th>Result</th></tr></thead><tbody>
         ${games.map(g => {
           const home = g.home === name, opp = home ? g.away : g.home;
           const fin = isFinal(g), won = fin && winnerOf(g) === name;
           const inn = Math.max(g.homeLine.length, g.awayLine.length);
           const res = fin ? `<b class="${won ? 'good' : 'bad'}">${won ? 'W' : 'L'}</b> ${home ? g.homeR : g.awayR}-${home ? g.awayR : g.homeR}${inn !== 7 ? ` <span class="muted small">(${inn})</span>` : ''}` : '<span class="muted">—</span>';
-          const dec = fin ? (won ? `W: ${esc(g.wp || '')}` : `L: ${esc(g.lp || '')}`) : '';
           return `<tr class="clickable" data-g="${g.id}"><td class="small">${g.week > 14 ? esc(weekName(g.week).replace('Conf. Tournaments', 'Conf T')) : g.week}</td><td class="small">${esc(g.day)}</td>
-            <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp)}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td><td class="small muted">${dec}</td></tr>`;
-        }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game</p></div>
+            <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp)}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
+        }).join('') || '<tr><td colspan="4" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game</p></div>
     <div class="grid" style="margin-top:16px">
-      <div class="card"><h2>Pitching staff</h2><div class="table-wrap"><table><thead><tr><th>Pitcher</th><th class="num">W-L</th><th class="num">SV</th><th class="num">IP</th><th class="num">H</th><th class="num">R</th><th class="num">BB</th><th class="num">K</th><th class="num">RA/7</th></tr></thead><tbody>
+      <div class="card"><h2>Pitching staff</h2><div class="table-wrap"><table><thead><tr><th>Pitcher</th><th class="num">APP</th><th class="num">IP</th><th class="num">H</th><th class="num">R</th><th class="num">BB</th><th class="num">K</th><th class="num">RA/7</th></tr></thead><tbody>
         ${Object.entries(ps).map(([n, x]) => { const i = t.staff?.indexOf(n) ?? -1; return `<tr><td>${inSeason && i >= 0 ? `<input type="text" class="pin" data-p="${i}" value="${esc(n)}"><div class="small muted">${ROLES[i]}</div>` : `${esc(n)} <span class="muted small">${x.former ? '(no longer on staff)' : ''}</span>`}</td>
-          <td class="num">${x.w}-${x.l}</td><td class="num">${x.sv}</td><td class="num">${ip(x.outs)}</td><td class="num">${x.h}</td><td class="num">${x.r}</td><td class="num">${x.bb}</td><td class="num">${x.k}</td><td class="num">${x.outs ? ((x.r * 21) / x.outs).toFixed(2) : '—'}</td></tr>`; }).join('')}</tbody></table></div>
-        <p class="small muted">Pitching lines come from simulated games. Results you type in count toward W-L and saves only.</p></div>
+          <td class="num">${x.app}</td><td class="num">${ip(x.outs)}</td><td class="num">${x.h}</td><td class="num">${x.r}</td><td class="num">${x.bb}</td><td class="num">${x.k}</td><td class="num">${x.outs ? ((x.r * 21) / x.outs).toFixed(2) : '—'}</td></tr>`; }).join('')}</tbody></table></div>
+        <p class="small muted">Pitching lines come from simulated games; results you type in don't add to them.</p></div>
     <div class="card"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
       ${history.map(([y, h]) => `<tr><td>${y}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     </div>
