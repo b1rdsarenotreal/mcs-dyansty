@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Don't tell image hosts which site is showing their images; many logo
+       sites block images embedded on other websites based on that. -->
+  <meta name="referrer" content="no-referrer">
+  <title>MCS Dynasty</title>
+  <meta name="description" content="A commissioner-style men's college softball dynasty: line scores, standings, RPI, polls, conference tournaments, regionals and the Men's College World Series.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='%23e8e04a'/><path d='M22 22 Q50 50 22 78 M78 22 Q50 50 78 78' stroke='%23b3261e' stroke-width='5' fill='none'/></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">◆</span> <span id="league-name">MCS Dynasty</span></div>
+    <div class="season-picker" id="season-picker"></div>
+    <nav id="nav" class="nav"></nav>
+  </header>
+  <main id="app" class="app"><p class="muted">Loading…</p></main>
+  <dialog id="modal"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

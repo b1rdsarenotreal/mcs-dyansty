@@ -1,0 +1,409 @@
+// Season pages: home, schedule, standings, rankings and postseason.
+
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js';
+import { latestPoll, generatePoll, pollRankMap } from './polls.js';
+import { ovr } from './sim.js';
+import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js';
+import { REG_WEEKS } from './schedule.js';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids } from './postseason.js';
+import { fmtPct } from './util.js';
+
+const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
+export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
+
+const PHASE_TEXT = { regular: 'Regular season', conf: 'Conference tournaments', selection: 'Selection', regionals: 'NCAA Regionals', mcws: "Men's College World Series", complete: 'Season complete' };
+
+function nextGame(s) {
+  return s.games.filter(g => !isFinal(g)).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id)[0] || null;
+}
+
+function simAndReport(filter, what, opts = {}) {
+  const s = S();
+  const n = simGames(s, filter, opts);
+  changed();
+  toast(n ? `${n} game${n === 1 ? '' : 's'} simulated${what ? ' ' + what : ''}.` : 'Nothing left to simulate there.');
+}
+
+// ---------- Home ----------
+
+export function renderHome() {
+  const s = S(), recs = cache.recs(), poll = latestPoll(s);
+  const total = s.games.length, done = s.games.filter(isFinal).length;
+  const nx = nextGame(s);
+  const best = Object.keys(s.teams).sort((a, b) => (recs[b].w - recs[b].l) - (recs[a].w - recs[a].l) || recs[b].w - recs[a].w)[0];
+  const champ = s.post?.champion;
+  const ct = champ ? teamInfo(champ) : null;
+  const recent = s.games.filter(isFinal).sort((a, b) => b.week - a.week || b.order - a.order || b.id - a.id).slice(0, 8);
+  const leaders = Object.keys(ctx.league.conferences).filter(c => Object.values(s.teams).some(t => t.conference === c)).map(c => {
+    const st = confStandings(s, c, recs);
+    return { c, top: st[0] };
+  });
+  app.innerHTML = `
+    <div class="section-head"><h1>${s.year} Season</h1><span class="muted">${PHASE_TEXT[s.phase]}${nx ? ` · next: ${weekName(nx.week)}, ${DAY_NAMES[nx.day] || nx.day}` : ''}</span></div>
+    ${champ ? `<div class="banner" style="background:linear-gradient(120deg, ${esc(ct.color)}, #15171c)"><span class="trophy">🏆</span><div><div class="small" style="opacity:.8">${s.year} National Champion</div><div class="big">${esc(champ)}</div><div class="small" style="opacity:.8">Beat ${esc(s.post.runnerUp)} in the ${esc(s.settings.mcwsName)} Championship Series · ${recs[champ].w}-${recs[champ].l}</div></div></div><div style="height:16px"></div>` : ''}
+    <div class="kpis">
+      <div class="kpi"><div class="v">${done}<span class="muted" style="font-size:16px"> / ${total}</span></div><div class="l">Games final</div></div>
+      <div class="kpi"><div class="v">${poll?.ranks[0] ? team(poll.ranks[0].team, { rank: false, size: 22 }) : '—'}</div><div class="l">No. 1 ${poll ? (poll.week === 'final' ? '(final poll)' : poll.week === 0 ? '(preseason)' : `(week ${poll.week} poll)`) : ''}</div></div>
+      <div class="kpi"><div class="v">${best ? team(best, { rank: false, size: 22 }) : '—'}</div><div class="l">Best record ${best ? `(${recs[best].w}-${recs[best].l})` : ''}</div></div>
+      <div class="kpi"><div class="v">${PHASE_TEXT[s.phase]}</div><div class="l">Phase</div></div>
+    </div>
+    ${nx ? `<div class="card"><div class="row"><div><h2 style="margin:0">Up next: ${weekName(nx.week)} · ${DAY_NAMES[nx.day] || nx.day}</h2>
+      <div class="muted small">${s.games.filter(g => g.week === nx.week && g.day === nx.day && !isFinal(g)).length} games that day</div></div><span class="spacer"></span>
+      <a class="btn" href="#/schedule">Open schedule</a>
+      <button class="btn" id="h-day">🎲 Sim next day</button>
+      <button class="btn primary" id="h-week">🎲 Sim ${weekName(nx.week)}</button></div></div>`
+      : s.phase === 'selection' ? `<div class="card"><div class="row"><h2 style="margin:0">The NCAA field is ready to announce</h2><span class="spacer"></span><a class="btn primary" href="#/postseason">Review the field</a></div></div>` : ''}
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><h2>${poll ? (poll.week === 'final' ? 'Final poll' : poll.week === 0 ? 'Preseason poll' : `Week ${poll.week} poll`) : 'Poll'}</h2>
+        <table><tbody>${(poll?.ranks || []).slice(0, 10).map((x, i) => `<tr><td class="num" style="width:28px">${i + 1}</td><td>${team(x.team, { rank: false })}</td><td class="num muted">${esc(x.record)}</td></tr>`).join('')}</tbody></table>
+        <p class="small"><a href="#/rankings">Full Top 25 and RPI →</a></p></div>
+      <div class="card"><h2>Conference leaders</h2>
+        <table><tbody>${leaders.map(({ c, top }) => `<tr><td style="width:30px"><a href="${confHref(c)}">${confLogo(c, 22)}</a></td><td>${top ? team(top.team) : '—'}</td><td class="num muted">${top ? `${top.cw}-${top.cl}` : ''}</td></tr>`).join('')}</tbody></table>
+        <p class="small"><a href="#/standings">Standings →</a></p></div>
+      <div class="card"><h2>Latest results</h2>
+        ${recent.length ? `<table><tbody>${recent.map(g => `<tr class="clickable" data-open="${g.id}"><td class="small muted" style="width:70px">${esc(weekName(g.week).replace('Week ', 'Wk '))} ${esc(g.day)}</td><td>${esc(resultText(g))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No games played yet.</p>'}</div>
+    </div>`;
+  $$('[data-open]').forEach(r => (r.onclick = () => openGame(Number(r.dataset.open))));
+  if ($('#h-day')) $('#h-day').onclick = () => simAndReport(g => g.week === nx.week && g.day === nx.day, `on ${DAY_NAMES[nx.day] || nx.day}`);
+  if ($('#h-week')) $('#h-week').onclick = () => simAndReport(g => g.week === nx.week, `in ${weekName(nx.week)}`);
+}
+
+// ---------- Schedule ----------
+
+function weeksOf(s) { return [...new Set(s.games.map(g => g.week))].sort((a, b) => a - b); }
+
+export function renderSchedule() {
+  const s = S();
+  const weeks = weeksOf(s);
+  if (ui.week === null || !weeks.includes(ui.week)) ui.week = nextGame(s)?.week ?? weeks[weeks.length - 1] ?? 1;
+  const games = s.games.filter(g => g.week === ui.week).sort((a, b) => a.order - b.order || a.id - b.id);
+  const unplayed = games.filter(g => !isFinal(g));
+  const days = [...new Set(games.map(g => g.day))];
+  const firstOpenDay = unplayed[0]?.day;
+  const isDone = w => s.games.filter(g => g.week === w).every(isFinal);
+  const finals = s.games.filter(isFinal).length;
+  const regLeft = s.games.filter(g => g.type === 'regular' && !isFinal(g)).length;
+  app.innerHTML = `
+    <div class="section-head"><h1>${s.year} Schedule</h1><span class="muted">${finals} of ${s.games.length} games final</span></div>
+    <div class="chips">${weeks.map(w => `<button class="chip ${w === ui.week ? 'active' : ''} ${isDone(w) ? 'done' : ''}" data-week="${w}">${w > REG_WEEKS ? esc(weekName(w)) : 'Wk ' + w}</button>`).join('')}</div>
+    <div class="row" style="margin-bottom:14px">
+      <h2 style="margin:0">${esc(weekName(ui.week))}</h2><span class="spacer"></span>
+      ${firstOpenDay ? `<button class="btn" id="w-day">🎲 Sim ${DAY_NAMES[firstOpenDay] || firstOpenDay}</button>` : ''}
+      ${unplayed.length ? `<button class="btn" id="w-sim">🎲 Sim week (${unplayed.length})</button>` : ''}
+      ${regLeft && ui.week <= REG_WEEKS ? `<button class="btn" id="w-rest">Sim rest of regular season (${regLeft})</button>` : ''}
+      ${ui.week <= REG_WEEKS ? '<button class="btn" id="w-add">+ Add game</button>' : ''}
+    </div>
+    ${days.map(d => `<h3 class="day-head">${DAY_NAMES[d] || esc(d)} <span class="muted small">${games.filter(g => g.day === d).length} games</span></h3>
+      <div class="games">${games.filter(g => g.day === d).map(gameCard).join('')}</div>`).join('') || '<div class="empty">No games this week.</div>'}
+    <p class="small muted" style="margin-top:16px">Click a game to enter its line score by inning or simulate it. Percentages are pre-game win chances from the teams' OFF, PIT and DEF ratings and the day's starting pitchers (Friday aces, Saturday and Sunday starters, midweek arms). Rotation order and starters can be changed in the game editor.</p>`;
+  $$('[data-week]').forEach(b => (b.onclick = () => { ui.week = Number(b.dataset.week); renderSchedule(); }));
+  bindGameCards();
+  if ($('#w-day')) $('#w-day').onclick = () => simAndReport(g => g.week === ui.week && g.day === firstOpenDay, `on ${DAY_NAMES[firstOpenDay] || firstOpenDay}`);
+  if ($('#w-sim')) $('#w-sim').onclick = () => simAndReport(g => g.week === ui.week, `in ${weekName(ui.week)}`);
+  if ($('#w-rest')) $('#w-rest').onclick = () => {
+    if (!confirm(`Simulate all ${regLeft} remaining regular-season games? Every result stays editable.`)) return;
+    simAndReport(g => g.type === 'regular', 'in the regular season');
+  };
+  if ($('#w-add')) $('#w-add').onclick = () => {
+    const g = addGame(s, { week: ui.week, day: 'Tue' });
+    openGame(g.id, { isNew: true });
+  };
+}
+
+// ---------- Standings ----------
+
+export function renderStandings() {
+  const s = S(), recs = cache.recs(), r = rpi(s);
+  const regRecs = records(s, g => g.type === 'regular');
+  const confs = Object.keys(ctx.league.conferences).filter(c => Object.values(s.teams).some(t => t.conference === c));
+  const card = c => {
+    const st = confStandings(s, c, regRecs, r);
+    const n = st.length;
+    const size = Math.min(n, s.settings.confTourney?.[c] ?? defaultConfTourneySize(n));
+    const champ = regSeasonChamp(s, c, regRecs, r);
+    const tchamp = s.post?.confT?.[c]?.champion;
+    const canSize = s.phase === 'regular';
+    return `<div class="card">
+      <div class="row" style="margin-bottom:8px"><a href="${confHref(c)}">${confLogo(c, 30)}</a><h2 style="margin:0"><a class="team-link" href="${confHref(c)}">${esc(c)}</a></h2><span class="spacer"></span>
+        ${tchamp ? `<span class="badge gold">Tournament: ${esc(tchamp)}</span>` : ''}</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">GB</th><th class="num">Overall</th><th class="num">Home</th><th class="num">Away</th><th class="num">Strk</th><th class="num">RPI</th></tr></thead>
+        <tbody>${st.map((x, i) => `<tr class="${i === size - 1 && size < n ? 'cutline' : ''}"><td class="num muted">${i + 1}</td>
+          <td>${team(x.team)}${x.team === champ && x.cw + x.cl > 0 ? ' <span title="Regular-season champion">👑</span>' : ''}</td>
+          <td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${x.gb ? x.gb.toFixed(1).replace('.0', '') : '—'}</td>
+          <td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${x.hw}-${x.hl}</td><td class="num">${x.aw}-${x.al}</td>
+          <td class="num">${x.streak || ''}</td><td class="num">${x.rpiRank ?? ''}</td></tr>`).join('')}</tbody></table></div>
+      <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
+        <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamp({ ...s, overrides: {} }, c, regRecs, r) || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
+        <label class="field">Tournament teams <select data-size="${esc(c)}" ${canSize ? '' : 'disabled'}>${[0, 2, 3, 4, 5, 6, 7, 8].filter(k => k <= n).map(k => `<option value="${k}" ${k === size ? 'selected' : ''}>${k ? `Top ${k}` : 'No tournament'}</option>`).join('')}</select></label>
+      </div>${canSize ? '' : '<p class="muted">Tournament size is locked once the tournaments are set.</p>'}</details>
+    </div>`;
+  };
+  app.innerHTML = `
+    <div class="section-head"><h1>${s.year} Standings</h1><span class="muted">Conference record first; ties go to head-to-head, then RPI. The line marks the conference tournament cut.</span></div>
+    <div class="grid wide">${confs.map(card).join('')}</div>`;
+  $$('[data-champ]').forEach(sel => (sel.onchange = () => {
+    s.overrides.regChamps ||= {};
+    if (sel.value) s.overrides.regChamps[sel.dataset.champ] = sel.value; else delete s.overrides.regChamps[sel.dataset.champ];
+    changed({ progress: false });
+  }));
+  $$('[data-size]').forEach(sel => (sel.onchange = () => { s.settings.confTourney ||= {}; s.settings.confTourney[sel.dataset.size] = Number(sel.value); changed({ progress: false }); }));
+}
+
+// ---------- Rankings ----------
+
+function pollWeeks(s) {
+  const ks = Object.keys(s.polls || {}).filter(k => k !== 'final').map(Number).sort((a, b) => a - b);
+  if (s.polls?.final) ks.push('final');
+  return ks;
+}
+
+export function renderRankings() {
+  const s = S();
+  const tabs = { poll: 'Top 25 poll', rpi: 'RPI', power: 'Power (OVR)' };
+  app.innerHTML = `
+    <div class="section-head"><h1>${s.year} Rankings</h1></div>
+    <div class="steps">${Object.entries(tabs).map(([k, l]) => `<a href="#/rankings" data-tab="${k}" class="${ui.rankTab === k ? 'active' : ''}">${l}</a>`).join('')}</div>
+    <div id="rk"></div>`;
+  $$('[data-tab]').forEach(a => (a.onclick = e => { e.preventDefault(); ui.rankTab = a.dataset.tab; ui.editPoll = null; renderRankings(); }));
+  ({ poll: renderPollTab, rpi: renderRpiTab, power: renderPowerTab })[ui.rankTab]($('#rk'));
+}
+
+function renderPollTab(root) {
+  const s = S();
+  const weeks = pollWeeks(s);
+  if (!weeks.length) { root.innerHTML = '<div class="empty">No polls yet.</div>'; return; }
+  if (ui.pollWeek === null || !weeks.some(w => String(w) === String(ui.pollWeek))) ui.pollWeek = weeks[weeks.length - 1];
+  const key = ui.pollWeek;
+  const poll = s.polls[key];
+  const prevKey = key === 'final' ? weeks.filter(w => w !== 'final').slice(-1)[0] : weeks.filter(w => w !== 'final' && w < key).slice(-1)[0];
+  const prev = prevKey !== undefined ? pollRankMap(s.polls[prevKey]) : {};
+  const label = w => (w === 'final' ? 'Final' : w === 0 ? 'Pre' : w === WEEK.conf ? 'Post-tourney' : `Wk ${w}`);
+  const editing = ui.editPoll && ui.editPoll.key === key;
+  const rows = editing ? ui.editPoll.ranks : poll.ranks;
+  const mv = (t, i) => {
+    const p = prev[t];
+    if (prevKey === undefined) return '';
+    if (!p) return '<span class="move up">NEW</span>';
+    const d = p - (i + 1);
+    return d > 0 ? `<span class="move up">▲${d}</span>` : d < 0 ? `<span class="move down">▼${-d}</span>` : '<span class="muted">—</span>';
+  };
+  root.innerHTML = `
+    <div class="chips">${weeks.map(w => `<button class="chip ${String(w) === String(key) ? 'active' : ''}" data-pw="${w}">${label(w)}</button>`).join('')}</div>
+    <div class="card">
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">${key === 'final' ? 'Final poll' : key === 0 ? 'Preseason poll' : key === WEEK.conf ? 'Poll after conference tournaments' : `Week ${key} poll`}</h2>
+        ${poll.edited ? '<span class="badge manual">Commissioner edited</span>' : ''}<span class="spacer"></span>
+        ${editing ? '<button class="btn" id="p-cancel">Cancel</button><button class="btn primary" id="p-save">Save poll</button>' : '<button class="btn" id="p-edit">Edit poll</button><button class="btn" id="p-regen">Regenerate</button>'}</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>${editing ? '<th></th>' : '<th class="num">Points</th><th class="num">Prev</th><th></th>'}</tr></thead>
+        <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>
+          ${editing ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'}>▼</button> <button class="btn sm danger" data-rm="${i}">✕</button></td>`
+          : `<td class="num">${x.pts ?? ''}</td><td class="num muted">${prevKey !== undefined ? prev[x.team] ?? 'NR' : ''}</td><td class="num">${mv(x.team, i)}</td>`}</tr>`).join('')}</tbody></table></div>
+      ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps 25 teams.</span></div>`
+      : poll.others?.length ? `<p class="small muted" style="margin-top:10px"><b>Others receiving votes:</b> ${poll.others.map(o => `${esc(o.team)} ${o.pts}`).join(', ')}</p>` : ''}
+      <p class="small muted">${poll.voters || 40} simulated voters. First-place votes in parentheses. Polls come out when a week's games are all final.</p>
+    </div>`;
+  $$('[data-pw]', root).forEach(b => (b.onclick = () => { ui.pollWeek = b.dataset.pw === 'final' ? 'final' : Number(b.dataset.pw); ui.editPoll = null; renderRankings(); }));
+  const recs = cache.recs();
+  if ($('#p-edit', root)) $('#p-edit', root).onclick = () => { ui.editPoll = { key, ranks: poll.ranks.map(x => ({ ...x })) }; renderRankings(); };
+  if ($('#p-cancel', root)) $('#p-cancel', root).onclick = () => { ui.editPoll = null; renderRankings(); };
+  if ($('#p-regen', root)) $('#p-regen', root).onclick = () => {
+    if (!confirm('Regenerate this poll from scratch? Your edits to it will be replaced.')) return;
+    s.polls[key] = key === 'final' ? generatePoll(s, 'final', { final: true }) : generatePoll(s, key);
+    changed({ progress: false }); toast('Poll regenerated.');
+  };
+  if ($('#p-save', root)) $('#p-save', root).onclick = () => {
+    const ranks = ui.editPoll.ranks.slice(0, 25);
+    const kept = new Set(ranks.map(r => r.team));
+    s.polls[key] = { ...poll, edited: true, ranks: ranks.map(r => ({ ...r, pts: r.pts ?? 0, fp: r.fp ?? 0 })), others: [...poll.others || [], ...poll.ranks.filter(r => !kept.has(r.team))].filter(o => !kept.has(o.team)) };
+    ui.editPoll = null; changed({ progress: false }); toast('Poll saved.');
+  };
+  const list = ui.editPoll?.ranks;
+  $$('[data-up]', root).forEach(b => (b.onclick = () => { const i = +b.dataset.up; [list[i - 1], list[i]] = [list[i], list[i - 1]]; renderRankings(); }));
+  $$('[data-down]', root).forEach(b => (b.onclick = () => { const i = +b.dataset.down; [list[i + 1], list[i]] = [list[i], list[i + 1]]; renderRankings(); }));
+  $$('[data-rm]', root).forEach(b => (b.onclick = () => { list.splice(+b.dataset.rm, 1); renderRankings(); }));
+  if ($('#p-add', root)) $('#p-add', root).onchange = e => {
+    const t = e.target.value; if (!t) return;
+    const r = recs[t];
+    list.push({ team: t, record: `${r.w}-${r.l}`, pts: 0, fp: 0 });
+    if (list.length > 25) list.splice(24, 1);
+    renderRankings();
+  };
+}
+
+function renderRpiTab(root) {
+  const s = S(), r = rpi(s), recs = cache.recs(), pr = cache.ranks();
+  const teams = Object.keys(s.teams).filter(t => r[t].games).sort((a, b) => r[a].rank - r[b].rank);
+  root.innerHTML = `<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th class="num">RPI</th><th>Team</th><th>Conf</th><th class="num">Record</th><th class="num">WP</th><th class="num">OWP</th><th class="num">OOWP</th><th class="num">Rating</th><th class="num">Poll</th></tr></thead>
+    <tbody>${teams.map(t => `<tr><td class="num"><b>${r[t].rank}</b></td><td>${team(t, { rank: false })}</td><td>${confLogo(s.teams[t].conference, 18)}</td><td class="num">${recs[t].w}-${recs[t].l}</td>
+      <td class="num">${fmtPct(r[t].wp)}</td><td class="num">${fmtPct(r[t].owp)}</td><td class="num">${fmtPct(r[t].oowp)}</td><td class="num"><b>${r[t].rpi.toFixed(4).replace(/^0/, '')}</b></td><td class="num muted">${pr[t] ?? ''}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">The RPI starts once games are played.</td></tr>'}</tbody></table></div>
+    <p class="small muted">RPI = 25% winning percentage + 50% opponents' winning percentage (not counting games against this team) + 25% opponents' opponents' winning percentage. The selection committee weighs RPI rank 60% and poll rank 40%.</p></div>`;
+}
+
+function renderPowerTab(root) {
+  const s = S(), recs = cache.recs(), pr = cache.ranks();
+  const teams = Object.keys(s.teams).sort((a, b) => ovr(s.teams[b]) - ovr(s.teams[a]) || s.teams[b].pit - s.teams[a].pit);
+  root.innerHTML = `<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th class="num">#</th><th>Team</th><th>Conf</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th class="num">Record</th><th class="num">Poll</th></tr></thead>
+    <tbody>${teams.map((t, i) => { const x = s.teams[t]; return `<tr><td class="num">${i + 1}</td><td>${team(t, { rank: false })}</td><td>${confLogo(x.conference, 18)}</td><td class="num">${x.off}</td><td class="num">${x.pit}</td><td class="num">${x.def}</td><td class="num"><b>${ovr(x)}</b></td><td class="num">${recs[t].w}-${recs[t].l}</td><td class="num muted">${pr[t] ?? ''}</td></tr>`; }).join('')}</tbody></table></div>
+    <p class="small muted">OVR = 40% OFF + 40% PIT + 20% DEF. Change ratings on the Teams page or a team's profile.</p></div>`;
+}
+
+// ---------- Postseason ----------
+
+function eventBracket(ev) {
+  const s = S();
+  const rounds = [];
+  for (const node of ev.nodes) {
+    const k = node.label.replace(/ \(.*\)$/, '');
+    let col = rounds.find(r => r.day === node.day);
+    if (!col) rounds.push((col = { day: node.day, nodes: [] }));
+    col.nodes.push(node);
+  }
+  const cell = node => {
+    if (node.gameId) { const g = s.games.find(x => x.id === node.gameId); if (g) return gameCard(g); }
+    const [a, b] = nodeTeams(ev, node);
+    if (a === 'BYE' || b === 'BYE') return node.winner ? `<div class="game placeholder"><div class="small muted">${esc(node.label)}</div>${team(node.winner)} <span class="muted small">advances (bye)</span></div>` : '';
+    const needed = nodeNeeded(ev, node);
+    return `<div class="game placeholder ${node.cond && !needed && (nodeTeams(ev, node).every(Boolean)) ? 'unneeded' : ''}"><div class="small muted">${esc(node.label)}</div>
+      <div>${a ? team(a) : '<span class="muted">TBD</span>'}</div><div>${b ? team(b) : '<span class="muted">TBD</span>'}</div></div>`;
+  };
+  return `<div class="bracket">${rounds.map(r => `<div class="round"><h3>${DAY_NAMES[r.day] || r.day}</h3>${r.nodes.map(cell).join('')}</div>`).join('')}</div>`;
+}
+
+export function renderPostseason() {
+  const s = S(), p = s.post || {};
+  const defaultTab = { regular: 'conf', conf: 'conf', selection: 'field', regionals: 'regionals', mcws: 'mcws', complete: 'mcws' }[s.phase];
+  if (!ui.postTab) ui.postTab = defaultTab;
+  const tabs = { conf: 'Conference tournaments', field: 'Selection', regionals: 'Regionals', mcws: s.settings.mcwsName.replace("Men's College World Series", 'MCWS') };
+  const left = s.games.filter(g => g.type !== 'regular' && !isFinal(g)).length + (s.phase === 'regular' ? 1 : 0);
+  app.innerHTML = `
+    <div class="section-head"><h1>${s.year} Postseason</h1><span class="muted">${PHASE_TEXT[s.phase]}</span><span class="spacer"></span>
+      ${s.phase !== 'complete' && s.phase !== 'regular' ? '<button class="btn" id="ps-all">🎲 Sim rest of postseason</button>' : ''}</div>
+    ${p.champion ? `<div class="banner" style="background:linear-gradient(120deg, ${esc(teamInfo(p.champion).color)}, #15171c)"><span class="trophy">🏆</span><div><div class="small" style="opacity:.8">${s.year} National Champion</div><div class="big">${esc(p.champion)}</div><div class="small" style="opacity:.8">Runner-up: ${esc(p.runnerUp)}</div></div></div><div style="height:16px"></div>` : ''}
+    <div class="steps">${Object.entries(tabs).map(([k, l]) => `<a href="#/postseason" data-pt="${k}" class="${ui.postTab === k ? 'active' : ''}">${esc(l)}</a>`).join('')}</div>
+    <div id="ps"></div>`;
+  $$('[data-pt]').forEach(a => (a.onclick = e => { e.preventDefault(); ui.postTab = a.dataset.pt; renderPostseason(); }));
+  if ($('#ps-all')) $('#ps-all').onclick = () => {
+    if (!confirm('Simulate the rest of the postseason? The NCAA field is announced as proposed if you haven\'t announced it yet.')) return;
+    simAndReport(g => g.type !== 'regular', 'in the postseason', { autoLock: true });
+  };
+  const root = $('#ps');
+  ({ conf: renderConfTourneys, field: renderField, regionals: renderRegionals, mcws: renderMcws })[ui.postTab](root);
+  bindGameCards(root);
+}
+
+function renderConfTourneys(root) {
+  const s = S(), p = s.post || {};
+  if (s.phase === 'regular') {
+    const left = s.games.filter(g => g.type === 'regular' && !isFinal(g)).length;
+    const confs = conferences(s);
+    root.innerHTML = `<div class="hint">Conference tournaments are seeded and start automatically when the regular season ends (${left} game${left === 1 ? '' : 's'} left). Tournament sizes can be changed on the Standings page until then. Projected seeds:</div>
+      <div class="grid" style="margin-top:14px">${confs.map(c => {
+        const n = Object.values(s.teams).filter(t => t.conference === c).length;
+        const size = Math.min(n, s.settings.confTourney?.[c] ?? defaultConfTourneySize(n));
+        const seeds = confTourneySeeds(s, c).slice(0, size);
+        return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, single elimination` : 'No tournament: regular-season champion gets the bid'}</span></div>
+          <ol class="seedlist">${seeds.map(t => `<li>${team(t)}</li>`).join('')}</ol></div>`;
+      }).join('')}</div>`;
+    return;
+  }
+  const evs = Object.values(p.confT || {});
+  const anyOpen = s.games.some(g => g.type === 'conf' && !isFinal(g));
+  root.innerHTML = `${anyOpen ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="ct-sim">🎲 Sim conference tournaments</button></div>' : ''}
+    ${evs.map(ev => {
+      const started = ev.nodes.some(n => n.gameId && s.games.find(g => g.id === n.gameId && isFinal(g)));
+      return `<div class="card"><div class="row" style="margin-bottom:10px"><a href="${confHref(ev.conf)}">${confLogo(ev.conf, 28)}</a><h2 style="margin:0">${esc(ev.conf)} Tournament</h2>
+        ${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}<span class="spacer"></span>
+        ${started ? '' : `<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
+        <div class="small muted" style="margin-bottom:8px">Seeds: ${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)}`).join(' · ')}</div>
+        ${eventBracket(ev)}</div>`;
+    }).join('')}
+    ${!evs.length ? '<div class="empty">No conference tournaments this season.</div>' : ''}`;
+  if ($('#ct-sim', root)) $('#ct-sim', root).onclick = () => simAndReport(g => g.type === 'conf', 'in the conference tournaments');
+  $$('[data-reseed]', root).forEach(b => (b.onclick = () => editSeeds(b.dataset.reseed)));
+}
+
+function editSeeds(conf) {
+  const s = S(), ev = s.post.confT[conf];
+  const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school).sort();
+  modal.innerHTML = `<div class="modal-head"><h2>${esc(conf)} Tournament seeds</h2><button class="btn ghost" data-x>✕</button></div>
+    <div class="modal-body stack">${ev.seeds.map((t, i) => `<label class="field">Seed ${i + 1} <select data-seed="${i}">${teamOptions(t, { blank: false, list: teams })}</select></label>`).join('')}</div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="sd-save">Save seeds</button></div>`;
+  $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+  modal.onclose = () => ctx.render();
+  $('#sd-save', modal).onclick = () => {
+    const seeds = $$('[data-seed]', modal).map(x => x.value);
+    if (new Set(seeds).size !== seeds.length) return toast('Each team can only have one seed.', true);
+    try { reseedConfTourney(s, conf, seeds); } catch (e) { return toast(e.message, true); }
+    modal.close(); changed(); toast('Seeds saved.');
+  };
+  modal.showModal();
+}
+
+function renderField(root) {
+  const s = S(), p = s.post || {};
+  if (!p.field) {
+    root.innerHTML = `<div class="empty">The 16-team NCAA field is chosen once every conference tournament is finished. It has ${Object.keys(ctx.league.conferences).length ? 'one automatic bid per conference (the tournament champion, or the regular-season champion where there is no tournament)' : 'automatic bids'}, and the rest are at-large picks by the committee: RPI rank weighted 60%, poll rank 40%.</div>`;
+    return;
+  }
+  const r = rpi(s), pr = cache.ranks(), recs = cache.recs();
+  const editable = s.phase === 'selection';
+  const field = [...p.field].sort((a, b) => a.seed - b.seed);
+  const podList = pods(field);
+  const podOf = t => podList.findIndex(pd => pd.includes(t));
+  const inField = new Set(field.map(f => f.team));
+  root.innerHTML = `
+    ${editable ? `<div class="hint">This is the committee's proposed field. Swap any team or move seeds, then announce it to start the regionals. The top four national seeds host. Regionals are built serpentine: 1, 8, 9 and 16 in one, 2, 7, 10 and 15 in the next, and so on.</div>` : ''}
+    <div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">NCAA field</h2><span class="spacer"></span>
+      ${editable ? '<button class="btn" id="f-redo">Re-run selection</button><button class="btn primary" id="f-lock">Announce field & start regionals</button>' : ''}</div>
+      <div class="table-wrap"><table><thead><tr><th class="num">Seed</th><th>Team</th><th>Conf</th><th>Bid</th><th class="num">Record</th><th class="num">RPI</th><th class="num">Poll</th><th>Regional</th>${editable ? '<th></th>' : ''}</tr></thead>
+      <tbody>${field.map((f, i) => `<tr><td class="num"><b>${f.seed}</b></td>
+        <td>${editable ? `<select data-swap="${i}">${teamOptions(f.team, { blank: false, list: teamNames().filter(t => t === f.team || !inField.has(t)) })}</select>` : team(f.team, { rank: false })}</td>
+        <td>${confLogo(f.conf, 18)}</td><td>${f.bid === 'auto' ? '<span class="badge real">Auto</span>' : '<span class="badge">At-large</span>'}</td>
+        <td class="num">${recs[f.team].w}-${recs[f.team].l}</td><td class="num">${r[f.team]?.rank ?? ''}</td><td class="num muted">${pr[f.team] ?? ''}</td>
+        <td class="small">${esc(podList[podOf(f.team)][0])}${podList[podOf(f.team)][0] === f.team ? ' (host)' : ''}</td>
+        ${editable ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-fup="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-fdown="${i}" ${i < field.length - 1 ? '' : 'disabled'}>▼</button></td>` : ''}</tr>`).join('')}</tbody></table></div>
+      <div class="row small" style="margin-top:10px;gap:24px">
+        <div><b>Last four in:</b> ${(p.lastIn || []).map(esc).join(', ') || '—'}</div>
+        <div><b>First four out:</b> ${(p.firstOut || []).map(esc).join(', ') || '—'}</div></div>
+    </div>`;
+  if (!editable) return;
+  const setField = list => { p.field = list.map((f, i) => ({ ...f, seed: i + 1 })); changed({ progress: false }); };
+  $$('[data-swap]', root).forEach(sel => (sel.onchange = () => {
+    const i = +sel.dataset.swap, t = sel.value;
+    const auto = new Set(Object.values(autoBids(s)));
+    field[i] = { team: t, seed: i + 1, bid: auto.has(t) ? 'auto' : 'at-large', conf: s.teams[t].conference };
+    setField(field);
+  }));
+  $$('[data-fup]', root).forEach(b => (b.onclick = () => { const i = +b.dataset.fup; [field[i - 1], field[i]] = [field[i], field[i - 1]]; setField(field); }));
+  $$('[data-fdown]', root).forEach(b => (b.onclick = () => { const i = +b.dataset.fdown; [field[i + 1], field[i]] = [field[i], field[i + 1]]; setField(field); }));
+  $('#f-redo', root).onclick = () => { if (confirm('Throw out your changes and re-run the committee selection?')) { proposeField(s); changed({ progress: false }); } };
+  $('#f-lock', root).onclick = () => { lockField(s); ui.postTab = 'regionals'; changed(); toast('Field announced. Regionals are set.'); };
+}
+
+function renderRegionals(root) {
+  const s = S(), p = s.post || {};
+  if (!p.regionals) { root.innerHTML = '<div class="empty">Regionals begin once the NCAA field is announced.</div>'; return; }
+  const open = s.games.some(g => g.type === 'regional' && !isFinal(g));
+  const seed = t => p.field.find(f => f.team === t)?.seed;
+  root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="rg-sim">🎲 Sim regionals</button></div>' : ''}
+    ${p.regionals.map(ev => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(ev.name)}</h2>${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}</div>
+      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)} (#${seed(t)})`).join(' · ')} · double elimination, hosted by ${esc(ev.host)}</div>
+      ${eventBracket(ev)}</div>`).join('')}`;
+  if ($('#rg-sim', root)) $('#rg-sim', root).onclick = () => simAndReport(g => g.type === 'regional', 'in the regionals');
+}
+
+function renderMcws(root) {
+  const s = S(), p = s.post || {};
+  if (!p.mcws) { root.innerHTML = `<div class="empty">The four regional champions meet in the ${esc(s.settings.mcwsName)}: double elimination down to two teams, then a best-of-three Championship Series.</div>`; return; }
+  const open = s.games.some(g => g.type === 'mcws' && !isFinal(g));
+  const seed = t => p.field.find(f => f.team === t)?.seed;
+  root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="mc-sim">🎲 Sim the MCWS</button></div>' : ''}
+    <div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(s.settings.mcwsName)}</h2>${p.mcws.champion ? `<span class="badge gold">Champion: ${esc(p.mcws.champion)}</span>` : ''}</div>
+    <div class="small muted" style="margin-bottom:8px">${p.mcws.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' · ')}</div>
+    ${eventBracket(p.mcws)}</div>`;
+  if ($('#mc-sim', root)) $('#mc-sim', root).onclick = () => simAndReport(g => g.type === 'mcws', 'in the MCWS');
+}
