@@ -1,6 +1,7 @@
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
-import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, LAST_POLL_WEEK } from '../js/league.js';
+import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, LAST_POLL_WEEK, coachName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
+import { setConfFormat } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal } from '../js/standings.js';
 import { REG_WEEKS } from '../js/schedule.js';
 
@@ -28,10 +29,44 @@ for (const conf of ['Horizon', 'Big Ten', 'MAC']) {
 const slot = new Set();
 for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.week}|${g.day}`; assert.ok(!slot.has(k), k); slot.add(k); }
 
-assert.ok(s.polls[0].ranks.length === 25, 'preseason poll');
+assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
 
-// Full season
+// Double elimination for the Big Ten (8 teams) and Horizon (top 6), single elsewhere
+s.settings.confFormat = { 'Big Ten': 'double', 'Horizon': 'double' };
+s.settings.confTourney = { 'Big Ten': 8 };
+const pre = Object.fromEntries(Object.entries(s.teams).map(([k, t]) => [k, { ...t.base }]));
+
+// Full season, stopping after the conference tournaments to check them
+simGames(s, g => g.type === 'regular' || g.type === 'conf');
+for (const [conf, ev] of Object.entries(s.post.confT)) {
+  const gs = s.games.filter(g => g.event === ev.id);
+  const titles = gs.filter(g => /Championship$|· Final$/.test(g.label));
+  assert.equal(titles.length, 1, `${conf}: exactly one championship game`);
+  assert.ok(!gs.some(g => /if necessary/i.test(g.label)), `${conf}: no if-necessary game`);
+  const losses = {};
+  for (const g of gs) { const l = g.homeR > g.awayR ? g.away : g.home; losses[l] = (losses[l] || 0) + 1; }
+  if (ev.kind === 'double') {
+    // Everyone but the champion and the title-game loser is out after two losses; nobody loses three times.
+    assert.ok(Object.values(losses).every(n => n <= 2), `${conf}: no team loses three times`);
+    const nonChampLosses = Object.entries(losses).filter(([t]) => t !== ev.champion);
+    assert.ok(nonChampLosses.length >= ev.size - 1, `${conf}: every other team lost`);
+  }
+  console.log(`${conf} (${ev.kind}, ${ev.size} teams): ${gs.length} games, champion ${ev.champion}`);
+}
+assert.equal(s.post.confT['Big Ten'].kind, 'double');
+assert.equal(s.post.confT['Big Ten'].size, 8);
+assert.equal(s.post.confT['Big 12'].kind, 'single');
+assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 simGames(s, undefined, { autoLock: true });
+// Regionals keep their if-necessary Game 7 structure
+for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
+
+// Ratings moved with results
+const moved = Object.entries(s.teams).filter(([k, t]) => t.off !== pre[k].off || t.pit !== pre[k].pit || t.def !== pre[k].def).length;
+const drift = Object.entries(s.teams).map(([k, t]) => Math.abs(t.off - pre[k].off) + Math.abs(t.pit - pre[k].pit) + Math.abs(t.def - pre[k].def));
+console.log(`ratings moved for ${moved} of ${Object.keys(s.teams).length} teams; biggest total change ${Math.max(...drift)}`);
+assert.ok(moved > 30, 'ratings change during the season');
+assert.ok(Math.max(...drift) <= 30, 'changes stay modest');
 assert.equal(s.phase, 'complete');
 assert.ok(s.games.every(isFinal));
 for (let w = 1; w <= LAST_POLL_WEEK; w++) assert.ok(s.polls[w], `poll week ${w}`);
@@ -50,9 +85,10 @@ const avg = k => (g.reduce((a, x) => a + x['home' + k] + x['away' + k], 0) / g.l
 console.log('per team per game: R', avg('R'), 'H', avg('H'), 'E', avg('E'), 'run-rule', (g.filter(x => x.runRule).length / g.length).toFixed(3), 'extras', (g.filter(x => x.awayLine.length > 7).length / g.length).toFixed(3));
 for (const x of s.games) { assert.equal(x.homeLine.reduce((a, b) => a + (b || 0), 0), x.homeR); }
 
-// Coaches
-assert.equal(s.teams['Oklahoma'].coach, 'JT Gasso');
-assert.ok(Object.values(s.teams).every(t => t.coach), 'every team has a coach');
+// Coaches are people with ids
+assert.equal(coachName(league, s.teams['Oklahoma'].coachId), 'JT Gasso');
+assert.ok(Object.values(s.teams).every(t => t.coachId), 'every team has a coach');
+assert.notEqual(s.teams['Iowa'].coachId, s.teams['Minnesota State'].coachId, 'two coaches named Tim Keirnan stay separate people');
 assert.ok(Object.values(s.teams).every(t => !t.staff), 'no pitching staffs');
 assert.ok(s.games.every(g => !g.pitching && !g.wp), 'no pitching stats');
 
@@ -60,7 +96,14 @@ assert.ok(s.games.every(g => !g.pitching && !g.wp), 'no pitching stats');
 const d = beginOffseason(league);
 assert.equal(d.year, 2017);
 addConference(league, 'Summit', { color: '#123456' });
-addTeam(league, d.teams, { school: 'Oregon State', conference: 'Summit', coach: 'Pat Casey' });
+addTeam(league, d.teams, { school: 'Oregon State', conference: 'Summit', coachName: 'Pat Casey' });
+// Coaching carousel: Oklahoma hires Green Bay's coach; Green Bay hires a new one
+const foore = d.teams['Green Bay'].coachId, gasso = d.teams['Oklahoma'].coachId;
+assert.equal(hireCoach(d.teams, 'Oklahoma', foore), 'Green Bay');
+assert.equal(d.teams['Green Bay'].coachId, null);
+assert.ok(draftWarnings(league).some(w => /Green Bay/.test(w)), 'vacancy is flagged');
+assert.ok(availableCoaches(league, d.teams).some(c => c.id === gasso), 'JT Gasso is now available');
+hireCoach(d.teams, 'Green Bay', newCoach(league, 'Sam New'));
 for (const t of ['Saint Louis', 'UMKC', 'North Dakota State']) d.teams[t].conference = 'Summit';
 d.teams['Houston'].conference = 'Big 12';
 draftRemoveTeam(league, 'Bemidji State');
@@ -71,7 +114,18 @@ assert.equal(s2.year, 2017);
 assert.ok(!league.draft);
 assert.ok(s2.teams['Oregon State'] && !s2.teams['Bemidji State']);
 assert.equal(s2.teams['Houston'].conference, 'Big 12');
-assert.equal(s2.teams['Oregon State'].coach, 'Pat Casey');
+assert.equal(coachName(league, s2.teams['Oregon State'].coachId), 'Pat Casey');
+assert.equal(coachName(league, s2.teams['Oklahoma'].coachId), 'Roman Foore');
+// New schedule each season, with conference series flipping home and away
+assert.ok(s2.games.some(g => g.type === 'regular') && s2.games.every(g => !g.final || g.type !== 'regular' || true));
+const host16 = new Map(s.games.filter(g => g.type === 'regular' && g.confGame).map(g => [[g.home, g.away].sort().join('|'), g.home]));
+let flipped = 0, same = 0;
+for (const g of s2.games.filter(g => g.type === 'regular' && g.confGame && g.day === 'Fri')) {
+  const h = host16.get([g.home, g.away].sort().join('|'));
+  if (h) (h === g.home ? same++ : flipped++);
+}
+console.log(`conference series that met in both years: ${flipped} flipped, ${same} same host`);
+assert.equal(same, 0, 'every repeat conference series switches sites');
 const summit = Object.values(s2.teams).filter(t => t.conference === 'Summit').map(t => t.school);
 assert.equal(summit.length, 4);
 for (const t of summit) {

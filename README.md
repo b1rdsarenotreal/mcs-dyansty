@@ -1,6 +1,6 @@
 # MCS Dynasty
 
-A commissioner-style **men's college softball** dynasty. It's fictional, but it's built to feel like the real NCAA game: 7-inning line scores, weekend series, the RPI, a Top 25 poll, conference tournaments, regionals and a Men's College World Series. You have the final say on every result.
+A commissioner-style **men's college softball** dynasty. It's fictional, but it's built to feel like the real NCAA game: 7-inning line scores, weekend series, the RPI, a Top 15 poll, conference tournaments, regionals and a Men's College World Series. You have the final say on every result.
 
 It is a static site with no build step and no server, so it runs on GitHub Pages as-is. It looks and works like the [CFB Commissioner](https://github.com/b1rdsarenotreal/cfb-dynasty) app.
 
@@ -20,6 +20,8 @@ Every team has three ratings from 40 to 99:
 
 **OVR = 40% OFF + 40% PIT + 20% DEF.** Starting ratings are guesses you can edit on the Teams page or a team's profile.
 
+**Ratings move during the season.** Every result counts: beating a better team raises a team's ratings, and losing to a weaker one lowers them. The part of the game that decided it gets most of the change. Scoring a lot moves OFF, holding the other team down moves PIT, and clean fielding moves DEF. A team can move at most 10 points from its preseason rating in any category. Team pages show the change since the preseason. Settings lets you choose how much ratings move, or turn it off. Because ratings are recalculated from all results in order, editing or clearing a result keeps everything consistent.
+
 ## The box score simulator
 
 Simulated games play out every plate appearance. Hitting (OFF) faces pitching (PIT) and fielding (DEF), and each plate appearance ends in a strikeout, walk, hit-by-pitch, single, double, triple, home run, error or out. Runners advance, double plays happen and sacrifice flies score runs.
@@ -30,23 +32,23 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 
 ## The season
 
-- **Schedule:** 14 weeks and 52–55 games per team. Weeks 1–4 are non-conference weekend series. Weeks 5–14 are a conference round robin of three-game series (Friday, Saturday, Sunday). Every week from week 2 also has a Tuesday midweek game.
+- **Schedule:** a new one is built every season. 14 weeks and 52–55 games per team. Weeks 1–4 are non-conference weekend series. Weeks 5–14 are a conference round robin of three-game series (Friday, Saturday, Sunday). Every week from week 2 also has a Tuesday midweek game. Conference opponents who met the year before **swap home and away**.
 - **Standings:** conference record first, then head-to-head, then RPI. You can override any regular-season champion.
 - **RPI:** 25% winning percentage, 50% opponents' winning percentage (not counting games against the team) and 25% opponents' opponents' winning percentage.
-- **Top 25 poll:** 40 simulated voters release a poll each week, starting with a preseason poll. Early in the season they lean on OVR, and later on record and RPI. They remember last week's poll, so teams move the way real polls do. Each poll shows points, first-place votes and others receiving votes. You can edit or regenerate any poll.
+- **Top 15 poll:** 40 simulated voters release a poll each week, starting with a preseason poll. Early in the season they lean on OVR, and later on record and RPI. They remember last week's poll, so teams move the way real polls do. Each poll shows points, first-place votes and others receiving votes. You can edit or regenerate any poll.
 
 ## The postseason
 
 The field is smaller than the real NCAA's 64 teams, so the format is scaled down:
 
-1. **Conference tournaments (week 15):** single elimination. Conferences with 9 or more teams take their top 6, and the rest take their top 4. You can change the size on the Standings page or edit seeds before a tournament starts. The champion gets the automatic bid.
+1. **Conference tournaments (week 15):** each conference picks **single or double elimination** and how many teams make it. By default, conferences with 9 or more teams take their top 6 and the rest take their top 4. Both are set on the Standings page. You can also switch a tournament's format or edit its seeds on the Postseason page until its first game. Double elimination has a winners bracket and an elimination bracket. The two bracket winners then meet in **one championship game, with no "if necessary" game**. The champion gets the automatic bid.
 2. **Selection:** a **16-team field**, with one automatic bid per conference and at-large picks by the committee: **RPI rank 60%, poll rank 40%**. The field is seeded 1–16. You can swap teams or move seeds before announcing it, and the page shows the last four in and first four out.
 3. **Regionals (week 16):** four 4-team **double-elimination** regionals hosted by the top four seeds, built serpentine (1-8-9-16, 2-7-10-15 and so on). There's a Game 7 if necessary.
 4. **Men's College World Series (week 17):** the four regional champions play double elimination down to two teams, then a **best-of-three Championship Series**. You can rename the championship in Settings.
 
 The final poll comes out after the championship, with the national champion at #1.
 
-The Postseason page shows each event as a bracket of compact cards with runs, hits and errors. Click a game, or open the Schedule page, for the full inning-by-inning line score.
+The Postseason page draws each event as a real bracket. Rounds are columns, each game sits between the two games that feed it, and lines join them. Double elimination shows the winners bracket on top and the elimination bracket underneath. Each card shows runs, hits and errors. Click a game, or open the Schedule page, for the full inning-by-inning line score.
 
 ## The offseason
 
@@ -56,9 +58,14 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 - **Add teams:** each new team gets a full schedule in the new season.
 - **Add conferences** or delete empty ones.
 - **Remove teams** from the dynasty. Their history stays, and you can bring them back before the season starts.
-- **Update head coaches and ratings.** Ratings have already moved for the new year, shown as +/−. Settings controls how big those changes are, or turns them off.
+- **Coaching changes:** pick each program's coach from a list of available coaches, coaches at other programs, or a new hire. Hiring another program's coach leaves that job open, and the page flags open jobs until they're filled.
+- **Update ratings.** Ratings have already moved for the new year, shown as +/−. Settings controls how big those changes are, or turns them off.
 
 **Start the season** builds the new schedule from the new alignment. The final poll seeds the next preseason poll.
+
+## Coaches
+
+Coaches are people in the dynasty, not just names on a team. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
 
 ## Commissioner controls
 
@@ -68,7 +75,8 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 | Change ratings | Teams page, or the team's profile |
 | Add a team | Offseason (full schedule), or Teams → + Add team mid-season |
 | Realign conferences | Offseason → Conference menus |
-| Change a head coach | Teams page, team profile, or Offseason |
+| Change a head coach | Teams page, team profile, or Offseason (dropdown) |
+| Pick a conference tournament format | Standings → Commissioner, or Postseason before it starts |
 | Rename a team, change colors, logo or conference | Team profile → Commissioner edits |
 | Add or rename a conference, set its logo | Conferences |
 | Add a game | Schedule → + Add game |
@@ -111,7 +119,8 @@ js/data.js              the 2016 teams and conferences, colors, starting ratings
 js/sim.js               plate-appearance game simulator and win probability
 js/schedule.js          schedule generator
 js/standings.js         records, standings, tiebreakers, RPI
-js/polls.js             generated Top 25 poll
+js/polls.js             generated Top 15 poll
+js/ratings.js           in-season rating movement
 js/postseason.js        conference tournaments, selection, regionals, MCWS
 js/league.js            league lifecycle, editing, simulation, new seasons
 js/store.js             saving and backups

@@ -1,4 +1,4 @@
-// Postseason: conference tournaments (single elimination, week 15), a
+// Postseason: conference tournaments (single or double elimination, week 15), a
 // 16-team NCAA field (week 16 regionals: four 4-team double-elimination
 // sites hosted by the top 4 national seeds), and the Men's College World
 // Series (week 17: the four regional champions play double elimination down
@@ -21,44 +21,104 @@ function bracketOrder(p) {
   return order;
 }
 
+// Days for a tournament week: the deepest round lands on Sunday.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function assignDays(nodes) {
+  const byKey = Object.fromEntries(nodes.map(n => [n.key, n]));
+  const depth = n => n._d ??= 1 + Math.max(0, ...[n.a, n.b].map(r => (r && !('seed' in r) ? depth(byKey[r.w || r.l]) : 0)));
+  const max = Math.max(...nodes.map(depth));
+  for (const n of nodes) { n.day = WEEKDAYS[Math.max(0, 7 - max + n._d - 1)]; n.depth = n._d; delete n._d; }
+  return nodes;
+}
+
+// Single elimination for `size` teams (byes for the top seeds when needed).
+// sec / col place each game in the drawn bracket.
 function singleElim(size) {
-  const p = 2 ** Math.ceil(Math.log2(size));
+  const p = 2 ** Math.ceil(Math.log2(Math.max(2, size)));
   const order = bracketOrder(p);
   const rounds = Math.log2(p);
   const names = ['Final', 'Semifinal', 'Quarterfinal', 'First round'];
-  const days = ['Thu', 'Fri', 'Sat', 'Sun'].slice(4 - Math.min(4, rounds));
+  const codes = ['F', 'SF', 'QF', 'R1'];
   const nodes = [];
-  let prev = [];
-  for (let i = 0; i < order.length; i += 2) prev.push({ seed: order[i] - 1 }, { seed: order[i + 1] - 1 });
-  let refs = prev;
+  let refs = [];
+  for (let i = 0; i < order.length; i += 2) refs.push({ seed: order[i] - 1 }, { seed: order[i + 1] - 1 });
   for (let r = 0; r < rounds; r++) {
-    const next = [];
+    const next = [], fromEnd = rounds - 1 - r, count = refs.length / 2;
     for (let i = 0; i < refs.length; i += 2) {
       const key = `R${r + 1}-${i / 2 + 1}`;
-      nodes.push({ key, a: refs[i], b: refs[i + 1], day: days[r] || 'Sun', label: names[rounds - 1 - r] || `Round ${r + 1}` });
+      const code = fromEnd === 0 ? 'Final' : `${codes[fromEnd] || 'R' + (r + 1)}${count > 1 ? '-' + (i / 2 + 1) : ''}`;
+      nodes.push({ key, code, a: refs[i], b: refs[i + 1], sec: 'W', col: r, label: names[fromEnd] || `Round ${r + 1}` });
       next.push({ w: key });
     }
     refs = next;
   }
-  return nodes;
+  return assignDays(nodes);
 }
+
+// Double elimination for a conference tournament: a winners bracket, an
+// elimination (losers) bracket, and ONE championship game between the two
+// bracket winners — no "if necessary" game.
+function doubleElimConf(size) {
+  const p = 2 ** Math.ceil(Math.log2(Math.max(2, size)));
+  const k = Math.log2(p);
+  if (k < 2) return singleElim(size);
+  const order = bracketOrder(p);
+  const nodes = [];
+  const W = []; // W[r] = keys of winners round r (1-based)
+  let refs = [];
+  for (let i = 0; i < order.length; i += 2) refs.push({ seed: order[i] - 1 }, { seed: order[i + 1] - 1 });
+  for (let r = 1; r <= k; r++) {
+    W[r] = [];
+    const next = [], count = refs.length / 2;
+    for (let i = 0; i < refs.length; i += 2) {
+      const key = `W${r}-${i / 2 + 1}`;
+      nodes.push({ key, code: count > 1 ? key : 'W-Final', a: refs[i], b: refs[i + 1], sec: 'W', col: r - 1, label: r === k ? 'Winners final' : `Winners round ${r}` });
+      W[r].push(key); next.push({ w: key });
+    }
+    refs = next;
+  }
+  // Elimination bracket.
+  let lr = 1, prevL = [];
+  const addL = (pairs, label) => {
+    const keys = [];
+    pairs.forEach(([a, b], i) => {
+      const key = `L${lr}-${i + 1}`;
+      nodes.push({ key, code: pairs.length > 1 ? key : `L${lr}`, a, b, sec: 'L', col: lr - 1, label });
+      keys.push(key);
+    });
+    lr++;
+    return keys;
+  };
+  const w1 = W[1];
+  prevL = addL(Array.from({ length: w1.length / 2 }, (_, i) => [{ l: w1[2 * i] }, { l: w1[2 * i + 1] }]), 'Elimination round 1');
+  for (let j = 1; j <= k - 1; j++) {
+    const drop = [...W[j + 1]].reverse(); // cross the drop-ins to avoid quick rematches
+    const last = j === k - 1;
+    prevL = addL(prevL.map((key, i) => [{ w: key }, { l: drop[i] }]), last ? 'Elimination final' : `Elimination round ${lr}`);
+    if (!last) prevL = addL(Array.from({ length: prevL.length / 2 }, (_, i) => [{ w: prevL[2 * i] }, { w: prevL[2 * i + 1] }]), `Elimination round ${lr}`);
+  }
+  nodes.push({ key: 'CH', code: 'Final', a: { w: W[k][0] }, b: { w: prevL[0] }, sec: 'F', col: 0, label: 'Championship' });
+  return assignDays(nodes);
+}
+
+function buildConfNodes(kind, size) { return kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size); }
 
 function doubleElim(final = 'g7') {
   const n = [
-    { key: 'G1', a: { seed: 0 }, b: { seed: 3 }, day: 'Fri', label: 'Game 1' },
-    { key: 'G2', a: { seed: 1 }, b: { seed: 2 }, day: 'Fri', label: 'Game 2' },
-    { key: 'G3', a: { l: 'G1' }, b: { l: 'G2' }, day: 'Sat', label: 'Game 3 (elimination)' },
-    { key: 'G4', a: { w: 'G1' }, b: { w: 'G2' }, day: 'Sat', label: 'Game 4' },
-    { key: 'G5', a: { w: 'G3' }, b: { l: 'G4' }, day: 'Sun', label: 'Game 5 (elimination)' },
+    { key: 'G1', code: 'G1', a: { seed: 0 }, b: { seed: 3 }, day: 'Fri', label: 'Game 1', sec: 'W', col: 0 },
+    { key: 'G2', code: 'G2', a: { seed: 1 }, b: { seed: 2 }, day: 'Fri', label: 'Game 2', sec: 'W', col: 0 },
+    { key: 'G3', code: 'G3', a: { l: 'G1' }, b: { l: 'G2' }, day: 'Sat', label: 'Game 3 (elimination)', sec: 'L', col: 0 },
+    { key: 'G4', code: 'G4', a: { w: 'G1' }, b: { w: 'G2' }, day: 'Sat', label: 'Game 4', sec: 'W', col: 1 },
+    { key: 'G5', code: 'G5', a: { w: 'G3' }, b: { l: 'G4' }, day: 'Sun', label: 'Game 5 (elimination)', sec: 'L', col: 1 },
   ];
   if (final === 'g7') {
-    n.push({ key: 'G6', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Sun', label: 'Regional final' });
-    n.push({ key: 'G7', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Mon', label: 'Regional final (if necessary)', cond: 'g7' });
+    n.push({ key: 'G6', code: 'G6', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Sun', label: 'Regional final', sec: 'F', col: 0 });
+    n.push({ key: 'G7', code: 'G7', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Mon', label: 'Regional final (if necessary)', cond: 'g7', sec: 'F', col: 0 });
   } else {
     for (const x of n) x.day = { Fri: 'Thu', Sat: 'Fri', Sun: 'Sat' }[x.day];
-    n.push({ key: 'F1', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Sun', label: 'Championship Series · Game 1', after: 'G5' });
-    n.push({ key: 'F2', a: { w: 'G5' }, b: { w: 'G4' }, day: 'Mon', label: 'Championship Series · Game 2', after: 'F1' });
-    n.push({ key: 'F3', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Tue', label: 'Championship Series · Game 3 (if necessary)', cond: 'f3' });
+    n.push({ key: 'F1', code: 'Finals G1', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Sun', label: 'Championship Series · Game 1', after: 'G5', sec: 'F', col: 0 });
+    n.push({ key: 'F2', code: 'Finals G2', a: { w: 'G5' }, b: { w: 'G4' }, day: 'Mon', label: 'Championship Series · Game 2', after: 'F1', sec: 'F', col: 0 });
+    n.push({ key: 'F3', code: 'Finals G3', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Tue', label: 'Championship Series · Game 3 (if necessary)', cond: 'f3', sec: 'F', col: 0 });
   }
   return n;
 }
@@ -114,14 +174,14 @@ function advanceEvent(season, ev, { type, week, name }) {
       if (!condMet(ev, node)) continue;
       const a = resolve(ev, node.a), b = resolve(ev, node.b);
       if (!a || !b) continue;
-      if (a === BYE || b === BYE) { node.winner = a === BYE ? b : a; node.loser = null; if (node.winner === BYE) node.winner = null; changed = true; continue; }
+      if (a === BYE || b === BYE) { node.winner = a === BYE ? b : a; node.loser = BYE; changed = true; continue; }
       const ia = ev.seeds.indexOf(a), ib = ev.seeds.indexOf(b);
       let home = ia <= ib ? a : b, away = home === a ? b : a;
       if (node.key === 'F2') [home, away] = [away, home];
       const hosted = ev.host && (home === ev.host || away === ev.host);
       if (hosted && away === ev.host) [home, away] = [away, home];
       const g = blankGame(season, {
-        type, week, day: node.day, order: DAY_ORDER[node.day] + (['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0),
+        type, week, day: node.day, order: DAY_ORDER[node.day] + (type !== 'conf' && ['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0) + (node.depth || 0) * 0.01,
         home, away, neutral: !hosted, event: ev.id, node: node.key,
         label: `${name} · ${node.label}`,
       });
@@ -135,7 +195,7 @@ function advanceEvent(season, ev, { type, week, name }) {
 }
 
 function eventChampion(ev) {
-  if (ev.kind === 'single') { const last = ev.nodes[ev.nodes.length - 1]; return last.winner || null; }
+  if (ev.kind === 'single' || ev.kind === 'double') { const w = ev.nodes[ev.nodes.length - 1].winner; return w && w !== BYE ? w : null; }
   if (ev.kind === 'regional') {
     const g6 = nodeOf(ev, 'G6'), g7 = nodeOf(ev, 'G7');
     if (g7.winner) return g7.winner;
@@ -169,7 +229,8 @@ export function setupConfTourneys(season) {
     const size = Math.min(n, season.settings.confTourney?.[conf] ?? defaultConfTourneySize(n));
     if (size < 2) continue;
     const seeds = confTourneySeeds(season, conf).slice(0, size);
-    season.post.confT[conf] = { id: `ct-${conf}`, kind: 'single', conf, size, seeds, nodes: singleElim(size), champion: null };
+    const kind = size >= 3 && season.settings.confFormat?.[conf] === 'double' ? 'double' : 'single';
+    season.post.confT[conf] = { id: `ct-${conf}`, kind, conf, size, seeds, nodes: buildConfNodes(kind, size), champion: null };
   }
   season.phase = 'conf';
 }
@@ -181,7 +242,7 @@ export function reseedConfTourney(season, conf, seeds) {
   if (season.games.some(g => ids.has(g.id) && isFinal(g))) throw new Error('That tournament has already started.');
   season.games = season.games.filter(g => !ids.has(g.id));
   ev.seeds = seeds;
-  ev.nodes = singleElim(ev.size);
+  ev.nodes = buildConfNodes(ev.kind, ev.size);
   ev.champion = null;
 }
 
@@ -192,7 +253,7 @@ export function committeeOrder(season) {
   const r = rpi(season);
   const pr = pollRankMap(latestPoll(season));
   const teams = Object.keys(season.teams);
-  const score = t => 0.6 * (r[t].rank ?? 99) + 0.4 * (pr[t] ?? 35);
+  const score = t => 0.6 * (r[t].rank ?? 99) + 0.4 * (pr[t] ?? 22);
   return teams.sort((a, b) => score(a) - score(b) || r[b].rpi - r[a].rpi);
 }
 
@@ -300,3 +361,24 @@ export function nodeTeams(ev, node) {
   return [f(node.a), f(node.b)];
 }
 export function nodeNeeded(ev, node) { return !node.cond || condMet(ev, node); }
+
+// "Winner of SF-1" style text for an undecided slot.
+export function refLabel(ev, ref) {
+  if (!ref || 'seed' in ref) return null;
+  const n = nodeOf(ev, ref.w || ref.l);
+  return `${ref.w ? 'Winner' : 'Loser'} of ${n?.code || n?.key || '?'}`;
+}
+
+// Change a conference tournament's format before it starts.
+export function setConfFormat(season, conf, kind) {
+  season.settings.confFormat ||= {};
+  season.settings.confFormat[conf] = kind;
+  const ev = season.post?.confT?.[conf];
+  if (!ev) return;
+  const ids = new Set(ev.nodes.map(n => n.gameId).filter(Boolean));
+  if (season.games.some(g => ids.has(g.id) && isFinal(g))) throw new Error('That tournament has already started.');
+  season.games = season.games.filter(g => !ids.has(g.id));
+  ev.kind = ev.size >= 3 && kind === 'double' ? 'double' : 'single';
+  ev.nodes = buildConfNodes(ev.kind, ev.size);
+  ev.champion = null;
+}

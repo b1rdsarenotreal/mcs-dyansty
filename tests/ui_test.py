@@ -21,6 +21,11 @@ try:
         url = f"http://localhost:{PORT}/"
         pg.goto(url + "#/home"); pg.wait_for_selector(".kpis")
         pg.screenshot(path=f"{OUT}/01-home.png", full_page=True)
+        # Big Ten: 8-team double elimination; Horizon: double elimination
+        pg.goto(url + "#/standings"); pg.wait_for_selector("[data-format]", state="attached")
+        open_all = "document.querySelectorAll('details').forEach(d => d.open = true)"
+        for sel, val in [("select[data-format='Big Ten']", "double"), ("select[data-size='Big Ten']", "8"), ("select[data-format='Horizon']", "double")]:
+            pg.evaluate(open_all); pg.select_option(sel, val); pg.wait_for_timeout(200)
         pg.goto(url + "#/schedule"); pg.wait_for_selector(".game")
         pg.click("#w-sim"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/02-schedule.png", full_page=False)
@@ -81,13 +86,21 @@ try:
         for t in ["Saint Louis", "UMKC", "North Dakota State"]:
             pg.select_option(f"select[data-dconf='{t}']", "Summit"); pg.wait_for_timeout(150)
         pg.click("button[data-addto='Summit']"); pg.fill("#f-school", "Omaha"); pg.fill("#f-coach", "Pat Casey"); pg.click("#f-save"); pg.wait_for_timeout(300)
-        pg.fill("input[data-dcoach='Oklahoma']", "New Coach"); pg.press("input[data-dcoach='Oklahoma']", "Tab")
+        # Coaching carousel: Oklahoma hires Green Bay's coach, Green Bay hires someone new
+        pg.select_option("select[data-dcoach='Oklahoma']", label="Roman Foore (Green Bay)"); pg.wait_for_timeout(300)
+        assert pg.locator("select[data-dcoach='Green Bay'].vacant").count() == 1, "Green Bay job is open"
+        pg.select_option("select[data-dcoach='Green Bay']", "__new"); pg.wait_for_selector("#cn-name")
+        pg.fill("#cn-name", "Sam Newman"); pg.click("#cn-save"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/15b-offseason-realigned.png", full_page=True)
         pg.click("#o-start"); pg.wait_for_timeout(800)
         pg.goto(url + "#/standings"); pg.wait_for_timeout(300)
         assert "Summit" in pg.content() and "Omaha" in pg.content()
         pg.goto(url + "#/team/Oklahoma"); pg.wait_for_timeout(300)
-        assert "New Coach" in pg.content()
+        assert "Roman Foore" in pg.content()
+        pg.screenshot(path=f"{OUT}/16c-team-2017.png", full_page=True)
+        pg.goto(url + "#/coaches"); pg.wait_for_timeout(300)
+        assert "Sam Newman" in pg.content() and "JT Gasso" in pg.content()
+        pg.screenshot(path=f"{OUT}/16d-coaches.png", full_page=True)
         pg.goto(url + "#/home"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16-new-season.png", full_page=True)
         pg.goto(url + "#/history"); pg.wait_for_timeout(300)
@@ -122,11 +135,13 @@ try:
               if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(sel + ' boxes overlap');
             }
           }
+          // Bracket cards must hold their content.
+          for (const el of document.querySelectorAll('.bk-node > .bgame')) if (el.scrollHeight > el.clientHeight + 1) out.push('bracket card overflows: ' + name(el));
           // Truncated names (not an error, but counted).
           const cut = [...document.querySelectorAll('.bg-team .team-link, .line.sb .team-link, .kpi .team-link')].filter(e => vis(e) && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent);
           return { problems: [...new Set(out)].slice(0, 12), truncated: cut.slice(0, 8), truncatedCount: cut.length };
         }"""
-        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/settings"]
+        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/coaches", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/settings"]
         layout_issues = []
         for w in [1400, 1024, 768, 390]:
             lp = b.new_page(viewport={"width": w, "height": 900})

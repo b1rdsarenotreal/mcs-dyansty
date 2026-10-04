@@ -3,8 +3,9 @@
 import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js';
 import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js';
 import { ovr } from './sim.js';
-import { latestPoll, pollRankMap } from './polls.js';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings } from './league.js';
+import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js';
+import { setRating } from './ratings.js';
 import { postseasonFinish } from './postseason.js';
 import { exportLeague, clearLeague } from './store.js';
 import { clamp } from './util.js';
@@ -12,9 +13,58 @@ import { clamp } from './util.js';
 const ui = { confFilter: '' };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
 
-function ratingBar(label, v, color) {
+function ratingBar(label, v, color, pre = null) {
   const pct = ((v - 40) / 59) * 100;
-  return `<div class="rbar"><span class="rl">${label}</span><div class="rtrack"><div style="width:${pct}%;background:${esc(color)}"></div></div><span class="rv">${v}</span></div>`;
+  const d = pre == null ? 0 : v - pre;
+  return `<div class="rbar"><span class="rl">${label}</span><div class="rtrack"><div style="width:${pct}%;background:${esc(color)}"></div>${pre != null && d ? `<i class="rpre" style="left:${((pre - 40) / 59) * 100}%" title="Preseason ${pre}"></i>` : ''}</div><span class="rv">${v}</span><span class="rd ${d > 0 ? 'good' : d < 0 ? 'bad' : 'muted'}">${pre == null ? '' : d ? (d > 0 ? '+' : '') + d : '—'}</span></div>`;
+}
+const ovrOf = r => Math.round(r.off * 0.4 + r.pit * 0.4 + r.def * 0.2);
+
+// ---------- Coaches (shared pieces) ----------
+
+// Dropdown for a team's head coach. Choosing a coach who leads another
+// program hires him away and leaves that job open.
+function coachSelect(teams, school, attr) {
+  const L = ctx.league, cur = teams[school]?.coachId;
+  const avail = availableCoaches(L, teams);
+  const others = Object.values(teams).filter(t => t.school !== school && t.coachId).sort((a, b) => coachName(L, a.coachId).localeCompare(coachName(L, b.coachId)));
+  return `<select class="coach-sel ${cur ? '' : 'vacant'}" ${attr}="${esc(school)}" aria-label="${esc(school)} head coach">
+    ${cur ? `<option value="${cur}" selected>${esc(coachName(L, cur))}</option>` : ''}
+    <option value="" ${cur ? '' : 'selected'}>— Vacant —</option>
+    ${avail.length ? `<optgroup label="Available">${avail.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</optgroup>` : ''}
+    ${others.length ? `<optgroup label="Hire from another program">${others.map(t => `<option value="${t.coachId}">${esc(coachName(L, t.coachId))} (${esc(t.school)})</option>`).join('')}</optgroup>` : ''}
+    <option value="__new">+ New coach…</option></select>`;
+}
+
+function askCoachName(title, value = '') {
+  return new Promise(resolve => {
+    modal.innerHTML = `<div class="modal-head"><h2>${esc(title)}</h2><button class="btn ghost" data-x>✕</button></div>
+      <div class="modal-body stack"><label class="field">Coach's name <input type="text" id="cn-name" value="${esc(value)}" autocomplete="off"></label></div>
+      <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="cn-save">Save</button></div>`;
+    let result = null;
+    $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+    modal.onclose = () => resolve(result);
+    const save = () => { const v = $('#cn-name', modal).value.trim(); if (!v) return toast("Type the coach's name.", true); result = v; modal.close(); };
+    $('#cn-save', modal).onclick = save;
+    $('#cn-name', modal).onkeydown = e => { if (e.key === 'Enter') save(); };
+    modal.showModal();
+    $('#cn-name', modal).focus();
+  });
+}
+
+function bindCoachSelects(teams, attr) {
+  $$(`[${attr}]`).forEach(sel => (sel.onchange = async () => {
+    const school = sel.getAttribute(attr), L = ctx.league;
+    let id = sel.value;
+    if (id === '__new') {
+      const name = await askCoachName(`New head coach for ${school}`);
+      if (!name) return ctx.render();
+      id = newCoach(L, name);
+    }
+    const from = hireCoach(teams, school, id || null);
+    changed({ progress: false });
+    toast(from ? `${coachName(L, id)} leaves ${from} for ${school}. ${from} needs a new coach.` : id ? `${coachName(L, id)} is ${school}'s head coach.` : `${school}'s head coach job is open.`);
+  }));
 }
 
 // ---------- Teams ----------
@@ -30,23 +80,23 @@ export function renderTeams() {
     <div class="card"><div class="table-wrap"><table class="teams-table">
       <thead><tr><th>Team</th><th>Head coach</th><th>Conference</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th class="num">Record</th><th class="num">Poll</th></tr></thead>
       <tbody>${list.map(t => `<tr><td>${team(t.school, { rank: false })}</td>
-        <td><input type="text" class="coach-in" data-coach="${esc(t.school)}" value="${esc(t.coach || '')}" placeholder="Add coach" aria-label="${esc(t.school)} head coach"></td>
+        <td>${coachSelect(s.teams, t.school, 'data-coach')}</td>
         <td><select data-conf="${esc(t.school)}">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
         ${['off', 'pit', 'def'].map(k => `<td class="num"><input type="number" min="40" max="99" class="rin" data-rate="${k}" data-team="${esc(t.school)}" value="${t[k]}"></td>`).join('')}
-        <td class="num"><b data-ovr="${esc(t.school)}">${ovr(t)}</b></td><td class="num">${recs[t.school].w}-${recs[t.school].l}</td><td class="num muted">${pr[t.school] ?? ''}</td></tr>`).join('')}</tbody></table></div>
-    <p class="small muted">Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching) + 20% DEF (fielding). Changes apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
+        <td class="num"><b data-ovr="${esc(t.school)}">${ovr(t)}</b>${t.base && ovr(t) !== ovrOf(t.base) ? ` <span class="rd ${ovr(t) > ovrOf(t.base) ? 'good' : 'bad'}" title="Since preseason">${ovr(t) > ovrOf(t.base) ? '▲' : '▼'}${Math.abs(ovr(t) - ovrOf(t.base))}</span>` : ''}</td><td class="num">${recs[t.school].w}-${recs[t.school].l}</td><td class="num muted">${pr[t.school] ?? ''}</td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted">Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching) + 20% DEF (fielding). Ratings also move during the season with results (▲▼ shows the change since preseason); Settings controls how much. Changes you make apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
   $$('[data-cf]').forEach(b => (b.onclick = () => { ui.confFilter = b.dataset.cf; renderTeams(); }));
   $$('[data-rate]').forEach(inp => (inp.onchange = () => {
     const t = s.teams[inp.dataset.team];
-    t[inp.dataset.rate] = rate(inp.value); inp.value = t[inp.dataset.rate];
+    setRating(t, inp.dataset.rate, rate(inp.value)); inp.value = t[inp.dataset.rate];
     $(`[data-ovr="${CSS.escape(t.school)}"]`).textContent = ovr(t);
     persist();
   }));
   $$('[data-conf]').forEach(sel => (sel.onchange = () => { s.teams[sel.dataset.conf].conference = sel.value; changed({ progress: false }); }));
-  $$('[data-coach]').forEach(inp => (inp.onchange = () => { s.teams[inp.dataset.coach].coach = inp.value.trim(); persist(); }));
+  bindCoachSelects(s.teams, 'data-coach');
   $('#t-add').onclick = () => teamForm(s.teams, {
     note: !s.games.some(g => g.type === 'regular' && isFinal(g)) ? 'rebuild' : 'played',
-    after: f => { if (f.rebuild) rebuildSchedule(s); },
+    after: f => { if (f.rebuild) rebuildSchedule(s, ctx.league.seasons[s.year - 1] || null); },
   });
 }
 
@@ -59,7 +109,9 @@ function teamForm(teams, { note = null, after = () => {}, conference = null } = 
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="f-school" placeholder="e.g. Oregon State"></label>
         <label class="field" style="flex:1;min-width:110px">Mascot <input type="text" id="f-mascot" placeholder="Beavers"></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="f-abbr" maxlength="5" placeholder="ORST"></label></div>
-      <div class="row"><label class="field" style="flex:1;min-width:160px">Head coach <input type="text" id="f-coach" placeholder="Coach's name"></label>
+      <div class="row"><label class="field" style="flex:1;min-width:160px">Head coach <select id="f-coachsel"><option value="__new">New coach (type the name)</option>${availableCoaches(ctx.league, teams).map(c => `<option value="${c.id}">${esc(c.name)} (available)</option>`).join('')}</select></label>
+        <label class="field" style="flex:1;min-width:160px" id="f-coachname-wrap">New coach's name <input type="text" id="f-coach" placeholder="Coach's name"></label></div>
+      <div class="row">
         <label class="field" style="flex:1;min-width:160px">Conference <select id="f-conf">${confs.map(c => `<option ${c === conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label></div>
       <div class="row"><label class="field">Color <input type="color" id="f-color" value="#DC4405"></label><label class="field">Alt color <input type="color" id="f-alt" value="#000000"></label>
         ${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" id="f-${k}" value="65"></label>`).join('')}</div>
@@ -69,10 +121,12 @@ function teamForm(teams, { note = null, after = () => {}, conference = null } = 
     <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="f-save">Add team</button></div>`;
   $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
   modal.onclose = () => ctx.render();
+  $('#f-coachsel', modal).onchange = e => { $('#f-coachname-wrap', modal).style.display = e.target.value === '__new' ? '' : 'none'; };
   $('#f-save', modal).onclick = () => {
     const v = id => $(id, modal).value.trim();
     try {
-      addTeam(ctx.league, teams, { school: v('#f-school'), mascot: v('#f-mascot'), coach: v('#f-coach'), abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
+      const pick = v('#f-coachsel');
+      addTeam(ctx.league, teams, { school: v('#f-school'), mascot: v('#f-mascot'), coachId: pick === '__new' ? null : pick, coachName: pick === '__new' ? v('#f-coach') : '', abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
       after({ rebuild: !!$('#f-rebuild', modal)?.checked });
     } catch (e) { return toast(e.message, true); }
     modal.close(); changed({ progress: false }); toast('Team added.');
@@ -117,7 +171,7 @@ export function renderOffseason() {
     return `<div class="card off-conf"><div class="row" style="margin-bottom:8px">${confLogo(c, 28)}<h2 style="margin:0">${esc(c)}</h2><span class="muted small">${list.length} team${list.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" data-addto="${esc(c)}">+ Team</button></div>
       ${list.length ? `<div class="table-wrap"><table class="off-table"><thead><tr><th>Team</th><th>Head coach</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th>Conference</th><th></th></tr></thead><tbody>
         ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}</td>
-          <td><input type="text" class="coach-in" data-dcoach="${esc(t.school)}" value="${esc(t.coach || '')}" placeholder="Add coach" aria-label="${esc(t.school)} head coach"></td>
+          <td>${coachSelect(d.teams, t.school, 'data-dcoach')}</td>
           ${['off', 'pit', 'def'].map(k => `<td class="num"><span class="rin-wrap"><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}">${delta(t, k)}</span></td>`).join('')}
           <td class="num"><b>${ovr(t)}</b></td>
           <td><select data-dconf="${esc(t.school)}" aria-label="Move ${esc(t.school)}">${confs.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
@@ -129,13 +183,13 @@ export function renderOffseason() {
   app.innerHTML = `
     <div class="section-head"><h1>${d.year} Offseason</h1><span class="muted">${teams.length} teams in ${new Set(teams.map(t => t.conference)).size} conferences</span><span class="spacer"></span>
       <button class="btn" id="o-conf">+ Add conference</button><button class="btn" id="o-team">+ Add team</button><button class="btn primary" id="o-start">Start the ${d.year} season</button></div>
-    <div class="hint">Set up the ${d.year} season. Ratings have already changed for the new year (shown as +/−). Move teams with the <b>Conference</b> menus, add new teams or conferences, and update coaches. Nothing is scheduled until you start the season, so every team gets a full schedule.</div>
+    <div class="hint">Set up the ${d.year} season. Ratings have already changed for the new year (shown as +/−). Move teams with the <b>Conference</b> menus, add new teams or conferences, and make coaching changes (hiring another program's coach opens that job). Nothing is scheduled until you start the season, so every team gets a full schedule.</div>
     ${warnings.length ? `<div class="hint warn" style="margin-top:10px">${warnings.map(esc).join('<br>')}</div>` : ''}
     ${removed.length ? `<div class="card" style="margin-top:14px"><b>Leaving the dynasty:</b> ${removed.map(t => `<span class="chip-static">${esc(t)} <button class="btn sm" data-restore="${esc(t)}">Bring back</button></span>`).join(' ')}</div>` : ''}
     <div class="off-grid" style="margin-top:14px">${confs.map(card).join('')}</div>`;
   const T = d.teams;
-  $$('[data-dcoach]').forEach(inp => (inp.onchange = () => { T[inp.dataset.dcoach].coach = inp.value.trim(); persist(); }));
-  $$('[data-drate]').forEach(inp => (inp.onchange = () => { T[inp.dataset.team][inp.dataset.drate] = rate(inp.value); changed({ progress: false }); }));
+  bindCoachSelects(T, 'data-dcoach');
+  $$('[data-drate]').forEach(inp => (inp.onchange = () => { const t = T[inp.dataset.team], k = inp.dataset.drate; t[k] = rate(inp.value); t.base = { ...(t.base || {}), [k]: t[k] }; changed({ progress: false }); }));
   $$('[data-dconf]').forEach(sel => (sel.onchange = () => { T[sel.dataset.dconf].conference = sel.value; changed({ progress: false }); toast(`${sel.dataset.dconf} moves to the ${sel.value}.`); }));
   $$('[data-drm]').forEach(b => (b.onclick = () => { if (confirm(`Remove ${b.dataset.drm} from the dynasty starting in ${d.year}? Its history stays.`)) { draftRemoveTeam(L, b.dataset.drm); changed({ progress: false }); } }));
   $$('[data-restore]').forEach(b => (b.onclick = () => { draftRestoreTeam(L, b.dataset.restore); changed({ progress: false }); }));
@@ -158,8 +212,8 @@ function pollChart(pts, color) {
   const W = 760, H = 210, L = 36, R = 12, T = 12, B = 30;
   const n = pts.length, step = n > 1 ? (W - L - R) / (n - 1) : 0;
   const x = i => L + (n > 1 ? i * step : (W - L - R) / 2);
-  const y = rk => T + ((rk ?? 28) - 1) / 27 * (H - T - B);
-  const grid = [1, 5, 10, 15, 20, 25].map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid"/><text x="${L - 8}" y="${y(v) + 4}" class="pc-yl">${v}</text>`).join('')
+  const y = rk => T + ((rk ?? POLL_SIZE + 3) - 1) / (POLL_SIZE + 2) * (H - T - B);
+  const grid = [1, 5, 10, 15].filter(v => v <= POLL_SIZE).map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid"/><text x="${L - 8}" y="${y(v) + 4}" class="pc-yl">${v}</text>`).join('')
     + `<line x1="${L}" x2="${W - R}" y1="${y(null)}" y2="${y(null)}" class="pc-grid pc-nr"/><text x="${L - 8}" y="${y(null) + 4}" class="pc-yl">NR</text>`;
   let path = '', open = false;
   pts.forEach((p, i) => { if (p.rank) { path += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.rank).toFixed(1)}`; open = true; } else open = false; });
@@ -194,14 +248,15 @@ export function renderTeamPage(name) {
       <div class="team-hero-logo">${logoImg(t, 64)}</div>
       <div style="flex:1;min-width:200px">
         <div class="team-hero-name">${pr[name] ? `<span class="team-hero-rank">#${pr[name]}</span> ` : ''}${esc(name)}</div>
-        <div class="team-hero-sub">${t.coach ? `Head coach ${esc(t.coach)} · ` : ''}${esc(t.mascot || '')} · <a href="${confHref(t.conference)}" style="color:inherit">${esc(t.conference)}</a> · ${rec.w}-${rec.l} (${rec.cw}-${rec.cl} conf) · OVR ${ovr(t)}</div>
+        <div class="team-hero-sub">${t.coachId ? `Head coach <a href="#/coaches" style="color:inherit">${esc(coachName(ctx.league, t.coachId))}</a> · ` : 'Head coach job open · '}${esc(t.mascot || '')} · <a href="${confHref(t.conference)}" style="color:inherit">${esc(t.conference)}</a> · ${rec.w}-${rec.l} (${rec.cw}-${rec.cl} conf) · OVR ${ovr(t)}</div>
       </div>
       <a class="btn" href="#/teams">All teams</a>
     </div>
     ${inSeason ? '' : `<div class="hint" style="margin-bottom:14px">${esc(name)} isn't in the ${s.year} season. Showing its dynasty record.</div>`}
     <div class="grid">
       <div class="card"><h2>Ratings</h2>
-        ${ratingBar('OFF', t.off, t.color)}${ratingBar('PIT', t.pit, t.color)}${ratingBar('DEF', t.def, t.color)}${ratingBar('OVR', ovr(t), t.altColor && readableOn('#ffffff', t.altColor) !== '#ffffff' ? t.altColor : t.color)}
+        ${ratingBar('OFF', t.off, t.color, t.base?.off)}${ratingBar('PIT', t.pit, t.color, t.base?.pit)}${ratingBar('DEF', t.def, t.color, t.base?.def)}${ratingBar('OVR', ovr(t), t.color, t.base ? ovrOf(t.base) : null)}
+        <p class="small muted" style="margin:6px 0 0">Change since the preseason, from results so far. Ratings rise with wins over better teams and fall with losses to weaker ones.</p>
         ${inSeason ? `<div class="row" style="margin-top:10px">${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" data-r="${k}" value="${t[k]}"></label>`).join('')}</div>` : ''}
       </div>
       <div class="card"><h2>${s.year} season</h2>
@@ -228,11 +283,11 @@ export function renderTeamPage(name) {
             <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp)}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="4" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game</p></div>
     <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${esc(ctx.league.seasons[y].teams[name].coach || '—')}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${esc(coachName(ctx.league, ctx.league.seasons[y].teams[name].coachId) || '—')}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
-        <label class="field" style="flex:1;min-width:150px">Head coach <input type="text" id="e-coach" value="${esc(t.coach || '')}"></label>
+        <label class="field" style="flex:1;min-width:180px">Head coach ${coachSelect(s.teams, name, 'data-ecoach')}</label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="e-abbr" maxlength="5" value="${esc(t.abbr || '')}"></label>
         <label class="field" style="flex:1;min-width:140px">Conference <select id="e-conf">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
         <label class="field">Color <input type="color" id="e-color" value="${esc(t.color)}"></label><label class="field">Alt color <input type="color" id="e-alt" value="${esc(t.altColor)}"></label></div>
@@ -244,7 +299,8 @@ export function renderTeamPage(name) {
 
   $$('[data-g]').forEach(rw => (rw.onclick = e => { if (!e.target.closest('a')) openGame(Number(rw.dataset.g)); }));
   if (!inSeason) return;
-  $$('[data-r]').forEach(inp => (inp.onchange = () => { t[inp.dataset.r] = rate(inp.value); changed({ progress: false }); }));
+  $$('[data-r]').forEach(inp => (inp.onchange = () => { setRating(t, inp.dataset.r, rate(inp.value)); changed(); }));
+  bindCoachSelects(s.teams, 'data-ecoach');
   const applyLogo = url => { for (const se of Object.values(ctx.league.seasons)) if (se.teams[name]) se.teams[name].logoOverride = url; };
   $('#e-file').onchange = async e => {
     try { applyLogo(await imageFileToDataUrl(e.target.files[0])); changed({ progress: false }); toast('Logo updated.'); } catch (err) { toast(err.message, true); }
@@ -252,7 +308,7 @@ export function renderTeamPage(name) {
   if ($('#e-clearlogo')) $('#e-clearlogo').onclick = () => { applyLogo(null); changed({ progress: false }); };
   $('#e-save').onclick = () => {
     const v = id => $(id).value.trim();
-    Object.assign(t, { mascot: v('#e-mascot'), coach: v('#e-coach'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt') });
+    Object.assign(t, { mascot: v('#e-mascot'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt') });
     if (v('#e-logo')) applyLogo(v('#e-logo'));
     const newName = v('#e-school');
     try { if (newName !== name) { renameTeam(ctx.league, s, name, newName); location.hash = teamHref(newName); } } catch (e) { return toast(e.message, true); }
@@ -262,6 +318,58 @@ export function renderTeamPage(name) {
     if (!confirm(`Remove ${name} from the ${s.year} season? Its unplayed games are deleted; games already played stay in the record.`)) return;
     removeTeam(s, name); location.hash = '#/teams'; changed();
   };
+}
+
+// ---------- Coaches ----------
+
+function coachCareers() {
+  const L = ctx.league, out = {};
+  for (const c of Object.values(L.coaches || {})) out[c.id] = { ...c, w: 0, l: 0, seasons: [], ct: 0, ncaa: 0, mcws: 0, titles: 0 };
+  for (const y of Object.keys(L.seasons).map(Number).sort((a, b) => a - b)) {
+    const se = L.seasons[y], recs = records(se);
+    for (const t of Object.values(se.teams)) {
+      const c = out[t.coachId];
+      if (!c) continue;
+      c.w += recs[t.school].w; c.l += recs[t.school].l;
+      c.seasons.push({ y, school: t.school });
+      if (se.post?.confT?.[t.conference]?.champion === t.school) c.ct++;
+      if (se.post?.field?.some(f => f.team === t.school)) c.ncaa++;
+      if (se.post?.mcws?.seeds.includes(t.school)) c.mcws++;
+      if (se.post?.champion === t.school) c.titles++;
+    }
+  }
+  return out;
+}
+
+function stints(seasons) {
+  const out = [];
+  for (const x of seasons) {
+    const last = out[out.length - 1];
+    if (last && last.school === x.school && last.to === x.y - 1) last.to = x.y; else out.push({ school: x.school, from: x.y, to: x.y });
+  }
+  return out.map(s => `${esc(s.school)} (${s.from === s.to ? s.from : `${s.from}–${String(s.to).slice(-2)}`})`).join(', ');
+}
+
+const fmtPctLocal = x => x.toFixed(3).replace(/^0/, '');
+
+export function renderCoaches() {
+  const L = ctx.league, cur = L.seasons[L.currentYear];
+  const teamsNow = L.draft && cur.phase === 'complete' ? L.draft.teams : cur.teams;
+  const careers = Object.values(coachCareers()).map(c => ({ ...c, now: coachSchool(teamsNow, c.id) }))
+    .sort((a, b) => (b.now ? 1 : 0) - (a.now ? 1 : 0) || b.w - a.w || a.name.localeCompare(b.name));
+  app.innerHTML = `
+    <div class="section-head"><h1>Coaches</h1><span class="muted">${careers.filter(c => c.now).length} head coaches · ${careers.filter(c => !c.now).length} available</span><span class="spacer"></span><button class="btn primary" id="co-add">+ Add coach</button></div>
+    <div class="hint">Coaches are people in the dynasty. Change a program's coach from the Teams page, the team's page, or the Offseason. Picking a coach who leads another program hires him away and leaves that job open. Coaches without a job stay here as available.</div>
+    <div class="card" style="margin-top:14px"><div class="table-wrap"><table>
+      <thead><tr><th>Coach</th><th>Now</th><th class="num">Seasons</th><th class="num">W-L</th><th class="num">Pct</th><th class="num">Conf. tourney titles</th><th class="num">NCAA</th><th class="num">MCWS</th><th class="num">Natl. titles</th><th>Career</th><th></th></tr></thead>
+      <tbody>${careers.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${c.now ? team(c.now, { rank: false }) : '<span class="badge">Available</span>'}</td>
+        <td class="num">${c.seasons.length}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? fmtPctLocal(c.w / (c.w + c.l)) : '—'}</td>
+        <td class="num">${c.ct || ''}</td><td class="num">${c.ncaa || ''}</td><td class="num">${c.mcws || ''}</td><td class="num">${c.titles ? `<b>${c.titles}</b> 🏆` : ''}</td>
+        <td class="small muted">${stints(c.seasons) || 'No seasons yet'}</td>
+        <td class="num" style="white-space:nowrap"><button class="btn sm" data-rename="${c.id}">Rename</button>${!c.now && !c.seasons.length ? ` <button class="btn sm danger" data-cdel="${c.id}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  $('#co-add').onclick = async () => { const n = await askCoachName('Add a coach'); if (n) { newCoach(L, n); changed({ progress: false }); toast(`${n} added as an available coach.`); } else ctx.render(); };
+  $$('[data-rename]').forEach(b => (b.onclick = async () => { const c = L.coaches[b.dataset.rename]; const n = await askCoachName('Rename coach', c.name); if (n) { c.name = n; changed({ progress: false }); } else ctx.render(); }));
+  $$('[data-cdel]').forEach(b => (b.onclick = () => { delete L.coaches[b.dataset.cdel]; changed({ progress: false }); }));
 }
 
 // ---------- Conferences ----------
@@ -359,6 +467,7 @@ export function renderSettings() {
       </div>
       <div class="card stack"><h2>Simulation (${s.year})</h2>
         <label class="field">Upsets in simulated games <select id="s-vol">${[[0.8, 'Fewer'], [1, 'Realistic'], [1.3, 'More'], [1.8, 'Chaos']].map(([v, l]) => `<option value="${v}" ${Number(st.volatility) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Ratings move with results during the season <select id="s-form">${[['none', 'No — ratings stay put'], ['small', 'A little'], ['normal', 'Normal'], ['big', 'A lot']].map(([v, l]) => `<option value="${v}" ${(st.form || 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" id="s-rr" ${st.runRule ? 'checked' : ''}> 8-run rule after 5 innings</label>
         <label class="check"><input type="checkbox" id="s-tb" ${st.tiebreaker ? 'checked' : ''}> Extra innings start with a runner on second (8th inning on)</label>
       </div>
@@ -378,11 +487,12 @@ export function renderSettings() {
   $('#s-mcws').onchange = e => { st.mcwsName = e.target.value.trim() || "Men's College World Series"; changed({ progress: false }); };
   $('#s-dev').onchange = e => { st.development = e.target.value; persist(); };
   $('#s-vol').onchange = e => { st.volatility = Number(e.target.value); persist(); };
+  $('#s-form').onchange = e => { st.form = e.target.value; changed(); };
   $('#s-rr').onchange = e => { st.runRule = e.target.checked; persist(); };
   $('#s-tb').onchange = e => { st.tiebreaker = e.target.checked; persist(); };
   $('#s-rebuild').onclick = () => {
     if (!confirm(`Replace the ${s.year} regular-season schedule with a new one?`)) return;
-    try { rebuildSchedule(s); } catch (e) { return toast(e.message, true); }
+    try { rebuildSchedule(s, L.seasons[s.year - 1] || null); } catch (e) { return toast(e.message, true); }
     changed(); toast('New schedule built.');
   };
   $('#s-export').onclick = () => exportLeague(L);

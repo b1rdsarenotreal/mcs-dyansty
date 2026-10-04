@@ -353,8 +353,17 @@ export function compactCard(g, seedFn = () => null) {
     <div class="bg-foot">${foot}</div></div>`;
 }
 
+// A bracket slot whose game doesn't exist yet. `teams` entries are a team
+// name, 'BYE', or { text } for "Winner of SF-1" style placeholders.
 export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '' } = {}) {
-  const row = t => `<div class="bg-row"><span class="bg-team">${t && t !== 'BYE' && seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${t === 'BYE' ? '<span class="muted">Bye</span>' : t ? team(t, { rank: false, size: 16 }) : '<span class="muted">TBD</span>'}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
+  const row = t => {
+    let inner;
+    if (t === 'BYE') inner = '<span class="muted">Bye</span>';
+    else if (t && typeof t === 'object') inner = `<span class="muted slot-ref">${esc(t.text)}</span>`;
+    else if (t) inner = `${seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${team(t, { rank: false, size: 16 })}`;
+    else inner = '<span class="muted">TBD</span>';
+    return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
+  };
   return `<div class="bgame placeholder ${faded ? 'faded' : ''}">
     <div class="bg-row bg-head"><span>${esc(label)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
     ${row(teams[0])}${row(teams[1])}<div class="bg-foot"><span class="muted">${esc(note)}</span></div></div>`;

@@ -2,6 +2,8 @@
 // series, weeks 5–14 are conference series (round robin, three games each),
 // and from week 2 on every team also plays a Tuesday midweek game.
 // Teams without a conference series in a week get a non-conference series.
+// When `prev` (last season) is given, conference opponents who met last year
+// swap home and away.
 
 import { rng, shuffle, hashStr } from './util.js';
 
@@ -62,7 +64,7 @@ function crossPairs(pool, teams, met, r, played = null) {
 }
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-export function generateSchedule(season, seed = hashStr(String(season.year))) {
+export function generateSchedule(season, seed = hashStr(String(season.year)), prev = null) {
   const r = rng(seed);
   const teams = season.teams;
   const names = Object.keys(teams);
@@ -72,6 +74,15 @@ export function generateSchedule(season, seed = hashStr(String(season.year))) {
   const games = [];
   let seriesNo = 1;
 
+  // Who hosted each conference series last season.
+  const lastHost = new Map();
+  for (const g of prev?.games || []) if (g.type === 'regular' && g.confGame) lastHost.set(key(g.home, g.away), g.home);
+  const orientConf = (a, b) => {
+    const h = lastHost.get(key(a, b));
+    if (h === a) return [b, a];
+    if (h === b) return [a, b];
+    return orient(a, b);
+  };
   const orient = (a, b) => {
     if (homeCount[a] > homeCount[b]) return [b, a];
     if (homeCount[a] < homeCount[b]) return [a, b];
@@ -106,7 +117,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year))) {
   for (let week = 1; week <= REG_WEEKS; week++) {
     const busy = new Set();
     for (const [a, b] of weekPairs[week] || []) {
-      const [h, aw] = orient(a, b);
+      const [h, aw] = orientConf(a, b);
       addSeries(week, h, aw, true); busy.add(a); busy.add(b);
     }
     const free = names.filter(n => !busy.has(n));

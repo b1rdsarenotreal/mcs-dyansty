@@ -1,4 +1,4 @@
-// Generated Top 25 poll. Simulated voters each fill out a ballot from team
+// Generated Top 15 poll. Simulated voters each fill out a ballot from team
 // strength (OVR) early in the season, shifting to résumé (record and RPI)
 // as games are played. They remember last week's poll, so teams move the
 // way real polls do. The commissioner can edit any published poll.
@@ -8,6 +8,7 @@ import { ovr } from './sim.js';
 import { records, rpi, isFinal } from './standings.js';
 
 export const VOTERS = 40;
+export const POLL_SIZE = 15;
 
 function zmap(obj) {
   const v = Object.values(obj), n = v.length || 1;
@@ -45,7 +46,7 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
   prev?.ranks.forEach((x, i) => { prevRank[x.team] = i + 1; });
   const inertia = week === 0 ? 0.35 : final ? 0.1 : 0.45;
   const base = {};
-  for (const t of Object.keys(scores)) base[t] = scores[t] + (prevRank[t] ? inertia * (26 - prevRank[t]) / 25 : 0);
+  for (const t of Object.keys(scores)) base[t] = scores[t] + (prevRank[t] ? inertia * (POLL_SIZE + 1 - prevRank[t]) / POLL_SIZE : 0);
 
   const r = rng(hashStr(`${season.year}-${final ? 'final' : week}`));
   const pts = {}, fp = {};
@@ -54,22 +55,22 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     const ballot = Object.keys(base).map(t => {
       const bias = normal(rng(hashStr(`${v}|${t}|${season.year}`))) * 0.18;
       return [t, base[t] + bias + normal(r) * 0.16 + normal(vr) * 0.02];
-    }).sort((a, b) => b[1] - a[1]).slice(0, 25);
-    ballot.forEach(([t], i) => { pts[t] = (pts[t] || 0) + 25 - i; if (i === 0) fp[t] = (fp[t] || 0) + 1; });
+    }).sort((a, b) => b[1] - a[1]).slice(0, POLL_SIZE);
+    ballot.forEach(([t], i) => { pts[t] = (pts[t] || 0) + POLL_SIZE - i; if (i === 0) fp[t] = (fp[t] || 0) + 1; });
   }
   // Champion is unanimous #1 in the final poll.
   let order = Object.keys(pts).sort((a, b) => pts[b] - pts[a] || scores[b] - scores[a]);
   if (final && season.post?.champion) {
     const c = season.post.champion;
     order = [c, ...order.filter(t => t !== c)];
-    pts[c] = VOTERS * 25; fp[c] = VOTERS;
+    pts[c] = VOTERS * POLL_SIZE; fp[c] = VOTERS;
     for (const t of Object.keys(fp)) if (t !== c) fp[t] = 0;
   }
   const rec = t => `${recs[t].w}-${recs[t].l}`;
   return {
     week: final ? 'final' : week, voters: VOTERS, edited: false,
-    ranks: order.slice(0, 25).map(t => ({ team: t, pts: pts[t], fp: fp[t] || 0, record: rec(t) })),
-    others: order.slice(25).filter(t => pts[t] > 0).map(t => ({ team: t, pts: pts[t], record: rec(t) })),
+    ranks: order.slice(0, POLL_SIZE).map(t => ({ team: t, pts: pts[t], fp: fp[t] || 0, record: rec(t) })),
+    others: order.slice(POLL_SIZE).filter(t => pts[t] > 0).map(t => ({ team: t, pts: pts[t], record: rec(t) })),
   };
 }
 

@@ -5,13 +5,13 @@ import { loadLogoTable } from './logos.js';
 import { newLeague, afterChange, migrateLeague } from './league.js';
 import { ctx, app, cache, persist, esc } from './ui.js';
 import { renderHome, renderSchedule, renderStandings, renderRankings, renderPostseason, resetSeasonUi } from './views-season.js';
-import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings, renderOffseason } from './views-league.js';
+import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings, renderOffseason, renderCoaches } from './views-league.js';
 
-const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', offseason: 'Offseason', teams: 'Teams', conferences: 'Conferences', history: 'History', settings: 'Settings' };
+const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', offseason: 'Offseason', teams: 'Teams', coaches: 'Coaches', conferences: 'Conferences', history: 'History', settings: 'Settings' };
 const SUBVIEWS = { team: 'teams', conference: 'conferences' };
 const RENDER = {
   home: renderHome, schedule: renderSchedule, standings: renderStandings, rankings: renderRankings, postseason: renderPostseason,
-  offseason: renderOffseason, teams: renderTeams, conferences: renderConferences, history: renderHistory, settings: renderSettings,
+  offseason: renderOffseason, teams: renderTeams, coaches: renderCoaches, conferences: renderConferences, history: renderHistory, settings: renderSettings,
   team: () => renderTeamPage(routeArg()), conference: () => renderConferencePage(routeArg()),
 };
 

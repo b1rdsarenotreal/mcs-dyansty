@@ -113,10 +113,10 @@ export const COACHES = {
   'Texas State': 'Douglas Allin',
 };
 
-export function makeTeam({ school, conference, abbr, mascot = '', coach = '', color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65 }) {
+export function makeTeam({ school, conference, abbr, mascot = '', coach = '', coachId = null, color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65 }) {
   return {
     school, conference, abbr: abbr || school.replace(/[^A-Za-z ]/g, '').split(/\s+/).map(w => w[0]).join('').slice(0, 4).toUpperCase(),
-    mascot, coach, color, altColor, off, pit, def, logoOverride: null,
+    mascot, coach, coachId, color, altColor, off, pit, def, base: { off, pit, def }, logoOverride: null,
   };
 }
 

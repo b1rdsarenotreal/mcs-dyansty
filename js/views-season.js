@@ -2,11 +2,11 @@
 
 import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js';
 import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js';
-import { latestPoll, generatePoll, pollRankMap } from './polls.js';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js';
 import { ovr } from './sim.js';
 import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js';
 import { REG_WEEKS } from './schedule.js';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids } from './postseason.js';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat } from './postseason.js';
 import { fmtPct } from './util.js';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
@@ -58,7 +58,7 @@ export function renderHome() {
     <div class="grid" style="margin-top:16px">
       <div class="card"><h2>${poll ? (poll.week === 'final' ? 'Final poll' : poll.week === 0 ? 'Preseason poll' : `Week ${poll.week} poll`) : 'Poll'}</h2>
         <table><tbody>${(poll?.ranks || []).slice(0, 10).map((x, i) => `<tr><td class="num" style="width:28px">${i + 1}</td><td>${team(x.team, { rank: false })}</td><td class="num muted">${esc(x.record)}</td></tr>`).join('')}</tbody></table>
-        <p class="small"><a href="#/rankings">Full Top 25 and RPI →</a></p></div>
+        <p class="small"><a href="#/rankings">Full Top 15 and RPI →</a></p></div>
       <div class="card"><h2>Conference leaders</h2>
         <table><tbody>${leaders.map(({ c, top }) => `<tr><td style="width:30px"><a href="${confHref(c)}">${confLogo(c, 22)}</a></td><td>${top ? team(top.team) : '—'}</td><td class="num muted">${top ? `${top.cw}-${top.cl}` : ''}</td></tr>`).join('')}</tbody></table>
         <p class="small"><a href="#/standings">Standings →</a></p></div>
@@ -131,14 +131,15 @@ export function renderStandings() {
       <div class="table-wrap"><table>
         <thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">GB</th><th class="num">Overall</th><th class="num">Home</th><th class="num">Away</th><th class="num">Strk</th><th class="num">RPI</th></tr></thead>
         <tbody>${st.map((x, i) => `<tr class="${i === size - 1 && size < n ? 'cutline' : ''}"><td class="num muted">${i + 1}</td>
-          <td>${team(x.team)}${x.team === champ && x.cw + x.cl > 0 ? ' <span title="Regular-season champion">👑</span>' : ''}</td>
+          <td>${team(x.team)}${x.team === champ && x.cw + x.cl > 0 && s.phase !== 'complete' ? ' <span title="Regular-season champion">👑</span>' : ''}</td>
           <td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${x.gb ? x.gb.toFixed(1).replace('.0', '') : '—'}</td>
           <td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${x.hw}-${x.hl}</td><td class="num">${x.aw}-${x.al}</td>
           <td class="num">${x.streak || ''}</td><td class="num">${x.rpiRank ?? ''}</td></tr>`).join('')}</tbody></table></div>
       <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
         <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamp({ ...s, overrides: {} }, c, regRecs, r) || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
+        <label class="field">Tournament format <select data-format="${esc(c)}" ${canSize ? '' : 'disabled'}>${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${(s.settings.confFormat?.[c] || 'single') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Tournament teams <select data-size="${esc(c)}" ${canSize ? '' : 'disabled'}>${[0, 2, 3, 4, 5, 6, 7, 8].filter(k => k <= n).map(k => `<option value="${k}" ${k === size ? 'selected' : ''}>${k ? `Top ${k}` : 'No tournament'}</option>`).join('')}</select></label>
-      </div>${canSize ? '' : '<p class="muted">Tournament size is locked once the tournaments are set.</p>'}</details>
+      </div>${canSize ? '' : `<p class="muted">Tournament size and format are locked once the tournaments are set. You can still switch a tournament's format on the Postseason page until its first game.</p>`}</details>
     </div>`;
   };
   app.innerHTML = `
@@ -149,6 +150,7 @@ export function renderStandings() {
     if (sel.value) s.overrides.regChamps[sel.dataset.champ] = sel.value; else delete s.overrides.regChamps[sel.dataset.champ];
     changed({ progress: false });
   }));
+  $$('[data-format]').forEach(sel => (sel.onchange = () => { s.settings.confFormat ||= {}; s.settings.confFormat[sel.dataset.format] = sel.value; changed({ progress: false }); }));
   $$('[data-size]').forEach(sel => (sel.onchange = () => { s.settings.confTourney ||= {}; s.settings.confTourney[sel.dataset.size] = Number(sel.value); changed({ progress: false }); }));
 }
 
@@ -162,7 +164,7 @@ function pollWeeks(s) {
 
 export function renderRankings() {
   const s = S();
-  const tabs = { poll: 'Top 25 poll', rpi: 'RPI', power: 'Power (OVR)' };
+  const tabs = { poll: 'Top 15 poll', rpi: 'RPI', power: 'Power (OVR)' };
   app.innerHTML = `
     <div class="section-head"><h1>${s.year} Rankings</h1></div>
     <div class="steps">${Object.entries(tabs).map(([k, l]) => `<a href="#/rankings" data-tab="${k}" class="${ui.rankTab === k ? 'active' : ''}">${l}</a>`).join('')}</div>
@@ -201,7 +203,7 @@ function renderPollTab(root) {
         <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>
           ${editing ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'}>▼</button> <button class="btn sm danger" data-rm="${i}">✕</button></td>`
           : `<td class="num">${x.pts ?? ''}</td><td class="num muted">${prevKey !== undefined ? prev[x.team] ?? 'NR' : ''}</td><td class="num">${mv(x.team, i)}</td>`}</tr>`).join('')}</tbody></table></div>
-      ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps 25 teams.</span></div>`
+      ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps 15 teams.</span></div>`
       : poll.others?.length ? `<p class="small muted" style="margin-top:10px"><b>Others receiving votes:</b> ${poll.others.map(o => `${esc(o.team)} ${o.pts}`).join(', ')}</p>` : ''}
       <p class="small muted">${poll.voters || 40} simulated voters. First-place votes in parentheses. Polls come out when a week's games are all final.</p>
     </div>`;
@@ -215,7 +217,7 @@ function renderPollTab(root) {
     changed({ progress: false }); toast('Poll regenerated.');
   };
   if ($('#p-save', root)) $('#p-save', root).onclick = () => {
-    const ranks = ui.editPoll.ranks.slice(0, 25);
+    const ranks = ui.editPoll.ranks.slice(0, POLL_SIZE);
     const kept = new Set(ranks.map(r => r.team));
     s.polls[key] = { ...poll, edited: true, ranks: ranks.map(r => ({ ...r, pts: r.pts ?? 0, fp: r.fp ?? 0 })), others: [...poll.others || [], ...poll.ranks.filter(r => !kept.has(r.team))].filter(o => !kept.has(o.team)) };
     ui.editPoll = null; changed({ progress: false }); toast('Poll saved.');
@@ -228,7 +230,7 @@ function renderPollTab(root) {
     const t = e.target.value; if (!t) return;
     const r = recs[t];
     list.push({ team: t, record: `${r.w}-${r.l}`, pts: 0, fp: 0 });
-    if (list.length > 25) list.splice(24, 1);
+    if (list.length > POLL_SIZE) list.splice(POLL_SIZE - 1, 1);
     renderRankings();
   };
 }
@@ -254,28 +256,93 @@ function renderPowerTab(root) {
 
 // ---------- Postseason ----------
 
-// A bracket of compact cards (team, R, H, E). Single-elimination events are
-// laid out by round; double-elimination ones by day. Full line scores open
-// on click and are on the Schedule page.
+// A drawn bracket. Rounds are columns; every game sits halfway between the
+// two games that feed it, joined by lines. Double elimination draws the
+// winners bracket on top, the elimination bracket underneath, and the
+// championship to the right. Cards show R/H/E; click for the line score.
+const BK = { CW: 236, COLW: 264, H: 138, SLOT: 150, HEAD: 30, SEC_GAP: 34 };
+
 function eventBracket(ev, seedFn) {
   const s = S();
-  const cols = [];
-  for (const node of ev.nodes) {
-    const key = ev.kind === 'single' ? node.key.split('-')[0] : node.day;
-    let col = cols.find(c => c.key === key);
-    if (!col) cols.push((col = { key, title: ev.kind === 'single' ? node.label : DAY_NAMES[node.day] || node.day, day: node.day, nodes: [] }));
-    col.nodes.push(node);
+  const byKey = Object.fromEntries(ev.nodes.map(n => [n.key, n]));
+  const secOf = n => n.sec || 'W';
+  const kids = n => [n.a, n.b].filter(r => r && r.w && byKey[r.w] && secOf(byKey[r.w]) === secOf(n)).map(r => byKey[r.w]);
+  const pos = {};
+  // Elimination-bracket "games" against a bye never happen; leave them out.
+  const hidden = new Set(ev.nodes.filter(n => secOf(n) === 'L' && nodeTeams(ev, n).includes('BYE')).map(n => n.key));
+  const sections = ['W', 'L'].filter(sec => ev.nodes.some(n => secOf(n) === sec));
+  const double = sections.includes('L');
+  let top = 0, maxCol = 0;
+  const heads = [];
+  for (const sec of sections) {
+    const nodes = ev.nodes.filter(n => secOf(n) === sec);
+    const fed = new Set(nodes.flatMap(n => kids(n).map(k => k.key)));
+    const roots = nodes.filter(n => !fed.has(n.key));
+    let slot = 0;
+    const secTop = top + (double ? BK.SEC_GAP : 0) + BK.HEAD;
+    const place = n => {
+      if (pos[n.key]) return pos[n.key].y;
+      const ks = kids(n);
+      const y = ks.length ? ks.map(place).reduce((a, b) => a + b, 0) / ks.length : secTop + (slot++) * BK.SLOT;
+      pos[n.key] = { x: n.col * BK.COLW, y };
+      maxCol = Math.max(maxCol, n.col);
+      return y;
+    };
+    roots.forEach(place);
+    const cols = [...new Set(nodes.map(n => n.col))].sort((a, b) => a - b);
+    for (const c of cols) {
+      const first = nodes.find(n => n.col === c && !hidden.has(n.key));
+      if (!first) continue;
+      const byDay = ev.kind === 'regional' || ev.kind === 'mcws';
+      heads.push({ x: c * BK.COLW, y: secTop - BK.HEAD, text: byDay ? DAY_NAMES[first.day] || first.day : first.label.replace(/ \(.*\)$/, ''), day: byDay ? null : first.day });
+    }
+    if (double) heads.push({ x: 0, y: top, text: sec === 'W' ? 'Winners bracket' : 'Elimination bracket', section: true });
+    top = secTop + slot * BK.SLOT;
   }
+  // Championship column.
+  const finals = ev.nodes.filter(n => secOf(n) === 'F');
+  if (finals.length) {
+    const x = (maxCol + 1) * BK.COLW;
+    const feeders = [finals[0].a, finals[0].b].map(r => r && pos[r.w || r.l]).filter(Boolean);
+    const mid = feeders.length ? feeders.reduce((a, p) => a + p.y, 0) / feeders.length : BK.HEAD;
+    const start = Math.max(BK.HEAD, mid - ((finals.length - 1) * BK.SLOT) / 2);
+    finals.forEach((n, i) => { pos[n.key] = { x, y: start + i * BK.SLOT }; });
+    heads.push({ x, y: start - BK.HEAD, text: finals.length > 1 && ev.kind === 'mcws' ? 'Championship Series' : finals.length > 1 ? 'Regional final' : 'Championship', day: finals[0].day });
+    top = Math.max(top, start + finals.length * BK.SLOT);
+  }
+  const width = Math.max(...Object.values(pos).map(p => p.x)) + BK.CW;
+  const height = Math.max(...Object.values(pos).map(p => p.y)) + BK.H + 4;
+
+  // Connector lines: from each feeding game into the game it feeds.
+  const lines = [];
+  const link = (from, to) => {
+    const x1 = from.x + BK.CW, y1 = from.y + BK.H / 2, x2 = to.x, y2 = to.y + BK.H / 2, mx = x1 + (x2 - x1) / 2;
+    lines.push(`<path d="M${x1},${y1} H${mx} V${y2} H${x2}" />`);
+  };
+  for (const n of ev.nodes) {
+    if (secOf(n) === 'F') continue;
+    for (const k of kids(n)) if (!hidden.has(k.key)) link(pos[k.key], pos[n.key]);
+  }
+  if (finals.length) for (const r of [finals[0].a, finals[0].b]) { const f = r && pos[r.w]; if (f) link(f, pos[finals[0].key]); }
+
   const cell = node => {
-    const label = node.label.replace(/^Championship Series · /, 'Finals · ');
+    const label = node.code || node.label;
     if (node.gameId) { const g = s.games.find(x => x.id === node.gameId); if (g) return compactCard({ ...g, label }, seedFn); }
     const [a, b] = nodeTeams(ev, node);
-    if (a === 'BYE' || b === 'BYE') return placeholderCard(label, [a, b], seedFn, { faded: true, note: node.winner ? `${node.winner} advances` : 'Bye' });
+    if (a === 'BYE' || b === 'BYE') {
+      const t = a === 'BYE' ? b : a;
+      return placeholderCard(label, [t, 'BYE'], seedFn, { faded: true, note: 'First-round bye' });
+    }
     const needed = nodeNeeded(ev, node);
-    const decided = (node.cond === 'g7' && ev.nodes.find(n => n.key === 'G6')?.winner) || (node.cond === 'f3' && ev.nodes.find(n => n.key === 'F2')?.winner);
-    return placeholderCard(label, [a, b], seedFn, { faded: !!node.cond && !needed && !!decided, note: node.cond ? (decided && !needed ? 'Not needed' : 'If necessary') : '' });
+    const decided = (node.cond === 'g7' && byKey.G6?.winner) || (node.cond === 'f3' && byKey.F2?.winner);
+    const slotText = (t, ref) => t || (refLabel(ev, ref) ? { text: refLabel(ev, ref) } : null);
+    return placeholderCard(label, [slotText(a, node.a), slotText(b, node.b)], seedFn, { faded: !!node.cond && !needed && !!decided, note: node.cond ? (decided && !needed ? 'Not needed' : 'If necessary') : '' });
   };
-  return `<div class="bracket ${ev.kind === 'single' ? 'single' : 'double'}" style="--cols:${cols.length}">${cols.map(c => `<div class="round"><h3>${esc(c.title)}${ev.kind === 'single' ? ` <span class="muted">· ${esc(DAY_NAMES[c.day] || c.day)}</span>` : ''}</h3><div class="round-games">${c.nodes.map(cell).join('')}</div></div>`).join('')}</div>`;
+  return `<div class="bk-scroll"><div class="bk" style="width:${width}px;height:${height}px">
+    <svg class="bk-lines" width="${width}" height="${height}" aria-hidden="true">${lines.join('')}</svg>
+    ${heads.map(h => `<div class="bk-head ${h.section ? 'bk-sec' : ''}" style="left:${h.x}px;top:${h.y}px;${h.section ? '' : `width:${BK.CW}px`}">${esc(h.text)}${h.day ? ` <span class="muted">· ${esc(DAY_NAMES[h.day] || h.day)}</span>` : ''}</div>`).join('')}
+    ${ev.nodes.map(n => pos[n.key] && !hidden.has(n.key) ? `<div class="bk-node" style="left:${pos[n.key].x}px;top:${pos[n.key].y}px;width:${BK.CW}px;height:${BK.H}px">${cell(n)}</div>` : '').join('')}
+  </div></div>`;
 }
 
 export function renderPostseason() {
@@ -310,7 +377,7 @@ function renderConfTourneys(root) {
         const n = Object.values(s.teams).filter(t => t.conference === c).length;
         const size = Math.min(n, s.settings.confTourney?.[c] ?? defaultConfTourneySize(n));
         const seeds = confTourneySeeds(s, c).slice(0, size);
-        return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, single elimination` : 'No tournament: regular-season champion gets the bid'}</span></div>
+        return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, ${size >= 3 && s.settings.confFormat?.[c] === 'double' ? 'double' : 'single'} elimination` : 'No tournament: regular-season champion gets the bid'}</span></div>
           <ol class="seedlist">${seeds.map(t => `<li>${team(t)}</li>`).join('')}</ol></div>`;
       }).join('')}</div>`;
     return;
@@ -322,13 +389,17 @@ function renderConfTourneys(root) {
       const started = ev.nodes.some(n => n.gameId && s.games.find(g => g.id === n.gameId && isFinal(g)));
       return `<div class="card"><div class="row" style="margin-bottom:10px"><a href="${confHref(ev.conf)}">${confLogo(ev.conf, 28)}</a><h2 style="margin:0">${esc(ev.conf)} Tournament</h2>
         ${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}<span class="spacer"></span>
-        ${started ? '' : `<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
+        ${started ? `<span class="muted small">${ev.kind === 'double' ? 'Double' : 'Single'} elimination</span>` : `${ev.size >= 3 ? `<select class="sm-select" data-cformat="${esc(ev.conf)}" aria-label="${esc(ev.conf)} tournament format">${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${ev.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
         <div class="small muted" style="margin-bottom:8px">Seeds: ${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)}`).join(' · ')}</div>
         ${eventBracket(ev, t => ev.seeds.indexOf(t) + 1 || null)}</div>`;
     }).join('')}
     ${!evs.length ? '<div class="empty">No conference tournaments this season.</div>' : ''}`;
   if ($('#ct-sim', root)) $('#ct-sim', root).onclick = () => simAndReport(g => g.type === 'conf', 'in the conference tournaments');
   $$('[data-reseed]', root).forEach(b => (b.onclick = () => editSeeds(b.dataset.reseed)));
+  $$('[data-cformat]', root).forEach(sel => (sel.onchange = () => {
+    try { setConfFormat(s, sel.dataset.cformat, sel.value); } catch (e) { return toast(e.message, true); }
+    changed(); toast(`${sel.dataset.cformat} Tournament is now ${sel.value} elimination.`);
+  }));
 }
 
 function editSeeds(conf) {
