@@ -1,7 +1,5 @@
-// Starting league: the 2016 teams and conferences. Colors are each school's
-// real colors; OFF / PIT / DEF are starting ratings (40–99) you can edit.
-
-import { rng, hashStr } from './util.js';
+// Starting league: the 2016 teams, conferences and head coaches. Colors are
+// each school's real colors; OFF / PIT / DEF are starting ratings (40–99).
 
 export const START_YEAR = 2016;
 
@@ -66,32 +64,66 @@ const T = [
 // Names the logo list may know a school by.
 export const LOGO_ALIASES = { 'Central Florida': 'UCF', 'UMKC': 'Kansas City', 'UW–Whitewater': 'Wisconsin-Whitewater' };
 
-const FIRST = ['Jake', 'Tyler', 'Cole', 'Brady', 'Mason', 'Logan', 'Ryan', 'Caleb', 'Austin', 'Derek', 'Nolan', 'Garrett', 'Trevor', 'Blake', 'Chase', 'Eli', 'Grant', 'Hunter', 'Luke', 'Max', 'Owen', 'Reid', 'Sam', 'Wyatt', 'Zach', 'Colby', 'Drew', 'Evan', 'Jace', 'Kyle', 'Matt', 'Nate', 'Parker', 'Quinn', 'Shane', 'Travis', 'Bryce', 'Cody', 'Dalton', 'Gavin', 'Isaac', 'Jordan', 'Kade', 'Landon', 'Micah', 'Noah', 'Preston', 'Riley', 'Seth', 'Tanner', 'Weston', 'Ben', 'Carter', 'Dylan', 'Ethan', 'Finn', 'Hayden', 'Jonah', 'Kellen', 'Marcus'];
-const LAST = ['Anderson', 'Baker', 'Bishop', 'Brooks', 'Carver', 'Coleman', 'Dalton', 'Dawson', 'Ellis', 'Fischer', 'Foster', 'Garza', 'Gibson', 'Graves', 'Hale', 'Harper', 'Hayes', 'Hicks', 'Holt', 'Jensen', 'Keller', 'Kemp', 'Lang', 'Lawson', 'Mack', 'Maddox', 'Marsh', 'McCall', 'Meyer', 'Monroe', 'Nash', 'Nolan', 'Ortiz', 'Owens', 'Pace', 'Peralta', 'Pierce', 'Porter', 'Quinn', 'Ramos', 'Reese', 'Reyes', 'Rhodes', 'Riggs', 'Rowe', 'Ruiz', 'Sawyer', 'Schultz', 'Shaw', 'Sloan', 'Soto', 'Stark', 'Stone', 'Tate', 'Torres', 'Tucker', 'Vance', 'Wade', 'Walsh', 'Ward', 'Webb', 'Weller', 'Wilder', 'Wolfe', 'Yates', 'Zimmer', 'Brandt', 'Castillo', 'Decker', 'Novak'];
+// Head coaches for the first season (editable in the app).
+export const COACHES = {
+  'Missouri': 'Ehren Earleywine',
+  'Northern Colorado': 'Travis Owen',
+  'Oklahoma': 'JT Gasso',
+  'Texas': 'Craig Snider',
+  'Texas A&M': 'Gerry Glasco',
+  'Texas Tech': 'Ruben Felix',
+  'Indiana': 'Mike Perniciaro',
+  'Iowa': 'Tim Keirnan',
+  'Michigan': 'Bonnie Tholl',
+  'Michigan State': 'Scot Thomas',
+  'Minnesota': 'Derek Mayson',
+  'Nebraska': 'Darren Mueller',
+  'Ohio State': 'Troy Whitt',
+  'Wisconsin': 'Randy Schneider',
+  'Arizona': 'Caitlin Lowe',
+  'Arizona State': 'Robert Wagner',
+  'Cal State Fullerton': 'Jorge Araujo',
+  'Long Beach State': 'Landy Rodriguez',
+  'Stanford': 'Matthew Ratliff',
+  'UC Santa Barbara': 'Michael Johnson',
+  'UCLA': 'Kirk Walker',
+  'Bemidji State': 'Rick Supinski',
+  'Detroit Mercy': 'Marcus Tan',
+  'Green Bay': 'Roman Foore',
+  'Milwaukee': 'Nate Devine',
+  'Minnesota State': 'Tim Keirnan',
+  'Oakland': 'Jay Miller',
+  'Robert Morris': 'Craig Coleman',
+  'St. Cloud State': 'Greg Hicks',
+  'St. Thomas': 'Jim Tschida',
+  'UW–Whitewater': 'Bryson DuCharme',
+  'Central Michigan': 'Nickey McCurry',
+  'Kent State': 'Kyle Gross',
+  'North Dakota State': 'Darren Muelle',
+  'Northern Illinois': 'Mike Steuerwald',
+  'UMKC': 'Kristopher Walushka',
+  'Western Michigan': 'Andrew Kirkpatrick',
+  'Central Florida': 'Tommy Santiago',
+  'Coastal Carolina': 'Ronald Hackeatt',
+  'Florida': 'Cody Dent',
+  'Houston': 'JD Artega',
+  'James Madison': 'Brandon Cohen',
+  'LSU': 'Howard Dobson',
+  'Saint Louis': 'Avon Meacham',
+  'Texas State': 'Douglas Allin',
+};
 
-export function pitcherName(r) {
-  return `${FIRST[Math.floor(r() * FIRST.length)]} ${LAST[Math.floor(r() * LAST.length)]}`;
-}
-
-// Four pitchers: three starters (Fri / Sat / Sun) and a midweek arm who also relieves.
-export function makeStaff(school, salt = 0) {
-  const r = rng(hashStr(school) + salt);
-  const used = new Set(), out = [];
-  while (out.length < 4) { const n = pitcherName(r); if (!used.has(n)) { used.add(n); out.push(n); } }
-  return out;
-}
-
-export function makeTeam({ school, conference, abbr, mascot = '', color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65 }) {
+export function makeTeam({ school, conference, abbr, mascot = '', coach = '', color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65 }) {
   return {
     school, conference, abbr: abbr || school.replace(/[^A-Za-z ]/g, '').split(/\s+/).map(w => w[0]).join('').slice(0, 4).toUpperCase(),
-    mascot, color, altColor, off, pit, def, staff: makeStaff(school), logoOverride: null,
+    mascot, coach, color, altColor, off, pit, def, logoOverride: null,
   };
 }
 
 export function seedTeams() {
   const teams = {};
   for (const [school, conference, abbr, mascot, color, altColor, off, pit, def] of T) {
-    teams[school] = makeTeam({ school, conference, abbr, mascot, color, altColor, off, pit, def });
+    teams[school] = makeTeam({ school, conference, abbr, mascot, coach: COACHES[school] || '', color, altColor, off, pit, def });
   }
   return teams;
 }

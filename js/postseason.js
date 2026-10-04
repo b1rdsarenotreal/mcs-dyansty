@@ -81,10 +81,6 @@ function condMet(ev, node) {
   return true;
 }
 
-function eventGamesFor(season, ev, team) {
-  return season.games.filter(g => g.event === ev.id && (g.home === team || g.away === team)).length;
-}
-
 // Create games whose teams are known; record winners of finished games.
 function advanceEvent(season, ev, { type, week, name }) {
   // Re-derive winners from the games, so edited results flow through. Games
@@ -128,7 +124,6 @@ function advanceEvent(season, ev, { type, week, name }) {
         type, week, day: node.day, order: DAY_ORDER[node.day] + (['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0),
         home, away, neutral: !hosted, event: ev.id, node: node.key,
         label: `${name} · ${node.label}`,
-        homeSlot: eventGamesFor(season, ev, home) % 3, awaySlot: eventGamesFor(season, ev, away) % 3,
       });
       season.games.push(g);
       node.gameId = g.id;

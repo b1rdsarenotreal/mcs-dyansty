@@ -4,13 +4,12 @@ import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cac
 import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js';
 import { ovr } from './sim.js';
 import { latestPoll, pollRankMap } from './polls.js';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague } from './league.js';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings } from './league.js';
 import { postseasonFinish } from './postseason.js';
 import { exportLeague, clearLeague } from './store.js';
 import { clamp } from './util.js';
 
 const ui = { confFilter: '' };
-const ROLES = ['Friday starter', 'Saturday starter', 'Sunday starter', 'Midweek / relief'];
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
 
 function ratingBar(label, v, color) {
@@ -29,12 +28,13 @@ export function renderTeams() {
     <div class="section-head"><h1>${s.year} Teams</h1><span class="muted">${Object.keys(s.teams).length} teams</span><span class="spacer"></span><button class="btn primary" id="t-add">+ Add team</button></div>
     <div class="chips"><button class="chip ${!ui.confFilter ? 'active' : ''}" data-cf="">All</button>${confs.map(c => `<button class="chip ${ui.confFilter === c ? 'active' : ''}" data-cf="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="card"><div class="table-wrap"><table class="teams-table">
-      <thead><tr><th>Team</th><th>Conference</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th class="num">Record</th><th class="num">Poll</th></tr></thead>
+      <thead><tr><th>Team</th><th>Head coach</th><th>Conference</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th class="num">Record</th><th class="num">Poll</th></tr></thead>
       <tbody>${list.map(t => `<tr><td>${team(t.school, { rank: false })}</td>
+        <td><input type="text" class="coach-in" data-coach="${esc(t.school)}" value="${esc(t.coach || '')}" placeholder="Add coach" aria-label="${esc(t.school)} head coach"></td>
         <td><select data-conf="${esc(t.school)}">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
         ${['off', 'pit', 'def'].map(k => `<td class="num"><input type="number" min="40" max="99" class="rin" data-rate="${k}" data-team="${esc(t.school)}" value="${t[k]}"></td>`).join('')}
         <td class="num"><b data-ovr="${esc(t.school)}">${ovr(t)}</b></td><td class="num">${recs[t.school].w}-${recs[t.school].l}</td><td class="num muted">${pr[t.school] ?? ''}</td></tr>`).join('')}</tbody></table></div>
-    <p class="small muted">Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching staff) + 20% DEF (fielding). Changes apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
+    <p class="small muted">Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching) + 20% DEF (fielding). Changes apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
   $$('[data-cf]').forEach(b => (b.onclick = () => { ui.confFilter = b.dataset.cf; renderTeams(); }));
   $$('[data-rate]').forEach(inp => (inp.onchange = () => {
     const t = s.teams[inp.dataset.team];
@@ -43,21 +43,28 @@ export function renderTeams() {
     persist();
   }));
   $$('[data-conf]').forEach(sel => (sel.onchange = () => { s.teams[sel.dataset.conf].conference = sel.value; changed({ progress: false }); }));
-  $('#t-add').onclick = () => teamForm();
+  $$('[data-coach]').forEach(inp => (inp.onchange = () => { s.teams[inp.dataset.coach].coach = inp.value.trim(); persist(); }));
+  $('#t-add').onclick = () => teamForm(s.teams, {
+    note: !s.games.some(g => g.type === 'regular' && isFinal(g)) ? 'rebuild' : 'played',
+    after: f => { if (f.rebuild) rebuildSchedule(s); },
+  });
 }
 
-function teamForm() {
-  const s = S(), confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
-  const canRebuild = !s.games.some(g => g.type === 'regular' && isFinal(g));
+// Add-team form. `teams` is where the team goes: the current season's teams
+// or next season's (offseason).
+function teamForm(teams, { note = null, after = () => {}, conference = null } = {}) {
+  const confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
   modal.innerHTML = `<div class="modal-head"><h2>Add a team</h2><button class="btn ghost" data-x>✕</button></div>
     <div class="modal-body stack">
-      <div class="row"><label class="field" style="flex:2">School <input type="text" id="f-school" placeholder="e.g. Oregon State"></label>
-        <label class="field" style="flex:1">Mascot <input type="text" id="f-mascot" placeholder="Beavers"></label>
+      <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="f-school" placeholder="e.g. Oregon State"></label>
+        <label class="field" style="flex:1;min-width:110px">Mascot <input type="text" id="f-mascot" placeholder="Beavers"></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="f-abbr" maxlength="5" placeholder="ORST"></label></div>
-      <div class="row"><label class="field" style="flex:1">Conference <select id="f-conf">${confs.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>
-        <label class="field">Color <input type="color" id="f-color" value="#DC4405"></label><label class="field">Alt color <input type="color" id="f-alt" value="#000000"></label></div>
-      <div class="row">${['off', 'pit', 'def'].map(k => `<label class="field" style="width:90px">${k.toUpperCase()} <input type="number" min="40" max="99" id="f-${k}" value="65"></label>`).join('')}</div>
-      ${canRebuild ? '<label class="check"><input type="checkbox" id="f-rebuild" checked> Rebuild this season\'s schedule to include the new team</label>' : '<p class="small muted">Games have been played this season, so the new team starts with an empty schedule. Add its games on the Schedule page; it gets a full schedule next season.</p>'}
+      <div class="row"><label class="field" style="flex:1;min-width:160px">Head coach <input type="text" id="f-coach" placeholder="Coach's name"></label>
+        <label class="field" style="flex:1;min-width:160px">Conference <select id="f-conf">${confs.map(c => `<option ${c === conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label></div>
+      <div class="row"><label class="field">Color <input type="color" id="f-color" value="#DC4405"></label><label class="field">Alt color <input type="color" id="f-alt" value="#000000"></label>
+        ${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" id="f-${k}" value="65"></label>`).join('')}</div>
+      ${note === 'rebuild' ? '<label class="check"><input type="checkbox" id="f-rebuild" checked> Rebuild this season\'s schedule to include the new team</label>'
+        : note === 'played' ? '<p class="small muted">Games have been played this season, so the new team starts with an empty schedule. Add its games on the Schedule page, or add teams in the offseason so they get a full schedule.</p>' : ''}
     </div>
     <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="f-save">Add team</button></div>`;
   $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
@@ -65,27 +72,101 @@ function teamForm() {
   $('#f-save', modal).onclick = () => {
     const v = id => $(id, modal).value.trim();
     try {
-      addTeam(ctx.league, s, { school: v('#f-school'), mascot: v('#f-mascot'), abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
-      if ($('#f-rebuild', modal)?.checked) rebuildSchedule(s);
+      addTeam(ctx.league, teams, { school: v('#f-school'), mascot: v('#f-mascot'), coach: v('#f-coach'), abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
+      after({ rebuild: !!$('#f-rebuild', modal)?.checked });
     } catch (e) { return toast(e.message, true); }
     modal.close(); changed({ progress: false }); toast('Team added.');
   };
   modal.showModal();
 }
 
+function conferenceForm(after = () => {}) {
+  modal.innerHTML = `<div class="modal-head"><h2>Add a conference</h2><button class="btn ghost" data-x>✕</button></div>
+    <div class="modal-body stack"><div class="row"><label class="field" style="flex:1;min-width:160px">Name <input type="text" id="cf-name" placeholder="e.g. West Coast"></label>
+      <label class="field" style="width:90px">Abbr. <input type="text" id="cf-abbr" maxlength="5"></label><label class="field">Color <input type="color" id="cf-color" value="#2C5F8A"></label></div>
+      <p class="small muted">Then move teams into it. Each conference gets an automatic NCAA bid.</p></div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="cf-save">Add conference</button></div>`;
+  $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+  modal.onclose = () => ctx.render();
+  $('#cf-save', modal).onclick = () => {
+    try { addConference(ctx.league, $('#cf-name', modal).value, { abbr: $('#cf-abbr', modal).value.trim().toUpperCase() || undefined, color: $('#cf-color', modal).value }); }
+    catch (e) { return toast(e.message, true); }
+    after(); modal.close(); changed({ progress: false }); toast('Conference added.');
+  };
+  modal.showModal();
+}
+
+// ---------- Offseason ----------
+
+export function renderOffseason() {
+  const L = ctx.league, cur = L.seasons[L.currentYear];
+  if (cur.phase !== 'complete') {
+    app.innerHTML = `<div class="section-head"><h1>Offseason</h1></div><div class="empty">The offseason opens once the ${cur.year} national champion is crowned. Then you can add teams and conferences and realign before the ${cur.year + 1} season.</div>`;
+    return;
+  }
+  const d = beginOffseason(L);
+  persist();
+  const prev = cur.teams;
+  const confs = Object.keys(L.conferences).filter(c => !L.conferences[c].retired);
+  const teams = Object.values(d.teams);
+  const warnings = draftWarnings(L);
+  const delta = (t, k) => { const p = prev[t.school]; const x = p ? t[k] - p[k] : 0; return `<span class="delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}">${x ? (x > 0 ? '+' : '') + x : ''}</span>`; };
+  const moved = t => prev[t.school] && prev[t.school].conference !== t.conference;
+  const card = c => {
+    const list = teams.filter(t => t.conference === c).sort((a, b) => a.school.localeCompare(b.school));
+    return `<div class="card off-conf"><div class="row" style="margin-bottom:8px">${confLogo(c, 28)}<h2 style="margin:0">${esc(c)}</h2><span class="muted small">${list.length} team${list.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" data-addto="${esc(c)}">+ Team</button></div>
+      ${list.length ? `<div class="table-wrap"><table class="off-table"><thead><tr><th>Team</th><th>Head coach</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th>Conference</th><th></th></tr></thead><tbody>
+        ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}</td>
+          <td><input type="text" class="coach-in" data-dcoach="${esc(t.school)}" value="${esc(t.coach || '')}" placeholder="Add coach" aria-label="${esc(t.school)} head coach"></td>
+          ${['off', 'pit', 'def'].map(k => `<td class="num"><span class="rin-wrap"><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}">${delta(t, k)}</span></td>`).join('')}
+          <td class="num"><b>${ovr(t)}</b></td>
+          <td><select data-dconf="${esc(t.school)}" aria-label="Move ${esc(t.school)}">${confs.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
+          <td><button class="btn sm danger" data-drm="${esc(t.school)}" title="Leave the dynasty">✕</button></td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted small">No teams yet. Move teams in with the Conference menus, or add a new one.</p>'}
+      ${!list.length ? `<button class="btn sm danger" data-delconf="${esc(c)}">Delete conference</button>` : ''}</div>`;
+  };
+  const removed = Object.keys(d.removed || {});
+  app.innerHTML = `
+    <div class="section-head"><h1>${d.year} Offseason</h1><span class="muted">${teams.length} teams in ${new Set(teams.map(t => t.conference)).size} conferences</span><span class="spacer"></span>
+      <button class="btn" id="o-conf">+ Add conference</button><button class="btn" id="o-team">+ Add team</button><button class="btn primary" id="o-start">Start the ${d.year} season</button></div>
+    <div class="hint">Set up the ${d.year} season. Ratings have already changed for the new year (shown as +/−). Move teams with the <b>Conference</b> menus, add new teams or conferences, and update coaches. Nothing is scheduled until you start the season, so every team gets a full schedule.</div>
+    ${warnings.length ? `<div class="hint warn" style="margin-top:10px">${warnings.map(esc).join('<br>')}</div>` : ''}
+    ${removed.length ? `<div class="card" style="margin-top:14px"><b>Leaving the dynasty:</b> ${removed.map(t => `<span class="chip-static">${esc(t)} <button class="btn sm" data-restore="${esc(t)}">Bring back</button></span>`).join(' ')}</div>` : ''}
+    <div class="off-grid" style="margin-top:14px">${confs.map(card).join('')}</div>`;
+  const T = d.teams;
+  $$('[data-dcoach]').forEach(inp => (inp.onchange = () => { T[inp.dataset.dcoach].coach = inp.value.trim(); persist(); }));
+  $$('[data-drate]').forEach(inp => (inp.onchange = () => { T[inp.dataset.team][inp.dataset.drate] = rate(inp.value); changed({ progress: false }); }));
+  $$('[data-dconf]').forEach(sel => (sel.onchange = () => { T[sel.dataset.dconf].conference = sel.value; changed({ progress: false }); toast(`${sel.dataset.dconf} moves to the ${sel.value}.`); }));
+  $$('[data-drm]').forEach(b => (b.onclick = () => { if (confirm(`Remove ${b.dataset.drm} from the dynasty starting in ${d.year}? Its history stays.`)) { draftRemoveTeam(L, b.dataset.drm); changed({ progress: false }); } }));
+  $$('[data-restore]').forEach(b => (b.onclick = () => { draftRestoreTeam(L, b.dataset.restore); changed({ progress: false }); }));
+  $$('[data-addto]').forEach(b => (b.onclick = () => teamForm(T, { conference: b.dataset.addto })));
+  $$('[data-delconf]').forEach(b => (b.onclick = () => { try { deleteConference(L, { teams: T }, b.dataset.delconf); changed({ progress: false }); } catch (e) { toast(e.message, true); } }));
+  $('#o-team').onclick = () => teamForm(T);
+  $('#o-conf').onclick = () => conferenceForm();
+  $('#o-start').onclick = () => {
+    if (!confirm(`Start the ${d.year} season with ${Object.keys(T).length} teams? The schedule is built from this alignment.`)) return;
+    try { const ns = startNextSeason(L); L.viewYear = ns.year; } catch (e) { return toast(e.message, true); }
+    location.hash = '#/home'; changed({ progress: false }); toast(`Welcome to ${d.year}.`);
+  };
+}
+
 // ---------- Team profile ----------
 
-function pitcherStats(s, school) {
-  const out = {};
-  const t = s.teams[school];
-  for (const name of t?.staff || []) out[name] = { outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0 };
-  for (const g of s.games) {
-    if (!isFinal(g) || (g.home !== school && g.away !== school)) continue;
-    const side = g.home === school ? 'home' : 'away';
-    const ensure = n => (out[n] ||= { outs: 0, h: 0, r: 0, bb: 0, k: 0, app: 0, former: true });
-    for (const p of g.pitching?.[side] || []) { const x = ensure(p.name); x.outs += p.outs; x.h += p.h; x.r += p.r; x.bb += p.bb; x.k += p.k; x.app++; }
-  }
-  return out;
+// Line chart of a team's poll rank by week (1 at the top; unranked weeks
+// sit on the "NR" line and break the line).
+function pollChart(pts, color) {
+  const W = 760, H = 210, L = 36, R = 12, T = 12, B = 30;
+  const n = pts.length, step = n > 1 ? (W - L - R) / (n - 1) : 0;
+  const x = i => L + (n > 1 ? i * step : (W - L - R) / 2);
+  const y = rk => T + ((rk ?? 28) - 1) / 27 * (H - T - B);
+  const grid = [1, 5, 10, 15, 20, 25].map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid"/><text x="${L - 8}" y="${y(v) + 4}" class="pc-yl">${v}</text>`).join('')
+    + `<line x1="${L}" x2="${W - R}" y1="${y(null)}" y2="${y(null)}" class="pc-grid pc-nr"/><text x="${L - 8}" y="${y(null) + 4}" class="pc-yl">NR</text>`;
+  let path = '', open = false;
+  pts.forEach((p, i) => { if (p.rank) { path += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.rank).toFixed(1)}`; open = true; } else open = false; });
+  const dots = pts.map((p, i) => `<g><title>${esc(p.title)}: ${p.rank ? '#' + p.rank : 'unranked'}</title><circle cx="${x(i)}" cy="${y(p.rank)}" r="${p.rank ? 4.5 : 3}" class="${p.rank ? 'pc-dot' : 'pc-nrdot'}" style="${p.rank ? `fill:${esc(color)}` : ''}"/>${p.rank && (n <= 12 || i % 2 === 0 || i === n - 1) ? `<text x="${x(i)}" y="${y(p.rank) - 9}" class="pc-val">${p.rank}</text>` : ''}</g>`).join('');
+  const xl = pts.map((p, i) => `<text x="${x(i)}" y="${H - 10}" class="pc-xl">${esc(p.label)}</text>`).join('');
+  return `<div class="pc-wrap"><svg class="pollchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poll rank by week">${grid}<path d="${path}" class="pc-line" style="stroke:${esc(color)}"/>${dots}${xl}</svg></div>
+    <p class="small muted">P = preseason, CT = after conference tournaments, F = final poll.</p>`;
 }
 
 function seasonSummary(season, name) {
@@ -104,10 +185,8 @@ export function renderTeamPage(name) {
   const recs = cache.recs(), r = rpi(s), pr = cache.ranks();
   const rec = recs[name] || { w: 0, l: 0, cw: 0, cl: 0, rs: 0, ra: 0, streak: '', hw: 0, hl: 0, aw: 0, al: 0 };
   const games = s.games.filter(g => g.home === name || g.away === name).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id);
-  const ps = pitcherStats(s, name);
-  const ip = o => `${Math.floor(o / 3)}.${o % 3}`;
-  const pollRow = Object.entries(s.polls || {}).sort((a, b) => (a[0] === 'final' ? 99 : +a[0]) - (b[0] === 'final' ? 99 : +b[0]))
-    .map(([w, p]) => [w, pollRankMap(p)[name]]);
+  const pollPts = Object.entries(s.polls || {}).sort((a, b) => (a[0] === 'final' ? 99 : +a[0]) - (b[0] === 'final' ? 99 : +b[0]))
+    .map(([w, p]) => ({ label: w === 'final' ? 'F' : w === '0' ? 'P' : w === '15' ? 'CT' : w, title: w === 'final' ? 'Final poll' : w === '0' ? 'Preseason' : w === '15' ? 'After conference tournaments' : `Week ${w}`, rank: pollRankMap(p)[name] ?? null }));
   const history = Object.keys(ctx.league.seasons).map(Number).sort((a, b) => b - a).map(y => [y, ctx.league.seasons[y]]).filter(([, se]) => se.teams[name]).map(([y, se]) => [y, seasonSummary(se, name)]);
   const confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
   app.innerHTML = `
@@ -115,7 +194,7 @@ export function renderTeamPage(name) {
       <div class="team-hero-logo">${logoImg(t, 64)}</div>
       <div style="flex:1;min-width:200px">
         <div class="team-hero-name">${pr[name] ? `<span class="team-hero-rank">#${pr[name]}</span> ` : ''}${esc(name)}</div>
-        <div class="team-hero-sub">${esc(t.mascot || '')} · <a href="${confHref(t.conference)}" style="color:inherit">${esc(t.conference)}</a> · ${rec.w}-${rec.l} (${rec.cw}-${rec.cl} conf) · OVR ${ovr(t)}</div>
+        <div class="team-hero-sub">${t.coach ? `Head coach ${esc(t.coach)} · ` : ''}${esc(t.mascot || '')} · <a href="${confHref(t.conference)}" style="color:inherit">${esc(t.conference)}</a> · ${rec.w}-${rec.l} (${rec.cw}-${rec.cl} conf) · OVR ${ovr(t)}</div>
       </div>
       <a class="btn" href="#/teams">All teams</a>
     </div>
@@ -126,18 +205,19 @@ export function renderTeamPage(name) {
         ${inSeason ? `<div class="row" style="margin-top:10px">${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" data-r="${k}" value="${t[k]}"></label>`).join('')}</div>` : ''}
       </div>
       <div class="card"><h2>${s.year} season</h2>
-        <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+        <div class="kpis kpis-sm">
           <div class="kpi"><div class="v">${rec.w}-${rec.l}</div><div class="l">Overall</div></div>
           <div class="kpi"><div class="v">${rec.cw}-${rec.cl}</div><div class="l">Conference</div></div>
           <div class="kpi"><div class="v">${r[name]?.rank ?? '—'}</div><div class="l">RPI rank</div></div>
-          <div class="kpi"><div class="v">${rec.rs}-${rec.ra}</div><div class="l">Runs for-against</div></div>
-          <div class="kpi"><div class="v">${rec.hw}-${rec.hl} / ${rec.aw}-${rec.al}</div><div class="l">Home / away</div></div>
+          <div class="kpi"><div class="v">${rec.rs}<span class="kpi-sep">–</span>${rec.ra}</div><div class="l">Runs for–against</div></div>
+          <div class="kpi"><div class="v">${rec.hw}-${rec.hl}</div><div class="l">Home</div></div>
+          <div class="kpi"><div class="v">${rec.aw}-${rec.al}</div><div class="l">Away</div></div>
           <div class="kpi"><div class="v">${rec.streak || '—'}</div><div class="l">Streak</div></div>
         </div>
         ${postseasonFinish(s, name) ? `<p><span class="badge gold">${esc(postseasonFinish(s, name))}</span></p>` : ''}
-        ${pollRow.length ? `<div class="small muted">Poll: ${pollRow.map(([w, k]) => `<span title="${w === 'final' ? 'Final' : w === '0' ? 'Preseason' : 'Week ' + w}">${w === 'final' ? 'F' : w === '0' ? 'P' : w}:<b>${k ?? '–'}</b></span>`).join(' ')}</div>` : ''}
       </div>
     </div>
+    ${pollPts.length ? `<div class="card" style="margin-top:16px"><h2>Poll history</h2>${pollChart(pollPts, t.color === '#000000' || t.color === '#FFFFFF' ? t.altColor : t.color)}</div>` : ''}
     <div class="card" style="margin-top:16px"><h2>Schedule & results</h2><div class="table-wrap"><table><thead><tr><th>Wk</th><th>Day</th><th>Opponent</th><th>Result</th></tr></thead><tbody>
         ${games.map(g => {
           const home = g.home === name, opp = home ? g.away : g.home;
@@ -147,17 +227,12 @@ export function renderTeamPage(name) {
           return `<tr class="clickable" data-g="${g.id}"><td class="small">${g.week > 14 ? esc(weekName(g.week).replace('Conf. Tournaments', 'Conf T')) : g.week}</td><td class="small">${esc(g.day)}</td>
             <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp)}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="4" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game</p></div>
-    <div class="grid" style="margin-top:16px">
-      <div class="card"><h2>Pitching staff</h2><div class="table-wrap"><table><thead><tr><th>Pitcher</th><th class="num">APP</th><th class="num">IP</th><th class="num">H</th><th class="num">R</th><th class="num">BB</th><th class="num">K</th><th class="num">RA/7</th></tr></thead><tbody>
-        ${Object.entries(ps).map(([n, x]) => { const i = t.staff?.indexOf(n) ?? -1; return `<tr><td>${inSeason && i >= 0 ? `<input type="text" class="pin" data-p="${i}" value="${esc(n)}"><div class="small muted">${ROLES[i]}</div>` : `${esc(n)} <span class="muted small">${x.former ? '(no longer on staff)' : ''}</span>`}</td>
-          <td class="num">${x.app}</td><td class="num">${ip(x.outs)}</td><td class="num">${x.h}</td><td class="num">${x.r}</td><td class="num">${x.bb}</td><td class="num">${x.k}</td><td class="num">${x.outs ? ((x.r * 21) / x.outs).toFixed(2) : '—'}</td></tr>`; }).join('')}</tbody></table></div>
-        <p class="small muted">Pitching lines come from simulated games; results you type in don't add to them.</p></div>
-    <div class="card"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
-    </div>
+    <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
+      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${esc(ctx.league.seasons[y].teams[name].coach || '—')}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
+        <label class="field" style="flex:1;min-width:150px">Head coach <input type="text" id="e-coach" value="${esc(t.coach || '')}"></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="e-abbr" maxlength="5" value="${esc(t.abbr || '')}"></label>
         <label class="field" style="flex:1;min-width:140px">Conference <select id="e-conf">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
         <label class="field">Color <input type="color" id="e-color" value="${esc(t.color)}"></label><label class="field">Alt color <input type="color" id="e-alt" value="${esc(t.altColor)}"></label></div>
@@ -170,7 +245,6 @@ export function renderTeamPage(name) {
   $$('[data-g]').forEach(rw => (rw.onclick = e => { if (!e.target.closest('a')) openGame(Number(rw.dataset.g)); }));
   if (!inSeason) return;
   $$('[data-r]').forEach(inp => (inp.onchange = () => { t[inp.dataset.r] = rate(inp.value); changed({ progress: false }); }));
-  $$('[data-p]').forEach(inp => (inp.onchange = () => { const v = inp.value.trim(); if (v) { t.staff[+inp.dataset.p] = v; changed({ progress: false }); } }));
   const applyLogo = url => { for (const se of Object.values(ctx.league.seasons)) if (se.teams[name]) se.teams[name].logoOverride = url; };
   $('#e-file').onchange = async e => {
     try { applyLogo(await imageFileToDataUrl(e.target.files[0])); changed({ progress: false }); toast('Logo updated.'); } catch (err) { toast(err.message, true); }
@@ -178,7 +252,7 @@ export function renderTeamPage(name) {
   if ($('#e-clearlogo')) $('#e-clearlogo').onclick = () => { applyLogo(null); changed({ progress: false }); };
   $('#e-save').onclick = () => {
     const v = id => $(id).value.trim();
-    Object.assign(t, { mascot: v('#e-mascot'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt') });
+    Object.assign(t, { mascot: v('#e-mascot'), coach: v('#e-coach'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt') });
     if (v('#e-logo')) applyLogo(v('#e-logo'));
     const newName = v('#e-school');
     try { if (newName !== name) { renameTeam(ctx.league, s, name, newName); location.hash = teamHref(newName); } } catch (e) { return toast(e.message, true); }
@@ -205,21 +279,7 @@ export function renderConferences() {
       return `<a class="card conf-card" href="${confHref(c)}"><div class="row">${confLogo(c, 44)}<div><h2 style="margin:0">${esc(c)}</h2><div class="muted small">${ts.length} teams · avg OVR ${avg}</div></div></div>
         <div class="small" style="margin-top:10px">${st[0] && st[0].cw + st[0].cl ? `Leader: <b>${esc(st[0].team)}</b> ${st[0].cw}-${st[0].cl}` : 'No conference games yet'}${ch ? ` · Tournament champion: <b>${esc(ch)}</b>` : ''}</div></a>`;
     }).join('')}</div>`;
-  $('#c-add').onclick = () => {
-    modal.innerHTML = `<div class="modal-head"><h2>Add a conference</h2><button class="btn ghost" data-x>✕</button></div>
-      <div class="modal-body stack"><div class="row"><label class="field" style="flex:1">Name <input type="text" id="cf-name" placeholder="e.g. West Coast"></label>
-        <label class="field" style="width:90px">Abbr. <input type="text" id="cf-abbr" maxlength="5"></label><label class="field">Color <input type="color" id="cf-color" value="#2C5F8A"></label></div>
-        <p class="small muted">Move teams into it from the Teams page or a team's profile. Each conference gets an automatic NCAA bid.</p></div>
-      <div class="modal-foot"><span class="spacer"></span><button class="btn" data-x>Cancel</button><button class="btn primary" id="cf-save">Add conference</button></div>`;
-    $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
-    modal.onclose = () => ctx.render();
-    $('#cf-save', modal).onclick = () => {
-      try { addConference(ctx.league, $('#cf-name', modal).value, { abbr: $('#cf-abbr', modal).value.trim().toUpperCase() || undefined, color: $('#cf-color', modal).value }); }
-      catch (e) { return toast(e.message, true); }
-      modal.close(); changed({ progress: false }); toast('Conference added.');
-    };
-    modal.showModal();
-  };
+  $('#c-add').onclick = () => conferenceForm();
 }
 
 export function renderConferencePage(c) {
@@ -295,7 +355,7 @@ export function renderSettings() {
         <label class="field">League name <input type="text" id="s-name" value="${esc(L.name)}"></label>
         <label class="field">${s.year} championship name <input type="text" id="s-mcws" value="${esc(st.mcwsName)}"></label>
         <label class="field">Ratings between seasons <select id="s-dev">${Object.entries({ none: 'Stay the same', small: 'Small changes', normal: 'Normal changes', big: 'Big changes' }).map(([k, l]) => `<option value="${k}" ${st.development === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <p class="small muted">Each new season moves every rating a little toward 70 with some random growth, and about a third of pitchers graduate and are replaced. You can edit any rating afterward.</p>
+        <p class="small muted">Each new season moves every rating a little toward 70 with some random growth, and you can edit any rating in the offseason.</p>
       </div>
       <div class="card stack"><h2>Simulation (${s.year})</h2>
         <label class="field">Upsets in simulated games <select id="s-vol">${[[0.8, 'Fewer'], [1, 'Realistic'], [1.3, 'More'], [1.8, 'Chaos']].map(([v, l]) => `<option value="${v}" ${Number(st.volatility) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -303,8 +363,8 @@ export function renderSettings() {
         <label class="check"><input type="checkbox" id="s-tb" ${st.tiebreaker ? 'checked' : ''}> Extra innings start with a runner on second (8th inning on)</label>
       </div>
       <div class="card stack"><h2>Season</h2>
-        ${isCurrent ? `<button class="btn" id="s-next" ${s.phase === 'complete' ? '' : 'disabled'}>Start the ${s.year + 1} season</button>
-          <p class="small muted">${s.phase === 'complete' ? 'Teams, conferences and settings carry over. The final poll seeds the new preseason poll.' : 'Available once the national champion is crowned.'}</p>` : `<p class="muted">You're viewing a past season. Switch to ${L.currentYear} at the top to start a new one.</p>`}
+        ${isCurrent ? `<a class="btn ${s.phase === 'complete' ? 'primary' : 'disabled'}" href="#/offseason">Go to the ${s.year + 1} offseason</a>
+          <p class="small muted">${s.phase === 'complete' ? 'Add teams and conferences, realign, update coaches, then start the new season. The final poll seeds the new preseason poll.' : 'Opens once the national champion is crowned.'}</p>` : `<p class="muted">You're viewing a past season. Switch to ${L.currentYear} at the top to start a new one.</p>`}
         <button class="btn" id="s-rebuild" ${canRebuild ? '' : 'disabled'}>Rebuild ${s.year} schedule</button>
         <p class="small muted">${canRebuild ? 'Makes a new regular-season schedule from the current teams and conferences.' : 'Locked: regular-season games have been played.'}</p>
       </div>
@@ -320,9 +380,6 @@ export function renderSettings() {
   $('#s-vol').onchange = e => { st.volatility = Number(e.target.value); persist(); };
   $('#s-rr').onchange = e => { st.runRule = e.target.checked; persist(); };
   $('#s-tb').onchange = e => { st.tiebreaker = e.target.checked; persist(); };
-  if ($('#s-next')) $('#s-next').onclick = () => {
-    const ns = startNextSeason(L); L.viewYear = ns.year; location.hash = '#/home'; changed({ progress: false }); toast(`Welcome to ${ns.year}.`);
-  };
   $('#s-rebuild').onclick = () => {
     if (!confirm(`Replace the ${s.year} regular-season schedule with a new one?`)) return;
     try { rebuildSchedule(s); } catch (e) { return toast(e.message, true); }

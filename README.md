@@ -6,7 +6,7 @@ It is a static site with no build step and no server, so it runs on GitHub Pages
 
 ## The league
 
-The dynasty starts in **2016** with 45 teams in six conferences: Big 12, Big Ten, Big West, Horizon, MAC and Sun Belt. Every team uses its school's real colors. Teams, conferences, colors, logos and ratings can all be changed in the app.
+The dynasty starts in **2016** with 45 teams in six conferences: Big 12, Big Ten, Big West, Horizon, MAC and Sun Belt. Every team uses its school's real colors and has a head coach. Teams, coaches, conferences, colors, logos and ratings can all be changed in the app.
 
 ## Ratings
 
@@ -15,7 +15,7 @@ Every team has three ratings from 40 to 99:
 | Rating | What it covers |
 |---|---|
 | **OFF** | Hitting: contact, power, plate discipline |
-| **PIT** | The pitching staff |
+| **PIT** | Pitching |
 | **DEF** | Fielding: errors and turning batted balls into outs |
 
 **OVR = 40% OFF + 40% PIT + 20% DEF.** Starting ratings are guesses you can edit on the Teams page or a team's profile.
@@ -25,8 +25,7 @@ Every team has three ratings from 40 to 99:
 Simulated games play out every plate appearance. Hitting (OFF) faces pitching (PIT) and fielding (DEF), and each plate appearance ends in a strikeout, walk, hit-by-pitch, single, double, triple, home run, error or out. Runners advance, double plays happen and sacrifice flies score runs.
 
 - **NCAA rules:** 7 innings, the home team skips its last at-bat when already ahead, walk-offs, the **8-run rule after 5 innings**, and extra innings starting with a **runner on second** from the 8th inning. Both rules can be turned off in Settings.
-- **Pitching staffs:** each team has four pitchers: Friday, Saturday and Sunday starters plus a midweek arm who also relieves. Starters get pulled when they tire or get hit hard. Each sim records a pitching line for everyone who pitched. Pitcher names can be edited on the team page.
-- **Results:** a full line score (runs by inning, R/H/E). Teams average about 4 runs, 7 hits and 1 error a game. A team 10 points better wins about 73% of the time, and one 20 points better about 88%. Settings has an **Upsets** option (Fewer, Realistic, More, Chaos).
+- **Results:** a full line score: runs by inning plus R/H/E. Teams average about 4 runs, 7 hits and 1 error a game. A team 10 points better wins about 73% of the time, and one 20 points better about 88%. Settings has an **Upsets** option (Fewer, Realistic, More, Chaos).
 - **Simulations are suggestions:** in the game editor you can simulate, change anything, and then save. You can also type in a line score by hand.
 
 ## The season
@@ -47,18 +46,29 @@ The field is smaller than the real NCAA's 64 teams, so the format is scaled down
 
 The final poll comes out after the championship, with the national champion at #1.
 
-## Between seasons
+The Postseason page shows each event as a bracket of compact cards with runs, hits and errors. Click a game, or open the Schedule page, for the full inning-by-inning line score.
 
-**Settings → Start the next season** carries over teams, conferences and settings. Ratings drift toward average with some random growth, and about a third of pitchers graduate. You can choose how big those changes are, or turn them off. The final poll seeds the next preseason poll.
+## The offseason
+
+Once the national champion is crowned, an **Offseason** page opens. Next season's teams are set up there before any games are scheduled:
+
+- **Realign conferences:** move any team with its Conference menu. Moved teams are marked.
+- **Add teams:** each new team gets a full schedule in the new season.
+- **Add conferences** or delete empty ones.
+- **Remove teams** from the dynasty. Their history stays, and you can bring them back before the season starts.
+- **Update head coaches and ratings.** Ratings have already moved for the new year, shown as +/−. Settings controls how big those changes are, or turns them off.
+
+**Start the season** builds the new schedule from the new alignment. The final poll seeds the next preseason poll.
 
 ## Commissioner controls
 
 | Want to… | Where |
 |---|---|
 | Enter or change a score | Click the game (Schedule, Postseason, team page) |
-| Pick a game's starting pitchers | Game editor → starter dropdowns |
 | Change ratings | Teams page, or the team's profile |
-| Add a team | Teams → + Add team |
+| Add a team | Offseason (full schedule), or Teams → + Add team mid-season |
+| Realign conferences | Offseason → Conference menus |
+| Change a head coach | Teams page, team profile, or Offseason |
 | Rename a team, change colors, logo or conference | Team profile → Commissioner edits |
 | Add or rename a conference, set its logo | Conferences |
 | Add a game | Schedule → + Add game |

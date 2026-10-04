@@ -4,7 +4,7 @@
 import { saveLeague } from './store.js';
 import { logoFor } from './logos.js';
 import { LOGO_ALIASES } from './data.js';
-import { ovr, winProbability, starterSlot } from './sim.js';
+import { ovr, winProbability } from './sim.js';
 import { records, isFinal, winnerOf } from './standings.js';
 import { latestPoll, pollRankMap } from './polls.js';
 import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js';
@@ -80,14 +80,16 @@ export function readableOn(bg, alt) {
   return ratio(lb, 1) >= ratio(lb, 0) ? '#ffffff' : '#000000';
 }
 
-export function team(name, { rank = true, record = false, seed = null, link = true, size = 18 } = {}) {
+export function team(name, { rank = true, record = false, seed = null, link = true, size = 18, abbrAlt = false } = {}) {
   if (!name) return '<span class="muted">TBD</span>';
   const t = teamInfo(name);
   const rk = cache.ranks()[name];
   const r = seed ? `<span class="rank" title="National seed">(${seed})</span>` : rank && rk ? `<span class="rank">${rk}</span>` : '';
   let rec = '';
   if (record && S().teams[name]) { const x = cache.recs()[name]; rec = ` <span class="muted small">${x.w}-${x.l}</span>`; }
-  const label = t && link ? `<a class="team-link" href="${teamHref(name)}">${esc(name)}</a>` : esc(name);
+  // abbrAlt: also carry the abbreviation, shown instead when the card is narrow.
+  const text = abbrAlt && t?.abbr ? `<span class="tn-full">${esc(name)}</span><span class="tn-abbr">${esc(t.abbr)}</span>` : esc(name);
+  const label = t && link ? `<a class="team-link" href="${teamHref(name)}" title="${esc(name)}">${text}</a>` : text;
   return `<span class="team">${logoImg(t, size)}${r}${label}${rec}</span>`;
 }
 
@@ -151,7 +153,7 @@ export function gameCard(g) {
   const cell = (arr, i) => (fin ? (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '') : '');
   const recs = cache.recs();
   const line = (t, arr, R, H, E) => `<div class="line sb" style="--q:${n}">
-      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t) })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
+      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
       ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
   const head = `<div class="line sb head" style="--q:${n}"><div></div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
@@ -181,7 +183,7 @@ export function bindGameCards(root = app) {
     toast(resultText(g));
     changed();
   }));
-  $$('.game[data-game]', root).forEach(el => {
+  $$('.game[data-game], .bgame[data-game]', root).forEach(el => {
     el.onclick = e => { if (!e.target.closest('a, button')) openGame(Number(el.dataset.game)); };
     el.onkeydown = e => { if (e.key === 'Enter') openGame(Number(el.dataset.game)); };
   });
@@ -192,8 +194,8 @@ export function bindGameCards(root = app) {
 export function openGame(id, { isNew = false } = {}) {
   const s = S(), g = s.games.find(x => x.id === id);
   if (!g) return;
-  let source = g.source, pitching = g.pitching;
-  let n = Math.max(7, g.homeLine.length, g.awayLine.length);
+  let source = g.source;
+  let n = isFinal(g) ? Math.max(g.homeLine.length, g.awayLine.length) : 7;
   const regular = g.type === 'regular';
   const cellVal = (arr, i) => (isFinal(g) && i < arr.length ? (arr[i] === null ? '' : arr[i]) : '');
 
@@ -208,12 +210,10 @@ export function openGame(id, { isNew = false } = {}) {
       </div>
       <div class="row"><label class="check"><input type="checkbox" id="m-neutral" ${g.neutral ? 'checked' : ''}> Neutral site</label>
         <label class="check"><input type="checkbox" id="m-conf" ${g.confGame ? 'checked' : ''}> Conference game</label></div>` : ''}
-      <div class="row" id="m-starters"></div>
       <div class="table-wrap"><div class="lsgrid" id="m-grid"></div></div>
       <div class="row"><button class="btn sm" id="m-addinn">+ Extra inning</button><button class="btn sm" id="m-delinn">− Inning</button>
         <span class="small muted">Leave the home team's last inning blank for an "X" (they didn't need to bat).</span></div>
       <div id="m-preview"></div>
-      <div id="m-box"></div>
     </div>
     <div class="modal-foot">
       <button class="btn" id="m-sim">🎲 Simulate</button>
@@ -248,23 +248,10 @@ export function openGame(id, { isNew = false } = {}) {
         <input type="text" inputmode="numeric" maxlength="2" id="m-${side}E" value="${esc(values[side + 'E'])}" aria-label="${side} errors"></div>`;
     }
     $('#m-grid', modal).innerHTML = h;
-    $$('#m-grid input', modal).forEach(i => (i.oninput = () => { source = 'manual'; pitching = null; readGrid(); totals(); }));
+    $$('#m-grid input', modal).forEach(i => (i.oninput = () => { source = 'manual'; readGrid(); totals(); }));
     totals();
   };
   const totals = () => { for (const side of ['away', 'home']) $(`#m-${side}-R`, modal).textContent = sum(values[side].slice(0, n)); };
-  const slotName = (t, side) => { const tm = s.teams[t]; if (!tm) return ''; const i = starterSlot({ ...g, home: cur().home, away: cur().away }, side); return tm.staff[i] || ''; };
-  const drawStarters = () => {
-    const t = cur();
-    const pick = side => {
-      const fixed = side === 'home' ? g.homeStarter : g.awayStarter;
-      const tm = s.teams[t[side]];
-      if (!tm) return '';
-      return `<label class="field" style="flex:1;min-width:150px">${esc(tm.abbr)} starter <select data-starter="${side}">
-        <option value="">Rotation (${esc(slotName(t[side], side))})</option>${tm.staff.map((p, i) => `<option value="${i}" ${fixed === i ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>`;
-    };
-    $('#m-starters', modal).innerHTML = pick('away') + pick('home');
-    $$('[data-starter]', modal).forEach(sel => (sel.onchange = () => { const v = sel.value === '' ? null : Number(sel.value); if (sel.dataset.starter === 'home') g.homeStarter = v; else g.awayStarter = v; refresh(); }));
-  };
   const refresh = () => {
     const t = cur(), prev = $('#m-preview', modal);
     if (t.home && t.away && s.teams[t.home] && s.teams[t.away] && t.home !== t.away) {
@@ -273,25 +260,14 @@ export function openGame(id, { isNew = false } = {}) {
       prev.innerHTML = `<div class="small muted" style="margin-bottom:4px">Pre-game: ${esc(t.home)} wins ${Math.round(wp * 100)}%, ${esc(t.away)} ${Math.round((1 - wp) * 100)}% · OVR ${ovr(s.teams[t.away])} vs ${ovr(s.teams[t.home])}</div>
         <div class="wpbar"><div style="width:${(1 - wp) * 100}%;background:${esc(ch(t.away))}"></div><div style="width:${wp * 100}%;background:${esc(ch(t.home))}"></div></div>`;
     } else prev.innerHTML = '';
-    drawBox();
   };
-  const drawBox = () => {
-    const box = $('#m-box', modal);
-    if (!pitching) { box.innerHTML = ''; return; }
-    const t = cur();
-    const ip = o => `${Math.floor(o / 3)}.${o % 3}`;
-    const tbl = side => `<table class="box"><thead><tr><th>${esc(t[side])} pitching</th><th class="num">IP</th><th class="num">H</th><th class="num">R</th><th class="num">BB</th><th class="num">K</th></tr></thead><tbody>
-      ${(pitching[side] || []).map(p => `<tr><td>${esc(p.name)}</td><td class="num">${ip(p.outs)}</td><td class="num">${p.h}</td><td class="num">${p.r}</td><td class="num">${p.bb}</td><td class="num">${p.k}</td></tr>`).join('')}</tbody></table>`;
-    box.innerHTML = `<div class="box-grid">${tbl('away')}${tbl('home')}</div>`;
-  };
-
-  drawGrid(); drawStarters(); refresh();
+  drawGrid(); refresh();
 
   if (regular) {
     const onTeams = () => {
       const t = cur();
       if (t.home && t.away && s.teams[t.home] && s.teams[t.away]) $('#m-conf', modal).checked = s.teams[t.home].conference === s.teams[t.away].conference;
-      drawGrid(); drawStarters(); refresh();
+      drawGrid(); refresh();
     };
     $('#m-home', modal).onchange = onTeams; $('#m-away', modal).onchange = onTeams;
     $('#m-neutral', modal).onchange = refresh;
@@ -308,11 +284,11 @@ export function openGame(id, { isNew = false } = {}) {
     const t = cur();
     if (!t.home || !t.away || t.home === t.away) return toast('Pick two different teams first.', true);
     const res = simResult(s, { ...g, ...t });
-    n = Math.max(7, res.homeLine.length, res.awayLine.length);
+    n = Math.max(res.homeLine.length, res.awayLine.length);
     values.away = res.awayLine.map(v => (v === null ? '' : v));
     values.home = res.homeLine.map(v => (v === null ? '' : v));
     Object.assign(values, { awayH: res.away.H, awayE: res.away.E, homeH: res.home.H, homeE: res.home.E });
-    pitching = res.pitching; source = 'sim';
+    source = 'sim';
     drawGrid(); refresh();
   };
   if ($('#m-clear', modal)) $('#m-clear', modal).onclick = () => { clearResult(g); modal.close(); changed(); toast('Result cleared.'); };
@@ -346,10 +322,40 @@ export function openGame(id, { isNew = false } = {}) {
       homeLine, awayLine,
       home: { R: hr, H: Number(values.homeH || 0), E: Number(values.homeE || 0) },
       away: { R: ar, H: Number(values.awayH || 0), E: Number(values.awayE || 0) },
-      pitching: source === 'sim' ? pitching : null,
       runRule: n < 7,
     }, source === 'sim' ? 'sim' : 'manual');
     isNew = false; modal.close(); changed(); toast('Result saved.');
   };
   modal.showModal();
+}
+
+// ---------- compact bracket cards (team, R, H, E) ----------
+
+export function compactCard(g, seedFn = () => null) {
+  const s = S();
+  const fin = isFinal(g);
+  const w = fin ? winnerOf(g) : null;
+  const inn = Math.max(g.homeLine.length, g.awayLine.length);
+  const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner' : 'loser') : ''}">
+      <span class="bg-team">${seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${team(t, { rank: false, size: 16 })}</span>
+      <span class="bg-n bg-r">${fin ? R : ''}</span><span class="bg-n">${fin ? H : ''}</span><span class="bg-n">${fin ? E : ''}</span></div>`;
+  let foot = '';
+  if (fin) foot = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
+  else if (s.teams[g.home] && s.teams[g.away]) {
+    const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
+    const fav = wp >= 0.5 ? g.home : g.away;
+    foot = `<span class="muted">${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%</span><button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>`;
+  }
+  const label = g.label ? g.label.split(' · ').slice(-1)[0] : '';
+  return `<div class="bgame" data-game="${g.id}" tabindex="0" title="Click for the full line score">
+    <div class="bg-row bg-head"><span>${esc(label)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    ${row(g.away, g.awayR, g.awayH, g.awayE)}${row(g.home, g.homeR, g.homeH, g.homeE)}
+    <div class="bg-foot">${foot}</div></div>`;
+}
+
+export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '' } = {}) {
+  const row = t => `<div class="bg-row"><span class="bg-team">${t && t !== 'BYE' && seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${t === 'BYE' ? '<span class="muted">Bye</span>' : t ? team(t, { rank: false, size: 16 }) : '<span class="muted">TBD</span>'}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
+  return `<div class="bgame placeholder ${faded ? 'faded' : ''}">
+    <div class="bg-row bg-head"><span>${esc(label)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    ${row(teams[0])}${row(teams[1])}<div class="bg-foot"><span class="muted">${esc(note)}</span></div></div>`;
 }

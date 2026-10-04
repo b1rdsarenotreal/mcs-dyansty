@@ -2,16 +2,16 @@
 
 import { loadLeague, saveLeague } from './store.js';
 import { loadLogoTable } from './logos.js';
-import { newLeague, afterChange } from './league.js';
+import { newLeague, afterChange, migrateLeague } from './league.js';
 import { ctx, app, cache, persist, esc } from './ui.js';
 import { renderHome, renderSchedule, renderStandings, renderRankings, renderPostseason, resetSeasonUi } from './views-season.js';
-import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings } from './views-league.js';
+import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings, renderOffseason } from './views-league.js';
 
-const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', teams: 'Teams', conferences: 'Conferences', history: 'History', settings: 'Settings' };
+const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', offseason: 'Offseason', teams: 'Teams', conferences: 'Conferences', history: 'History', settings: 'Settings' };
 const SUBVIEWS = { team: 'teams', conference: 'conferences' };
 const RENDER = {
   home: renderHome, schedule: renderSchedule, standings: renderStandings, rankings: renderRankings, postseason: renderPostseason,
-  teams: renderTeams, conferences: renderConferences, history: renderHistory, settings: renderSettings,
+  offseason: renderOffseason, teams: renderTeams, conferences: renderConferences, history: renderHistory, settings: renderSettings,
   team: () => renderTeamPage(routeArg()), conference: () => renderConferencePage(routeArg()),
 };
 
@@ -23,7 +23,8 @@ function renderChrome() {
   document.getElementById('league-name').textContent = L.name;
   document.title = L.name;
   const v = currentView();
-  document.getElementById('nav').innerHTML = Object.entries(VIEWS).map(([k, label]) => `<a href="#/${k}" class="${k === v || SUBVIEWS[v] === k ? 'active' : ''}">${label}</a>`).join('');
+  const offOpen = L.seasons[L.currentYear].phase === 'complete';
+  document.getElementById('nav').innerHTML = Object.entries(VIEWS).filter(([k]) => k !== 'offseason' || offOpen || v === 'offseason').map(([k, label]) => `<a href="#/${k}" class="${k === v || SUBVIEWS[v] === k ? 'active' : ''}">${label}</a>`).join('');
   const years = Object.keys(L.seasons).map(Number).sort((a, b) => b - a);
   const picker = document.getElementById('season-picker');
   picker.innerHTML = `<select aria-label="Season">${years.map(y => `<option value="${y}" ${y === L.viewYear ? 'selected' : ''}>${y}${y === L.currentYear ? '' : ' (past)'}</option>`).join('')}</select>`;
@@ -47,6 +48,7 @@ async function boot() {
     league = newLeague();
     await saveLeague(league);
   }
+  migrateLeague(league);
   if (!league.seasons[league.viewYear]) league.viewYear = league.currentYear;
   ctx.league = league;
   afterChange(league.seasons[league.currentYear]);

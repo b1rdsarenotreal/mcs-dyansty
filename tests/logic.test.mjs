@@ -1,6 +1,6 @@
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
-import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, LAST_POLL_WEEK } from '../js/league.js';
+import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, LAST_POLL_WEEK } from '../js/league.js';
 import { records, rpi, confStandings, isFinal } from '../js/standings.js';
 import { REG_WEEKS } from '../js/schedule.js';
 
@@ -50,15 +50,38 @@ const avg = k => (g.reduce((a, x) => a + x['home' + k] + x['away' + k], 0) / g.l
 console.log('per team per game: R', avg('R'), 'H', avg('H'), 'E', avg('E'), 'run-rule', (g.filter(x => x.runRule).length / g.length).toFixed(3), 'extras', (g.filter(x => x.awayLine.length > 7).length / g.length).toFixed(3));
 for (const x of s.games) { assert.equal(x.homeLine.reduce((a, b) => a + (b || 0), 0), x.homeR); }
 
-// Commissioner edits and a second season
-addConference(league, 'Summit');
-addTeam(league, s, { school: 'Test U', conference: 'Summit' });
-renameTeam(league, s, 'Test U', 'Testing State');
-assert.ok(s.teams['Testing State']);
+// Coaches
+assert.equal(s.teams['Oklahoma'].coach, 'JT Gasso');
+assert.ok(Object.values(s.teams).every(t => t.coach), 'every team has a coach');
+assert.ok(Object.values(s.teams).every(t => !t.staff), 'no pitching staffs');
+assert.ok(s.games.every(g => !g.pitching && !g.wp), 'no pitching stats');
+
+// Offseason: new conference, new team, realignment, a team leaves
+const d = beginOffseason(league);
+assert.equal(d.year, 2017);
+addConference(league, 'Summit', { color: '#123456' });
+addTeam(league, d.teams, { school: 'Oregon State', conference: 'Summit', coach: 'Pat Casey' });
+for (const t of ['Saint Louis', 'UMKC', 'North Dakota State']) d.teams[t].conference = 'Summit';
+d.teams['Houston'].conference = 'Big 12';
+draftRemoveTeam(league, 'Bemidji State');
+assert.deepEqual(draftWarnings(league), []);
+assert.ok(s.teams['Bemidji State'], 'history keeps the team');
 const s2 = startNextSeason(league);
 assert.equal(s2.year, 2017);
-assert.ok(s2.teams['Testing State']);
+assert.ok(!league.draft);
+assert.ok(s2.teams['Oregon State'] && !s2.teams['Bemidji State']);
+assert.equal(s2.teams['Houston'].conference, 'Big 12');
+assert.equal(s2.teams['Oregon State'].coach, 'Pat Casey');
+const summit = Object.values(s2.teams).filter(t => t.conference === 'Summit').map(t => t.school);
+assert.equal(summit.length, 4);
+for (const t of summit) {
+  const opps = new Set(s2.games.filter(g => g.confGame && (g.home === t || g.away === t)).map(g => (g.home === t ? g.away : g.home)));
+  assert.equal(opps.size, 3, `${t} plays its new Summit rivals`);
+}
+assert.ok(s2.games.some(g => g.home === 'Oregon State' || g.away === 'Oregon State'));
 assert.ok(s2.carryPoll);
+renameTeam(league, s2, 'Oregon State', 'Oregon St.');
+assert.ok(s2.teams['Oregon St.']);
 simGames(s2, undefined, { autoLock: true });
 assert.equal(s2.phase, 'complete');
 console.log('2017 champion', s2.post.champion);

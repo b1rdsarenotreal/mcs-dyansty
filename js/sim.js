@@ -1,20 +1,18 @@
 // Softball game simulator. Plays every plate appearance from the teams'
 // OFF (hitting), PIT (pitching) and DEF (fielding) ratings and returns a full
-// line score: runs by inning, R/H/E, and pitching lines. NCAA rules: 7 innings, 8-run rule after 5, and from
-// the 8th inning each half starts with a runner on second.
+// line score: runs by inning and R/H/E. NCAA rules: 7 innings, 8-run rule
+// after 5, and from the 8th inning each half starts with a runner on second.
 // A simulation is only a suggestion — the commissioner reviews and saves it.
 
-import { rng as makeRng, hashStr } from './util.js';
+import { rng as makeRng } from './util.js';
 
 export const OVR_WEIGHTS = { off: 0.4, pit: 0.4, def: 0.2 };
+const ovrExact = t => t.off * OVR_WEIGHTS.off + t.pit * OVR_WEIGHTS.pit + t.def * OVR_WEIGHTS.def;
 export function ovr(t) { return Math.round(t.off * OVR_WEIGHTS.off + t.pit * OVR_WEIGHTS.pit + t.def * OVR_WEIGHTS.def); }
 
 // League-average plate appearance for two 70-rated teams.
 const BASE = { k: 0.19, bb: 0.08, hbp: 0.017, hr: 0.024, tri: 0.006, dbl: 0.045, sgl: 0.152, err: 0.03 };
 const TALENT = 28; // rating points per unit of talent gap
-
-// Starter quality by rotation slot: Friday ace, Saturday, Sunday, midweek / relief.
-const SLOT_ADJ = [2, 0, -2, -4];
 
 function paProbs(off, pit, def, home, vol) {
   const t = (off - pit) / TALENT / vol;
@@ -42,58 +40,14 @@ function outcome(p, r) {
   return 'out';
 }
 
-// Which staff member starts: rotation by day for the regular season,
-// or an explicit slot (postseason, or a commissioner pick).
-export function starterSlot(game, side) {
-  const fixed = side === 'home' ? game.homeStarter : game.awayStarter;
-  if (fixed != null) return fixed;
-  const byDay = { Fri: 0, Sat: 1, Sun: 2 };
-  if (game.type === 'regular') return byDay[game.day] ?? 3;
-  return (side === 'home' ? game.homeSlot : game.awaySlot) ?? 0;
-}
-
 export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility = 1, runRule = true, tiebreaker = true } = {}) {
   const r = makeRng(seed);
   const vol = volatility;
   const neutral = !!game.neutral;
   const sides = {
-    home: { team: homeTeam, staff: homeTeam.staff || ['Pitcher 1', 'Pitcher 2', 'Pitcher 3', 'Pitcher 4'] },
-    away: { team: awayTeam, staff: awayTeam.staff || ['Pitcher 1', 'Pitcher 2', 'Pitcher 3', 'Pitcher 4'] },
+    home: { team: homeTeam, R: 0, H: 0, E: 0, innings: [] },
+    away: { team: awayTeam, R: 0, H: 0, E: 0, innings: [] },
   };
-  for (const s of ['home', 'away']) {
-    const slot = starterSlot(game, s);
-    const st = sides[s];
-    st.used = [slot];
-    st.lines = [newLine(st.staff[slot] || `Pitcher ${slot + 1}`, slot, true)];
-    st.cur = st.lines[0];
-    st.R = 0; st.H = 0; st.E = 0; st.innings = [];
-  }
-
-  function newLine(name, slot, starter) { return { name, slot, starter, outs: 0, h: 0, r: 0, bb: 0, k: 0, bf: 0 }; }
-
-  function pitRating(st) {
-    const base = st.team.pit + (SLOT_ADJ[st.cur.slot] ?? -4) + (st.cur.starter ? 0 : 1);
-    const tired = Math.max(0, st.cur.bf - 24) * 0.6;
-    return base - tired;
-  }
-
-  function maybePull(st, inning, inningRuns, force = false) {
-    const c = st.cur;
-    let pull = force;
-    if (c.starter) {
-      if (c.r >= 5 || inningRuns >= 4) pull = true;
-      else if (c.r >= 4 && inning >= 4 && r() < 0.6) pull = true;
-      else if (c.bf > 27 && r() < 0.35) pull = true;
-    } else if (c.r >= 4 || inningRuns >= 4) pull = true;
-    if (!pull) return;
-    const usedSlots = new Set(st.used);
-    const order = [3, 2, 1, 0].filter(i => !usedSlots.has(i) && i < st.staff.length);
-    if (!order.length) return;
-    const slot = order[0];
-    st.used.push(slot);
-    st.cur = newLine(st.staff[slot], slot, false);
-    st.lines.push(st.cur);
-  }
 
   let gameOver = false, runRuleEnd = false;
   const score = () => ({ home: sides.home.R, away: sides.away.R });
@@ -108,32 +62,29 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
 
     const scoreRuns = n => {
       for (let i = 0; i < n; i++) {
-        bat.R++; runs++; fld.cur.r++;
+        bat.R++; runs++;
         if (batSide === 'home' && inning >= 7 && bat.R > fld.R) gameOver = true; // walk-off
         if (runRule && batSide === 'home' && inning >= 5 && bat.R - fld.R >= 8) { gameOver = true; runRuleEnd = true; }
       }
     };
 
     while (outs < 3 && !gameOver) {
-      const p = paProbs(bat.team.off, pitRating(fld), fld.team.def, isHome, vol);
+      const p = paProbs(bat.team.off, fld.team.pit, fld.team.def, isHome, vol);
       const o = outcome(p, r);
-      const c = fld.cur;
-      c.bf++;
       let n = 0;
       switch (o) {
-        case 'k': outs++; c.k++; c.outs++; break;
+        case 'k': outs++; break;
         case 'bb': case 'hbp':
-          if (o === 'bb') c.bb++;
           if (b[0] && b[1] && b[2]) n++;
           b[2] = b[2] || (b[0] && b[1]); b[1] = b[1] || b[0]; b[0] = true;
           break;
-        case 'hr': n = 1 + b.filter(Boolean).length; b[0] = b[1] = b[2] = false; bat.H++; c.h++; break;
-        case 'tri': n = b.filter(Boolean).length; b[0] = b[1] = false; b[2] = true; bat.H++; c.h++; break;
+        case 'hr': n = 1 + b.filter(Boolean).length; b[0] = b[1] = b[2] = false; bat.H++; break;
+        case 'tri': n = b.filter(Boolean).length; b[0] = b[1] = false; b[2] = true; bat.H++; break;
         case 'dbl': {
           if (b[2]) n++; if (b[1]) n++;
           const third = b[0] && !(r() < 0.45 && ++n);
           b[0] = false; b[1] = true; b[2] = !!third;
-          bat.H++; c.h++; break;
+          bat.H++; break;
         }
         case 'sgl': {
           const nb = [true, false, false];
@@ -141,7 +92,7 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
           if (b[1]) { if (r() < 0.6) n++; else nb[2] = true; }
           if (b[0]) { if (!nb[2] && r() < 0.28) nb[2] = true; else nb[1] = true; }
           b[0] = nb[0]; b[1] = nb[1]; b[2] = nb[2];
-          bat.H++; c.h++; break;
+          bat.H++; break;
         }
         case 'err': {
           const nb = [true, false, false];
@@ -152,8 +103,8 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
           fld.E++; break;
         }
         default: { // ball in play, out
-          outs++; c.outs++;
-          if (outs < 3 && b[0] && r() < 0.13) { outs++; c.outs++; b[0] = false; } // double play
+          outs++;
+          if (outs < 3 && b[0] && r() < 0.13) { outs++; b[0] = false; } // double play
           if (outs < 3) {
             if (b[2] && r() < 0.42) { n++; b[2] = false; }
             if (b[1] && !b[2] && r() < 0.35) { b[2] = true; b[1] = false; }
@@ -161,10 +112,8 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
         }
       }
       if (n) scoreRuns(n);
-      if (!gameOver && outs < 3) maybePull(fld, inning, runs);
     }
     bat.innings.push(runs);
-    if (!gameOver) maybePull(fld, inning, runs);
   }
 
   for (let inning = 1; inning <= 30 && !gameOver; inning++) {
@@ -180,12 +129,10 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
     if (inning >= 7 && t.home !== t.away) break;
   }
 
-  const line = st => st.lines.map(({ name, outs, h, r: runs, bb, k }) => ({ name, outs, h, r: runs, bb, k }));
   return {
     homeLine: sides.home.innings, awayLine: sides.away.innings,
     home: { R: sides.home.R, H: sides.home.H, E: sides.home.E },
     away: { R: sides.away.R, H: sides.away.H, E: sides.away.E },
-    pitching: { home: line(sides.home), away: line(sides.away) },
     innings: sides.away.innings.length, runRule: runRuleEnd,
   };
 }
@@ -194,9 +141,7 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
 // each point of rating edge is worth about 0.1 on the log-odds scale, so a
 // team 10 points better wins ~73% and one 20 points better ~88%.
 export function winProbability(homeTeam, awayTeam, game = {}, { volatility = 1 } = {}) {
-  const hp = homeTeam.pit + (SLOT_ADJ[starterSlot(game, 'home')] ?? -4);
-  const ap = awayTeam.pit + (SLOT_ADJ[starterSlot(game, 'away')] ?? -4);
-  const d = OVR_WEIGHTS.off * (homeTeam.off - awayTeam.off) + OVR_WEIGHTS.pit * (hp - ap) + OVR_WEIGHTS.def * (homeTeam.def - awayTeam.def);
+  const d = ovrExact(homeTeam) - ovrExact(awayTeam);
   const x = (0.1 * d) / volatility + (game.neutral ? 0 : 0.04);
   return 1 / (1 + Math.exp(-x));
 }

@@ -1,7 +1,7 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, seedTeams, makeTeam, pitcherName } from './data.js';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js';
 import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js';
 import { simulateGame } from './sim.js';
 import { generatePoll, releaseDuePolls } from './polls.js';
@@ -9,7 +9,7 @@ import { progress, lockField, WEEK } from './postseason.js';
 import { isFinal } from './standings.js';
 import { rng, normal, clamp, hashStr } from './util.js';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const LAST_POLL_WEEK = 15;
 
 export function defaultSettings() {
@@ -43,12 +43,12 @@ export function applyResult(g, res, source = 'sim') {
   g.homeLine = res.homeLine; g.awayLine = res.awayLine;
   g.homeR = res.home.R; g.homeH = res.home.H; g.homeE = res.home.E;
   g.awayR = res.away.R; g.awayH = res.away.H; g.awayE = res.away.E;
-  g.pitching = res.pitching ?? null; g.runRule = !!res.runRule;
+  g.runRule = !!res.runRule;
   g.final = true; g.source = source;
 }
 
 export function clearResult(g) {
-  Object.assign(g, { final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, pitching: null, source: null, runRule: false });
+  Object.assign(g, { final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, source: null, runRule: false });
 }
 
 export function simResult(season, g, seed) {
@@ -88,12 +88,14 @@ export function addGame(season, fields) {
 
 export function deleteGame(season, id) { season.games = season.games.filter(g => g.id !== id); }
 
-export function addTeam(league, season, fields) {
-  if (!fields.school?.trim()) throw new Error('Give the team a name.');
-  if (season.teams[fields.school]) throw new Error('There is already a team with that name.');
+// Adds a team to a set of teams (a season's, or the offseason draft's).
+export function addTeam(league, teams, fields) {
+  fields = { ...fields, school: fields.school?.trim() };
+  if (!fields.school) throw new Error('Give the team a name.');
+  if (teams[fields.school]) throw new Error('There is already a team with that name.');
   if (!league.conferences[fields.conference]) throw new Error('Pick a conference.');
-  season.teams[fields.school] = makeTeam(fields);
-  return season.teams[fields.school];
+  teams[fields.school] = makeTeam(fields);
+  return teams[fields.school];
 }
 
 // Removes the team and its unplayed games. Played games stay in the record.
@@ -126,6 +128,7 @@ export function renameTeam(league, season, from, to) {
 export function addConference(league, name, { abbr, color = '#555555' } = {}) {
   name = name.trim();
   if (!name) throw new Error('Give the conference a name.');
+  if (league.conferences[name]?.retired) { delete league.conferences[name].retired; league.conferences[name].color = color; return; }
   if (league.conferences[name]) throw new Error('That conference already exists.');
   league.conferences[name] = { abbr: abbr || name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4), color };
 }
@@ -171,16 +174,59 @@ export function developTeams(teams, year, level = 'normal') {
   const out = JSON.parse(JSON.stringify(teams));
   for (const t of Object.values(out)) {
     for (const k of ['off', 'pit', 'def']) t[k] = clamp(Math.round(70 + (t[k] - 70) * (sd ? 0.9 : 1) + normal(r) * sd), 40, 99);
-    // Graduation: some pitchers move on and new ones join the staff.
-    t.staff = t.staff.map(n => (sd && r() < 0.3 ? pitcherName(r) : n));
   }
+  return out;
+}
+
+// ---------- offseason ----------
+// Once the champion is crowned, next season's teams live in a draft the
+// commissioner can change: move teams between conferences, add or remove
+// teams, change coaches and ratings. Starting the season builds the schedule.
+
+export function beginOffseason(league) {
+  const prev = currentSeason(league);
+  if (prev.phase !== 'complete') throw new Error('Finish the season first.');
+  if (!league.draft || league.draft.year !== prev.year + 1) {
+    league.draft = { year: prev.year + 1, teams: developTeams(prev.teams, prev.year + 1, prev.settings.development), removed: {} };
+  }
+  return league.draft;
+}
+
+export function draftRemoveTeam(league, school) {
+  const d = league.draft;
+  d.removed[school] = d.teams[school];
+  delete d.teams[school];
+}
+
+export function draftRestoreTeam(league, school) {
+  const d = league.draft;
+  if (!d.removed[school]) return;
+  if (!league.conferences[d.removed[school].conference] || league.conferences[d.removed[school].conference].retired) {
+    d.removed[school].conference = Object.keys(league.conferences).find(c => !league.conferences[c].retired);
+  }
+  d.teams[school] = d.removed[school];
+  delete d.removed[school];
+}
+
+// Problems that would make next season's schedule lopsided.
+export function draftWarnings(league) {
+  const out = [];
+  const count = {};
+  for (const t of Object.values(league.draft.teams)) count[t.conference] = (count[t.conference] || 0) + 1;
+  for (const [c, n] of Object.entries(count)) {
+    if (n === 1) out.push(`${c} has only one team, so it has no conference games. It still gets an automatic bid.`);
+    if (n > 11) out.push(`${c} has ${n} teams. The 10 conference weeks fit 11 teams at most, so some members won't play each other.`);
+  }
+  if (Object.keys(league.draft.teams).length < 16) out.push('The NCAA field needs at least 16 teams.');
   return out;
 }
 
 export function startNextSeason(league) {
   const prev = currentSeason(league);
   const year = prev.year + 1;
-  const teams = developTeams(prev.teams, year, prev.settings.development);
+  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development);
+  if (Object.keys(teams).length < 16) throw new Error('The NCAA field needs at least 16 teams.');
+  delete league.draft;
   const season = newSeason(year, teams, prev.settings);
   season.carryPoll = prev.polls.final || null;
   season.polls[0] = generatePoll(season, 0);
@@ -196,3 +242,18 @@ export function seasonWeeks(season) {
 
 export const WEEK_NAMES = { [WEEK.conf]: 'Conf. Tournaments', [WEEK.regional]: 'Regionals', [WEEK.mcws]: 'MCWS' };
 export const weekName = w => WEEK_NAMES[w] || `Week ${w}`;
+
+// Bring an older save up to date: no pitching staffs, and head coaches.
+export function migrateLeague(league) {
+  if ((league.schema || 1) >= SCHEMA_VERSION) return league;
+  for (const se of Object.values(league.seasons)) {
+    for (const t of Object.values(se.teams)) {
+      delete t.staff;
+      if (t.coach === undefined) t.coach = COACHES[t.school] || '';
+    }
+    for (const g of se.games) { for (const k of ['pitching', 'wp', 'lp', 'sv', 'homeStarter', 'awayStarter', 'homeSlot', 'awaySlot']) delete g[k]; }
+  }
+  if (league.draft) for (const t of Object.values(league.draft.teams)) { delete t.staff; if (t.coach === undefined) t.coach = COACHES[t.school] || ''; }
+  league.schema = SCHEMA_VERSION;
+  return league;
+}
