@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004183556';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004183556';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004183556';
-import { ovr } from './sim.js?v=20261004183556';
-import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004183556';
-import { REG_WEEKS } from './schedule.js?v=20261004183556';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004183556';
-import { fmtPct } from './util.js?v=20261004183556';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004185818';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004185818';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004185818';
+import { ovr } from './sim.js?v=20261004185818';
+import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004185818';
+import { REG_WEEKS } from './schedule.js?v=20261004185818';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004185818';
+import { fmtPct } from './util.js?v=20261004185818';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }

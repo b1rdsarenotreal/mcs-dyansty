@@ -1,15 +1,15 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261004183556';
-import { logoFor } from './logos.js?v=20261004183556';
-import { LOGO_ALIASES } from './data.js?v=20261004183556';
-import { ovr, winProbability } from './sim.js?v=20261004183556';
-import { records, isFinal, winnerOf } from './standings.js?v=20261004183556';
-import { latestPoll, pollRankMap } from './polls.js?v=20261004183556';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004183556';
-import { DAY_ORDER } from './schedule.js?v=20261004183556';
-import { esc } from './util.js?v=20261004183556';
+import { saveLeague } from './store.js?v=20261004185818';
+import { logoFor } from './logos.js?v=20261004185818';
+import { LOGO_ALIASES } from './data.js?v=20261004185818';
+import { ovr, winProbability } from './sim.js?v=20261004185818';
+import { records, isFinal, winnerOf } from './standings.js?v=20261004185818';
+import { latestPoll, pollRankMap } from './polls.js?v=20261004185818';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004185818';
+import { DAY_ORDER } from './schedule.js?v=20261004185818';
+import { esc } from './util.js?v=20261004185818';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -43,9 +43,19 @@ export function toast(msg, error = false) {
 // Per-render caches.
 export const cache = {
   _recs: null, _ranks: null,
-  reset() { this._recs = null; this._ranks = null; },
+  reset() { this._recs = null; this._ranks = null; this._at = {}; },
   recs() { return (this._recs ||= records(S())); },
   ranks() { return (this._ranks ||= pollRankMap(latestPoll(S()))); },
+  // Ranks as they stood when a game in `week` was played: the most recent
+  // poll released before that week (week 1 uses the preseason poll).
+  // Games in weeks with no earlier poll yet use the latest one.
+  _at: {},
+  ranksAt(week) {
+    const s = S();
+    const key = Object.keys(s.polls || {}).filter(k => k !== 'final').map(Number).filter(w => w < week).sort((a, b) => b - a)[0];
+    if (key === undefined) return this.ranks();
+    return (this._at[key] ||= pollRankMap(s.polls[key]));
+  },
 };
 
 // ---------- teams and logos ----------
@@ -80,10 +90,10 @@ export function readableOn(bg, alt) {
   return ratio(lb, 1) >= ratio(lb, 0) ? '#ffffff' : '#000000';
 }
 
-export function team(name, { rank = true, record = false, seed = null, link = true, size = 18, abbrAlt = false } = {}) {
+export function team(name, { rank = true, record = false, seed = null, link = true, size = 18, abbrAlt = false, ranks = null } = {}) {
   if (!name) return '<span class="muted">TBD</span>';
   const t = teamInfo(name);
-  const rk = cache.ranks()[name];
+  const rk = (ranks || cache.ranks())[name];
   const r = seed ? `<span class="rank" title="National seed">(${seed})</span>` : rank && rk ? `<span class="rank">${rk}</span>` : '';
   let rec = '';
   if (record && S().teams[name]) { const x = cache.recs()[name]; rec = ` <span class="muted small">${x.w}-${x.l}</span>`; }
@@ -153,7 +163,7 @@ export function gameCard(g) {
   const cell = (arr, i) => (fin ? (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '') : '');
   const recs = cache.recs();
   const line = (t, arr, R, H, E) => `<div class="line sb" style="--q:${n}">
-      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
+      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
       ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
   const head = `<div class="line sb head" style="--q:${n}"><div></div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;

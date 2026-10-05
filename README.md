@@ -37,6 +37,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 - **Standings:** conference record first, then head-to-head, then RPI. You can override any regular-season champion.
 - **RPI:** 25% winning percentage, 50% opponents' winning percentage (not counting games against the team) and 25% opponents' opponents' winning percentage.
 - **Top 15 poll:** 40 simulated voters release a poll each week, starting with a preseason poll. Early in the season they lean on OVR, and later on record and RPI. They remember last week's poll, so teams move the way real polls do. Each poll shows points, first-place votes and others receiving votes. You can edit or regenerate any poll.
+- **Ranks at game time:** played games on the Schedule and team pages show each team's rank from the poll in effect when the game was played. Week 1 games use the preseason poll. Games not yet played show the latest poll.
 
 ## The postseason
 
