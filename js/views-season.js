@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005144512';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261005144512';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261005144512';
-import { ovr } from './sim.js?v=20261005144512';
-import { simGames, addGame, weekName } from './league.js?v=20261005144512';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005144512';
-import { fmtPct, hashStr } from './util.js?v=20261005144512';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005150016';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261005150016';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005150016';
+import { ovr } from './sim.js?v=20261005150016';
+import { simGames, addGame, weekName } from './league.js?v=20261005150016';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005150016';
+import { fmtPct, hashStr } from './util.js?v=20261005150016';
 
-const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
+const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
 
 const PHASE_TEXT = { regular: 'Regular season', conf: 'Conference tournaments', selection: 'Selection', regionals: 'NCAA Regionals', supers: 'Super Regionals', mcws: "Men's College World Series", complete: 'Season complete' };
@@ -216,22 +216,24 @@ function renderPollTab(root) {
         <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>
           ${editing ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'}>▼</button> <button class="btn sm danger" data-rm="${i}">✕</button></td>`
           : `<td class="num">${x.pts ?? ''}</td><td class="num muted">${prevKey !== undefined ? prev[x.team] ?? 'NR' : ''}</td><td class="num">${mv(x.team, i)}</td>`}</tr>`).join('')}</tbody></table></div>
-      ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps 15 teams.</span></div>`
+      ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps ${poll.size || poll.ranks.length} teams.</span></div>`
       : `${dropped.length ? `<div class="dropped"><b>Dropped out:</b> ${dropped.map(d => `<span class="drop-item">${team(d.team, { rank: false, size: 16 })} <span class="muted small">was #${d.was}${d.week ? `, ${d.week} this week` : ''}</span></span>`).join('')}</div>` : prevKey !== undefined ? '<p class="small muted" style="margin-top:10px">No teams dropped out this week.</p>' : ''}
         ${poll.others?.length ? `<p class="small muted" style="margin-top:10px"><b>Others receiving votes:</b> ${poll.others.map(o => `${esc(o.team)} ${o.pts}`).join(', ')}</p>` : ''}`}
-      <p class="small muted">${poll.voters || 40} simulated voters. First-place votes in parentheses. Polls come out when a week's games are all final.</p>
-    </div>`;
+      <p class="small muted">${poll.ballots ? `${poll.voters} voters` : `${poll.voters || 40} simulated voters`}. First-place votes in parentheses. ${poll.ranks.length !== pollSizeOf(s) ? `This poll ranks ${poll.ranks.length} teams; polls released from now on rank ${pollSizeOf(s)}. ` : ''}Polls come out when a week's games are all final.</p>
+    </div>
+    ${voterPanel(s, poll)}`;
+  $$('[data-voter]', root).forEach(b => (b.onclick = () => { ui.voter = ui.voter === b.dataset.voter ? null : b.dataset.voter; renderRankings(); }));
   $$('[data-pw]', root).forEach(b => (b.onclick = () => { ui.pollWeek = b.dataset.pw === 'final' ? 'final' : Number(b.dataset.pw); ui.editPoll = null; renderRankings(); }));
   const recs = cache.recs();
   if ($('#p-edit', root)) $('#p-edit', root).onclick = () => { ui.editPoll = { key, ranks: poll.ranks.map(x => ({ ...x })) }; renderRankings(); };
   if ($('#p-cancel', root)) $('#p-cancel', root).onclick = () => { ui.editPoll = null; renderRankings(); };
   if ($('#p-regen', root)) $('#p-regen', root).onclick = () => {
     if (!confirm('Regenerate this poll from scratch? Your edits to it will be replaced.')) return;
-    s.polls[key] = key === 'final' ? generatePoll(s, 'final', { final: true }) : generatePoll(s, key);
+    s.polls[key] = key === 'final' ? generatePoll(s, 'final', { final: true, postBonus: postseasonBonus(s) }) : generatePoll(s, key);
     changed({ progress: false }); toast('Poll regenerated.');
   };
   if ($('#p-save', root)) $('#p-save', root).onclick = () => {
-    const ranks = ui.editPoll.ranks.slice(0, POLL_SIZE);
+    const ranks = ui.editPoll.ranks.slice(0, poll.size || poll.ranks.length);
     const kept = new Set(ranks.map(r => r.team));
     s.polls[key] = { ...poll, edited: true, ranks: ranks.map(r => ({ ...r, pts: r.pts ?? 0, fp: r.fp ?? 0 })), others: [...poll.others || [], ...poll.ranks.filter(r => !kept.has(r.team))].filter(o => !kept.has(o.team)) };
     ui.editPoll = null; changed({ progress: false }); toast('Poll saved.');
@@ -244,9 +246,35 @@ function renderPollTab(root) {
     const t = e.target.value; if (!t) return;
     const r = recs[t];
     list.push({ team: t, record: `${r.w}-${r.l}`, pts: 0, fp: 0 });
-    if (list.length > POLL_SIZE) list.splice(POLL_SIZE - 1, 1);
+    const cap = poll.size || poll.ranks.length;
+    if (list.length > cap) list.splice(cap - 1, 1);
     renderRankings();
   };
+}
+
+// The voter panel: who votes, how they lean, their #1 this week, and any
+// voter's full ballot next to the poll.
+function voterPanel(s, poll) {
+  if (!poll.ballots) return `<div class="card" style="margin-top:16px"><h2>The voters</h2><p class="muted">Individual ballots weren't saved for this poll. Regenerate it to see them.</p></div>`;
+  const rank = pollRankMap(poll);
+  const pick = ui.voter && poll.ballots[ui.voter] ? VOTER_PANEL.find(v => v.id === ui.voter) : null;
+  const ballot = pick ? poll.ballots[pick.id] : null;
+  const diff = (t, i) => {
+    const r = rank[t];
+    if (!r) return '<span class="move up">Not in poll</span>';
+    const d = r - (i + 1);
+    return d === 0 ? '<span class="muted">same</span>' : d > 0 ? `<span class="move up">poll #${r}</span>` : `<span class="move down">poll #${r}</span>`;
+  };
+  return `<div class="card" style="margin-top:16px">
+    <div class="row" style="margin-bottom:6px"><h2 style="margin:0">The voters</h2><span class="muted small">${VOTER_PANEL.length} voters, each with their own way of ranking. Click a voter to see their ballot.</span></div>
+    <div class="voter-layout">
+      <div class="table-wrap"><table class="voters">
+        <thead><tr><th>Voter</th><th>Tendency</th><th>#1 vote</th></tr></thead>
+        <tbody>${VOTER_PANEL.map(v => `<tr class="clickable ${pick?.id === v.id ? 'sel' : ''}" data-voter="${v.id}"><td><b>${esc(v.name)}</b><div class="small muted">${esc(v.outlet)}</div></td><td class="small">${esc(voterStyle(s, v))}</td><td>${poll.ballots[v.id]?.[0] ? team(poll.ballots[v.id][0], { rank: false, size: 16, link: false }) : ''}</td></tr>`).join('')}</tbody></table></div>
+      ${pick ? `<div class="ballot"><h3>${esc(pick.name)}'s ballot</h3><div class="small muted" style="margin-bottom:6px">${esc(pick.outlet)} · ${esc(voterStyle(s, pick))}</div>
+        <table><tbody>${ballot.map((t, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(t, { rank: false, size: 16 })}</td><td class="num small">${diff(t, i)}</td></tr>`).join('')}</tbody></table>
+        <p class="small muted">${poll.edited ? 'The published poll was edited by the commissioner after the votes came in.' : 'Green: this voter ranks the team higher than the poll. Red: lower.'}</p></div>` : ''}
+    </div></div>`;
 }
 
 function renderRpiTab(root) {

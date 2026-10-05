@@ -52,6 +52,8 @@ try:
         pg.goto(url + "#/standings"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/04-standings.png", full_page=True)
         pg.goto(url + "#/rankings"); pg.wait_for_timeout(300)
+        pg.click("tr[data-voter='v2']"); pg.wait_for_timeout(200)
+        assert "Priya Raman's ballot" in pg.content()
         pg.screenshot(path=f"{OUT}/05-poll.png", full_page=True)
         assert pg.locator(".dropped").count() + pg.get_by_text("No teams dropped out").count() >= 1, "dropped-out list shown"
         pg.click("[data-tab=rpi]"); pg.wait_for_timeout(200)

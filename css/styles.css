@@ -372,3 +372,12 @@ select.coach-sel.vacant { border-color: var(--accent); color: var(--accent); fon
 .game .line.sb.head .series-tag { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 10.5px var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); align-self: center; }
 .game .line.sb.head .series-tag .tn-abbr { display: none; }
 @container (max-width: 380px) { .game .line.sb.head .series-tag .tn-full { display: none; } .game .line.sb.head .series-tag .tn-abbr { display: inline; } }
+
+/* Voter panel */
+.voter-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+.voter-layout > .table-wrap:only-child { grid-column: 1 / -1; }
+table.voters td { vertical-align: top; }
+table.voters tr.sel td { background: var(--chip); }
+.ballot { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel-2); position: sticky; top: 70px; }
+.ballot h3 { margin: 0 0 2px; }
+@media (max-width: 900px) { .voter-layout { grid-template-columns: 1fr; } .ballot { position: static; } }

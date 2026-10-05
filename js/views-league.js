@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005144512';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005144512';
-import { ovr } from './sim.js?v=20261005144512';
-import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261005144512';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005144512';
-import { setRating } from './ratings.js?v=20261005144512';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005144512';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005144512';
-import { exportLeague, clearLeague } from './store.js?v=20261005144512';
-import { clamp } from './util.js?v=20261005144512';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005150016';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005150016';
+import { ovr } from './sim.js?v=20261005150016';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005150016';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005150016';
+import { setRating } from './ratings.js?v=20261005150016';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005150016';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005150016';
+import { exportLeague, clearLeague } from './store.js?v=20261005150016';
+import { clamp } from './util.js?v=20261005150016';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -213,8 +213,9 @@ function pollChart(pts, color) {
   const W = 760, H = 210, L = 36, R = 12, T = 12, B = 30;
   const n = pts.length, step = n > 1 ? (W - L - R) / (n - 1) : 0;
   const x = i => L + (n > 1 ? i * step : (W - L - R) / 2);
-  const y = rk => T + ((rk ?? POLL_SIZE + 3) - 1) / (POLL_SIZE + 2) * (H - T - B);
-  const grid = [1, 5, 10, 15].filter(v => v <= POLL_SIZE).map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid"/><text x="${L - 8}" y="${y(v) + 4}" class="pc-yl">${v}</text>`).join('')
+  const SIZE = Math.max(pollSizeOf(S()), ...pts.map(p => p.rank || 0));
+  const y = rk => T + ((rk ?? SIZE + 3) - 1) / (SIZE + 2) * (H - T - B);
+  const grid = [1, 5, 10, 15, 20, 25].filter(v => v <= SIZE).map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid"/><text x="${L - 8}" y="${y(v) + 4}" class="pc-yl">${v}</text>`).join('')
     + `<line x1="${L}" x2="${W - R}" y1="${y(null)}" y2="${y(null)}" class="pc-grid pc-nr"/><text x="${L - 8}" y="${y(null) + 4}" class="pc-yl">NR</text>`;
   let path = '', open = false;
   pts.forEach((p, i) => { if (p.rank) { path += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.rank).toFixed(1)}`; open = true; } else open = false; });
@@ -536,6 +537,8 @@ export function renderSettings() {
       <div class="card stack"><h2>League</h2>
         <label class="field">League name <input type="text" id="s-name" value="${esc(L.name)}"></label>
         <label class="field">${s.year} championship name <input type="text" id="s-mcws" value="${esc(st.mcwsName)}"></label>
+        <label class="field">Poll size <select id="s-poll">${POLL_SIZES.map(n => `<option value="${n}" ${pollSizeOf(cur) === n ? 'selected' : ''}>Top ${n}</option>`).join('')}</select></label>
+        <p class="small muted" style="margin-top:-6px">Polls released from now on rank this many teams. Polls already out keep their size; regenerate one on the Rankings page to resize it.</p>
         <label class="field">Ratings between seasons <select id="s-dev">${Object.entries({ none: 'Stay the same', small: 'Small changes', normal: 'Normal changes', big: 'Big changes' }).map(([k, l]) => `<option value="${k}" ${st.development === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <p class="small muted">Each new season moves every rating a little toward 70 with some random growth, and you can edit any rating in the offseason.</p>
       </div>
@@ -572,6 +575,7 @@ export function renderSettings() {
         <button class="btn danger" id="s-reset">Start over with a new league</button>
       </div>
     </div>`;
+  $('#s-poll').onchange = e => { cs.pollSize = +e.target.value; changed({ progress: false }); toast(`Polls from now on will be a Top ${cs.pollSize}.`); };
   $('#s-weeks').onchange = e => { cs.regWeeks = Math.max(8, Math.min(16, Math.round(Number(e.target.value) || DEFAULT_REG_WEEKS))); changed({ progress: false }); toast(`New schedules will run ${cs.regWeeks} weeks.`); };
   $('#s-mid').onchange = e => { cs.midweek = e.target.value; changed({ progress: false }); };
   const draft = () => (ui.ncaaDraft ||= { ...nc });

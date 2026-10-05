@@ -11,9 +11,9 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261005144512';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261005144512';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261005144512';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261005150016';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261005150016';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261005150016';
 
 // ---------- tournament format ----------
 
@@ -383,7 +383,8 @@ export function committeeOrder(season) {
   const pr = pollRankMap(latestPoll(season));
   const teams = Object.keys(season.teams);
   const W = COMMITTEE_WEIGHTS;
-  const score = t => W.rpi * (r[t].rank ?? 99) + W.poll * (pr[t] ?? 22) + W.sos * (r[t].sosRank ?? 99);
+  const unranked = (latestPoll(season)?.ranks.length || 15) + 7;
+  const score = t => W.rpi * (r[t].rank ?? 99) + W.poll * (pr[t] ?? unranked) + W.sos * (r[t].sosRank ?? 99);
   return teams.sort((a, b) => score(a) - score(b) || r[b].rpi - r[a].rpi);
 }
 

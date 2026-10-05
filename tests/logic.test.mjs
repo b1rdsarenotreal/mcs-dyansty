@@ -40,6 +40,8 @@ for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.wee
 for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => x !== g && x.week === g.week && x.day === g.day && !x.series !== !g.series && (x.home === t || x.away === t) && x.series !== g.series), 'one opponent per day');
 
 assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
+assert.equal(Object.keys(s.polls[0].ballots).length, 23, '23 voters each turn in a ballot');
+assert.ok(Object.values(s.polls[0].ballots).every(b => b.length === 15 && new Set(b).size === 15));
 
 // Double elimination for the Big Ten (8 teams) and Horizon (top 6), single elsewhere
 s.settings.confFormat = { 'Big Ten': 'double', 'Horizon': 'double' };
@@ -86,6 +88,11 @@ assert.ok(Math.max(...drift) <= 30, 'changes stay modest');
 assert.equal(s.phase, 'complete');
 assert.ok(s.games.every(isFinal));
 for (let w = 1; w <= postWeeks(s).conf; w++) assert.ok(s.polls[w], `poll week ${w}`);
+// Voters differ a little, but not wildly, from the published poll
+const p6 = s.polls[6], r6 = Object.fromEntries(p6.ranks.map((x, i) => [x.team, i + 1]));
+const spread = Object.values(p6.ballots).map(b => b.reduce((acc, t, i) => acc + (r6[t] ? Math.abs(r6[t] - (i + 1)) : 6), 0) / b.length);
+console.log('week 6: ballots differ from the poll by', Math.min(...spread).toFixed(2), 'to', Math.max(...spread).toFixed(2), 'spots on average');
+assert.ok(Math.max(...spread) < 3.5 && Math.min(...spread) > 0, 'voters disagree a little, not wildly');
 assert.ok(s.polls.final);
 assert.equal(s.polls.final.ranks[0].team, s.post.champion);
 assert.equal(s.post.field.length, 16);
@@ -156,6 +163,8 @@ simGames(s2, undefined, { autoLock: true });
 assert.equal(s2.phase, 'complete');
 console.log('2017 champion', s2.post.champion);
 
+// Poll size from the settings
+s2.settings.pollSize = 20;
 // ---------- Tournament formats ----------
 // Each season after this one uses a different format set in the editor.
 assert.deepEqual(ncaaProblems({ regionals: 4, perRegional: 4, wsSize: 8 }, 46).length, 1, 'an 8-team MCWS needs 8 or 16 regionals');
@@ -178,6 +187,7 @@ function runFormat(cfg, check) {
   const W = postWeeks(se);
   const weeks = [...new Set(se.games.filter(g => g.type !== 'regular').map(g => weekName(g.week, se)))];
   console.log(`${se.year}: ${fieldSize(cfg)} qualifiers, ${cfg.regionals}×${cfg.perRegional}, MCWS ${cfg.wsSize} → champion ${se.post.champion} over ${se.post.runnerUp} · weeks: ${weeks.join(', ')}`);
+  assert.equal(se.polls[1].ranks.length, 20, 'a Top 20 after changing the setting');
   check(se, W);
 }
 // 8-team MCWS: Bracket A and B, then a best-of-three final

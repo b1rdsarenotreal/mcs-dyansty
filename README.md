@@ -38,7 +38,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 - **Standings:** conference record first, then head-to-head, then RPI. You can override any regular-season champion.
 - **RPI:** 25% winning percentage, 50% opponents' winning percentage (not counting games against the team) and 25% opponents' opponents' winning percentage.
 - **Rankings page:** the Top 15 poll (with a **Dropped out** list showing who fell out, their old rank and that week's record), the RPI, **strength of schedule** and power ratings. Strength of schedule is ⅔ opponents' winning percentage plus ⅓ opponents' opponents', with each team's opponents' combined record.
-- **Top 15 poll:** 40 simulated voters release a poll each week, starting with a preseason poll. Early in the season they lean on OVR, and later on record and RPI. They remember last week's poll, so teams move the way real polls do. Each poll shows points, first-place votes and others receiving votes. You can edit or regenerate any poll.
+- **Top 15 poll** (Settings → Poll size can make it a Top 10, 20 or 25): a fixed panel of **23 voters** (fictional writers and outlets) fills out ballots every week, starting with a preseason poll. Every voter starts from the same picture: ratings early in the season, shifting to record and RPI as games are played, plus last week's poll. Each then leans a little by personality. Some trust talent and are slow to move teams, some go by the numbers or schedule strength, some react to last week or punish bad losses, and a few regional voters give the conference they cover a small boost. The leans are small, so the poll stays close to a consensus. Personalities are built in and can't be edited. The Rankings page lists the voters, each one's #1 vote, and any voter's full ballot next to the poll. Each poll shows points and first-place votes, and you can edit or regenerate any poll.
 - **Ranks at game time:** played games on the Schedule and team pages show each team's rank from the poll in effect when the game was played. Week 1 games use the preseason poll. Games not yet played show the latest poll.
 
 ## The postseason
@@ -134,7 +134,7 @@ js/data.js              the 2016 teams and conferences, colors, starting ratings
 js/sim.js               plate-appearance game simulator and win probability
 js/schedule.js          schedule generator
 js/standings.js         records, standings, tiebreakers, RPI
-js/polls.js             generated Top 15 poll
+js/polls.js             voter panel and generated polls
 js/ratings.js           in-season rating movement
 js/postseason.js        conference tournaments, selection, regionals, MCWS
 js/league.js            league lifecycle, editing, simulation, new seasons

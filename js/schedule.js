@@ -9,7 +9,7 @@
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261005144512';
+import { rng, shuffle, hashStr } from './util.js?v=20261005150016';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const MIDWEEK = { single: 'One game on Tuesday', doubleheader: 'Tuesday doubleheader', split: 'Tuesday and Wednesday', mixed: 'Mix of both' };
