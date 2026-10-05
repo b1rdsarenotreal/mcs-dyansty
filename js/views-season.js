@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004212524';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004212524';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004212524';
-import { ovr } from './sim.js?v=20261004212524';
-import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004212524';
-import { REG_WEEKS } from './schedule.js?v=20261004212524';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004212524';
-import { fmtPct, hashStr } from './util.js?v=20261004212524';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004214741';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004214741';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004214741';
+import { ovr } from './sim.js?v=20261004214741';
+import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004214741';
+import { REG_WEEKS } from './schedule.js?v=20261004214741';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004214741';
+import { fmtPct, hashStr } from './util.js?v=20261004214741';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -135,7 +135,7 @@ export function renderStandings() {
       <div class="table-wrap"><table>
         <thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">GB</th><th class="num">Overall</th><th class="num">Home</th><th class="num">Away</th><th class="num">Strk</th></tr></thead>
         <tbody>${st.map((x, i) => `<tr class="${i === size - 1 && size < n ? 'cutline' : ''}"><td class="num muted">${i + 1}</td>
-          <td>${team(x.team)}${x.team === champ && x.cw + x.cl > 0 && s.phase !== 'complete' ? ' <span title="Regular-season champion">👑</span>' : ''}</td>
+          <td>${team(x.team)}</td>
           <td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${x.gb ? x.gb.toFixed(1).replace('.0', '') : '—'}</td>
           <td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${x.hw}-${x.hl}</td><td class="num">${x.aw}-${x.al}</td>
           <td class="num">${x.streak || ''}</td></tr>`).join('')}</tbody></table></div>

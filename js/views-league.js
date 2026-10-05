@@ -1,14 +1,14 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261004212524';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261004212524';
-import { ovr } from './sim.js?v=20261004212524';
-import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004212524';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261004212524';
-import { setRating } from './ratings.js?v=20261004212524';
-import { postseasonFinish } from './postseason.js?v=20261004212524';
-import { exportLeague, clearLeague } from './store.js?v=20261004212524';
-import { clamp } from './util.js?v=20261004212524';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261004214741';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261004214741';
+import { ovr } from './sim.js?v=20261004214741';
+import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004214741';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261004214741';
+import { setRating } from './ratings.js?v=20261004214741';
+import { postseasonFinish } from './postseason.js?v=20261004214741';
+import { exportLeague, clearLeague } from './store.js?v=20261004214741';
+import { clamp } from './util.js?v=20261004214741';
 
 const ui = { confFilter: '' };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -284,7 +284,7 @@ export function renderTeamPage(name) {
             <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
     <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' 👑' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' <span class="badge">Reg. season champ</span>' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
