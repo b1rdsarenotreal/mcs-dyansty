@@ -1,14 +1,14 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js';
-import { ovr } from './sim.js';
-import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js';
-import { setRating } from './ratings.js';
-import { postseasonFinish } from './postseason.js';
-import { exportLeague, clearLeague } from './store.js';
-import { clamp } from './util.js';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261004174544';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261004174544';
+import { ovr } from './sim.js?v=20261004174544';
+import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004174544';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261004174544';
+import { setRating } from './ratings.js?v=20261004174544';
+import { postseasonFinish } from './postseason.js?v=20261004174544';
+import { exportLeague, clearLeague } from './store.js?v=20261004174544';
+import { clamp } from './util.js?v=20261004174544';
 
 const ui = { confFilter: '' };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);

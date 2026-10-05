@@ -1,15 +1,15 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js';
-import { logoFor } from './logos.js';
-import { LOGO_ALIASES } from './data.js';
-import { ovr, winProbability } from './sim.js';
-import { records, isFinal, winnerOf } from './standings.js';
-import { latestPoll, pollRankMap } from './polls.js';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js';
-import { DAY_ORDER } from './schedule.js';
-import { esc } from './util.js';
+import { saveLeague } from './store.js?v=20261004174544';
+import { logoFor } from './logos.js?v=20261004174544';
+import { LOGO_ALIASES } from './data.js?v=20261004174544';
+import { ovr, winProbability } from './sim.js?v=20261004174544';
+import { records, isFinal, winnerOf } from './standings.js?v=20261004174544';
+import { latestPoll, pollRankMap } from './polls.js?v=20261004174544';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004174544';
+import { DAY_ORDER } from './schedule.js?v=20261004174544';
+import { esc } from './util.js?v=20261004174544';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };

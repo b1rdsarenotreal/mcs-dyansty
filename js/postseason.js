@@ -4,9 +4,9 @@
 // Series (week 17: the four regional champions play double elimination down
 // to two, then a best-of-three Championship Series).
 
-import { blankGame, DAY_ORDER } from './schedule.js';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261004174544';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004174544';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004174544';
 
 export const WEEK = { conf: 15, regional: 16, mcws: 17 };
 export const FIELD_SIZE = 16;
@@ -121,6 +121,31 @@ function doubleElim(final = 'g7') {
     n.push({ key: 'F3', code: 'Finals G3', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Tue', label: 'Championship Series · Game 3 (if necessary)', cond: 'f3', sec: 'F', col: 0 });
   }
   return n;
+}
+
+// Brackets saved by older versions lack the layout fields (sec, col, code,
+// depth) that the drawn bracket needs; fill them in from the node keys.
+const FIXED_LAYOUT = { G1: ['W', 0], G2: ['W', 0], G3: ['L', 0], G4: ['W', 1], G5: ['L', 1], G6: ['F', 0], G7: ['F', 0], F1: ['F', 0], F2: ['F', 0], F3: ['F', 0] };
+export function ensureLayout(ev) {
+  if (!ev?.nodes?.length || ev.nodes.every(n => n.sec && Number.isFinite(n.col) && n.code)) return ev;
+  const rounds = Math.max(1, ...ev.nodes.map(n => +(/^R(\d+)-/.exec(n.key)?.[1] || 0)));
+  for (const n of ev.nodes) {
+    let m;
+    if ((m = /^R(\d+)-(\d+)$/.exec(n.key))) {
+      const r = +m[1], fromEnd = rounds - r, count = ev.nodes.filter(x => x.key.startsWith(`R${r}-`)).length;
+      n.sec ||= 'W'; if (!Number.isFinite(n.col)) n.col = r - 1;
+      n.code ||= fromEnd === 0 ? 'Final' : `${['F', 'SF', 'QF', 'R1'][fromEnd] || 'R' + r}${count > 1 ? '-' + m[2] : ''}`;
+    } else if (FIXED_LAYOUT[n.key]) {
+      const [sec, col] = FIXED_LAYOUT[n.key];
+      n.sec ||= sec; if (!Number.isFinite(n.col)) n.col = col;
+      n.code ||= /^F\d/.test(n.key) ? `Finals G${n.key[1]}` : n.key;
+    } else if ((m = /^([WL])(\d+)-/.exec(n.key))) {
+      n.sec ||= m[1]; if (!Number.isFinite(n.col)) n.col = +m[2] - 1; n.code ||= n.key;
+    } else {
+      n.sec ||= 'F'; if (!Number.isFinite(n.col)) n.col = 0; n.code ||= n.key;
+    }
+  }
+  return ev;
 }
 
 const nodeOf = (ev, k) => ev.nodes.find(n => n.key === k);
@@ -302,6 +327,7 @@ export function lockField(season) {
 export function progress(season) {
   if (!season.post) season.post = {};
   const p = season.post;
+  for (const ev of allEvents(season)) ensureLayout(ev);
   if (season.phase === 'regular' && regularSeasonDone(season) && season.games.some(g => g.type === 'regular')) setupConfTourneys(season);
   if (p.confT) for (const ev of Object.values(p.confT)) advanceEvent(season, ev, { type: 'conf', week: WEEK.conf, name: `${ev.conf} Tournament` });
   if (season.phase === 'conf' && Object.values(p.confT || {}).every(ev => ev.champion)) proposeField(season);

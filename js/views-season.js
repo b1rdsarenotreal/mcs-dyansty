@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js';
-import { ovr } from './sim.js';
-import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js';
-import { REG_WEEKS } from './schedule.js';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat } from './postseason.js';
-import { fmtPct } from './util.js';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004174544';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004174544';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004174544';
+import { ovr } from './sim.js?v=20261004174544';
+import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004174544';
+import { REG_WEEKS } from './schedule.js?v=20261004174544';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004174544';
+import { fmtPct } from './util.js?v=20261004174544';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -264,6 +264,7 @@ const BK = { CW: 236, COLW: 264, H: 138, SLOT: 150, HEAD: 30, SEC_GAP: 34 };
 
 function eventBracket(ev, seedFn) {
   const s = S();
+  ensureLayout(ev);
   const byKey = Object.fromEntries(ev.nodes.map(n => [n.key, n]));
   const secOf = n => n.sec || 'W';
   const kids = n => [n.a, n.b].filter(r => r && r.w && byKey[r.w] && secOf(byKey[r.w]) === secOf(n)).map(r => byKey[r.w]);

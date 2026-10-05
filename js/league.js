@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js';
-import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js';
-import { simulateGame } from './sim.js';
-import { generatePoll, releaseDuePolls } from './polls.js';
-import { replayRatings, ensureBase } from './ratings.js';
-import { progress, lockField, WEEK } from './postseason.js';
-import { isFinal } from './standings.js';
-import { rng, normal, clamp, hashStr } from './util.js';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261004174544';
+import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js?v=20261004174544';
+import { simulateGame } from './sim.js?v=20261004174544';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261004174544';
+import { replayRatings, ensureBase } from './ratings.js?v=20261004174544';
+import { progress, lockField, WEEK } from './postseason.js?v=20261004174544';
+import { isFinal } from './standings.js?v=20261004174544';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261004174544';
 
 export const SCHEMA_VERSION = 3;
 export const LAST_POLL_WEEK = 15;

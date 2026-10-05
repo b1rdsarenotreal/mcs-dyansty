@@ -126,6 +126,9 @@ js/league.js            league lifecycle, editing, simulation, new seasons
 js/store.js             saving and backups
 js/logos.js             logo list loading and lookup
 tests/                  logic test (Node) and UI test (Playwright)
+tools/stamp.py          version-stamps file links before each release
 ```
+
+Before committing changes, run `python3 tools/stamp.py`. It adds a version to every script and stylesheet link so browsers load a matching set of files after an update instead of mixing cached old files with new ones.
 
 Run the tests with `node tests/logic.test.mjs` and `python3 tests/ui_test.py`. The UI test needs `pip install playwright` and `playwright install chromium`.
