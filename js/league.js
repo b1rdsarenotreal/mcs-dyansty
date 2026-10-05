@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261004174544';
-import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js?v=20261004174544';
-import { simulateGame } from './sim.js?v=20261004174544';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261004174544';
-import { replayRatings, ensureBase } from './ratings.js?v=20261004174544';
-import { progress, lockField, WEEK } from './postseason.js?v=20261004174544';
-import { isFinal } from './standings.js?v=20261004174544';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261004174544';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261004183556';
+import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js?v=20261004183556';
+import { simulateGame } from './sim.js?v=20261004183556';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261004183556';
+import { replayRatings, ensureBase } from './ratings.js?v=20261004183556';
+import { progress, lockField, WEEK } from './postseason.js?v=20261004183556';
+import { isFinal } from './standings.js?v=20261004183556';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261004183556';
 
 export const SCHEMA_VERSION = 3;
 export const LAST_POLL_WEEK = 15;

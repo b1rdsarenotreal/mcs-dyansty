@@ -1,15 +1,15 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261004174544';
-import { logoFor } from './logos.js?v=20261004174544';
-import { LOGO_ALIASES } from './data.js?v=20261004174544';
-import { ovr, winProbability } from './sim.js?v=20261004174544';
-import { records, isFinal, winnerOf } from './standings.js?v=20261004174544';
-import { latestPoll, pollRankMap } from './polls.js?v=20261004174544';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004174544';
-import { DAY_ORDER } from './schedule.js?v=20261004174544';
-import { esc } from './util.js?v=20261004174544';
+import { saveLeague } from './store.js?v=20261004183556';
+import { logoFor } from './logos.js?v=20261004183556';
+import { LOGO_ALIASES } from './data.js?v=20261004183556';
+import { ovr, winProbability } from './sim.js?v=20261004183556';
+import { records, isFinal, winnerOf } from './standings.js?v=20261004183556';
+import { latestPoll, pollRankMap } from './polls.js?v=20261004183556';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004183556';
+import { DAY_ORDER } from './schedule.js?v=20261004183556';
+import { esc } from './util.js?v=20261004183556';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -249,6 +249,21 @@ export function openGame(id, { isNew = false } = {}) {
     }
     $('#m-grid', modal).innerHTML = h;
     $$('#m-grid input', modal).forEach(i => (i.oninput = () => { source = 'manual'; readGrid(); totals(); }));
+    // Tab follows the game: top 1st, bottom 1st, top 2nd, … then hits and
+    // errors. Shift+Tab goes back. Each box's number is selected so typing replaces it.
+    const order = [];
+    for (let i = 0; i < n; i++) order.push($(`input[data-side="away"][data-inn="${i}"]`, modal), $(`input[data-side="home"][data-inn="${i}"]`, modal));
+    order.push($('#m-awayH', modal), $('#m-awayE', modal), $('#m-homeH', modal), $('#m-homeE', modal));
+    order.forEach((el, idx) => {
+      el.onfocus = () => el.select();
+      el.onkeydown = e => {
+        if (e.key !== 'Tab') return;
+        const next = order[idx + (e.shiftKey ? -1 : 1)];
+        if (!next) return; // leave the grid normally at either end
+        e.preventDefault();
+        next.focus();
+      };
+    });
     totals();
   };
   const totals = () => { for (const side of ['away', 'home']) $(`#m-${side}-R`, modal).textContent = sum(values[side].slice(0, n)); };
