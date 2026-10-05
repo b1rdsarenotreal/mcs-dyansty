@@ -1,15 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261004214741';
-import { logoFor } from './logos.js?v=20261004214741';
-import { LOGO_ALIASES } from './data.js?v=20261004214741';
-import { ovr, winProbability } from './sim.js?v=20261004214741';
-import { records, isFinal, winnerOf } from './standings.js?v=20261004214741';
-import { latestPoll, pollRankMap } from './polls.js?v=20261004214741';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004214741';
-import { DAY_ORDER } from './schedule.js?v=20261004214741';
-import { esc } from './util.js?v=20261004214741';
+import { saveLeague } from './store.js?v=20261005144512';
+import { logoFor } from './logos.js?v=20261005144512';
+import { LOGO_ALIASES } from './data.js?v=20261005144512';
+import { ovr, winProbability } from './sim.js?v=20261005144512';
+import { records, isFinal, winnerOf } from './standings.js?v=20261005144512';
+import { latestPoll, pollRankMap } from './polls.js?v=20261005144512';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261005144512';
+import { regWeeksOf } from './postseason.js?v=20261005144512';
+import { DAY_ORDER } from './schedule.js?v=20261005144512';
+import { esc } from './util.js?v=20261005144512';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -143,7 +144,7 @@ export function imageFileToDataUrl(file, max = 256) {
 // ---------- game cards ----------
 
 export function seedOf(g, t) {
-  if (!['regional', 'mcws'].includes(g.type)) return null;
+  if (!['regional', 'super', 'mcws'].includes(g.type)) return null;
   return S().post?.field?.find(f => f.team === t)?.seed ?? null;
 }
 
@@ -168,7 +169,7 @@ export function gameCard(g) {
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
   const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
   let meta = '';
-  if (g.label) meta += `<span class="badge gold">${esc(g.label.split(' · ').slice(-1)[0])}</span>`;
+  if (g.label) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
   if (fin) {
     const inn = Math.max(g.homeLine.length, g.awayLine.length);
     meta += `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>${g.source ? `<span class="badge ${g.source}">${g.source}</span>` : ''}`;
@@ -198,7 +199,8 @@ export function seriesStatus(g, maxChars = 31) {
   const s = S();
   cache._series ||= {};
   const all = (cache._series[key] ||= s.games.filter(x => seriesKey(x) === key).sort((a, b) => a.order - b.order || a.id - b.id));
-  if (all.length < 2 && g.type !== 'mcws') return '';
+  const bestOf = g.bestOf || (g.type === 'mcws' && /^F\d/.test(g.node || '') ? 3 : null);
+  if (all.length < 2 && !bestOf) return '';
   const idx = all.indexOf(g);
   const fin = isFinal(g);
   const upto = all.slice(0, fin ? idx + 1 : idx).filter(isFinal);
@@ -209,13 +211,13 @@ export function seriesStatus(g, maxChars = 31) {
   // Full school name when the sentence fits the corner; the abbreviation when it doesn't.
   const fits = t => `${t} leads series 10-10`.length <= maxChars;
   const name = t => (fits(t) ? `<span class="tn-full">${esc(t)}</span><span class="tn-abbr">${esc(teamInfo(t)?.abbr || t)}</span>` : esc(teamInfo(t)?.abbr || t));
-  // Weekend series play every game; the MCWS finals stop at two wins.
-  const total = g.type === 'mcws' ? 3 : all.length;
+  // Weekend and midweek sets play every game; best-of-three series stop at two wins.
+  const total = bestOf || all.length;
   const left = total - upto.length;
-  const clinched = g.type === 'mcws' ? hi >= 2 : hi > lo + left;
-  const over = g.type === 'mcws' ? clinched : left === 0;
+  const clinched = bestOf ? hi > bestOf / 2 : hi > lo + left;
+  const over = bestOf ? clinched : left === 0;
   let text;
-  if (!upto.length) text = g.type === 'mcws' ? 'Championship Series · best of 3' : `Game 1 of ${total}`;
+  if (!upto.length) text = bestOf ? 'Best of 3' : `Game 1 of ${total}`;
   else if (wa === wb) text = over ? `Series split ${wa}-${wb}` : `Series tied ${wa}-${wb}`;
   else if (clinched) text = `${name(leader)} wins series ${hi}-${lo}`;
   else text = `${name(leader)} leads series ${hi}-${lo}`;
@@ -250,12 +252,12 @@ export function openGame(id, { isNew = false } = {}) {
   const cellVal = (arr, i) => (isFinal(g) && i < arr.length ? (arr[i] === null ? '' : arr[i]) : '');
 
   modal.innerHTML = `
-    <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week)} · ${DAY_NAMES[g.day] || g.day}`)}</h2><button class="btn ghost" data-x>✕</button></div>
+    <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week, s)} · ${DAY_NAMES[g.day] || g.day}`)}</h2><button class="btn ghost" data-x>✕</button></div>
     <div class="modal-body stack">
       ${regular ? `<div class="row">
         <label class="field" style="flex:1;min-width:140px">Away <select id="m-away">${teamOptions(g.away)}</select></label>
         <label class="field" style="flex:1;min-width:140px">Home <select id="m-home">${teamOptions(g.home)}</select></label>
-        <label class="field" style="width:64px">Week <input type="number" id="m-week" min="1" max="14" value="${g.week}"></label>
+        <label class="field" style="width:64px">Week <input type="number" id="m-week" min="1" max="${regWeeksOf(s)}" value="${g.week}"></label>
         <label class="field" style="width:84px">Day <select id="m-day">${DAYS.map(d => `<option ${d === g.day ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
       </div>
       <div class="row"><label class="check"><input type="checkbox" id="m-neutral" ${g.neutral ? 'checked' : ''}> Neutral site</label>
@@ -380,7 +382,7 @@ export function openGame(id, { isNew = false } = {}) {
     if (homeLine[n - 1] === null && hr <= ar) return toast('The home team only skips its last at-bat when it is already ahead.', true);
     if (regular) {
       g.home = t.home; g.away = t.away; g.neutral = t.neutral; g.confGame = $('#m-conf', modal).checked;
-      g.week = Math.max(1, Math.min(14, Number($('#m-week', modal).value) || g.week));
+      g.week = Math.max(1, Math.min(regWeeksOf(s), Number($('#m-week', modal).value) || g.week));
       g.day = $('#m-day', modal).value; g.order = DAY_ORDER[g.day];
     }
     applyResult(g, {

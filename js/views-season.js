@@ -1,18 +1,17 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004214741';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004214741';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004214741';
-import { ovr } from './sim.js?v=20261004214741';
-import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004214741';
-import { REG_WEEKS } from './schedule.js?v=20261004214741';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004214741';
-import { fmtPct, hashStr } from './util.js?v=20261004214741';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005144512';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261005144512';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261005144512';
+import { ovr } from './sim.js?v=20261005144512';
+import { simGames, addGame, weekName } from './league.js?v=20261005144512';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005144512';
+import { fmtPct, hashStr } from './util.js?v=20261005144512';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
 
-const PHASE_TEXT = { regular: 'Regular season', conf: 'Conference tournaments', selection: 'Selection', regionals: 'NCAA Regionals', mcws: "Men's College World Series", complete: 'Season complete' };
+const PHASE_TEXT = { regular: 'Regular season', conf: 'Conference tournaments', selection: 'Selection', regionals: 'NCAA Regionals', supers: 'Super Regionals', mcws: "Men's College World Series", complete: 'Season complete' };
 
 function nextGame(s) {
   return s.games.filter(g => !isFinal(g)).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id)[0] || null;
@@ -40,7 +39,7 @@ export function renderHome() {
     return { c, top: st[0] };
   });
   app.innerHTML = `
-    <div class="section-head"><h1>${s.year} Season</h1><span class="muted">${PHASE_TEXT[s.phase]}${nx ? ` · next: ${weekName(nx.week)}, ${DAY_NAMES[nx.day] || nx.day}` : ''}</span></div>
+    <div class="section-head"><h1>${s.year} Season</h1><span class="muted">${PHASE_TEXT[s.phase]}${nx ? ` · next: ${weekName(nx.week, s)}, ${DAY_NAMES[nx.day] || nx.day}` : ''}</span></div>
     ${champ ? `<div class="banner" style="background:linear-gradient(120deg, ${esc(ct.color)}, #15171c)"><span class="trophy">🏆</span><div><div class="small" style="opacity:.8">${s.year} National Champion</div><div class="big">${esc(champ)}</div><div class="small" style="opacity:.8">Beat ${esc(s.post.runnerUp)} in the ${esc(s.settings.mcwsName)} Championship Series · ${recs[champ].w}-${recs[champ].l}</div></div></div><div style="height:16px"></div>` : ''}
     <div class="kpis">
       <div class="kpi"><div class="v">${done}<span class="muted" style="font-size:16px"> / ${total}</span></div><div class="l">Games final</div></div>
@@ -48,11 +47,11 @@ export function renderHome() {
       <div class="kpi"><div class="v">${best ? team(best, { rank: false, size: 22 }) : '—'}</div><div class="l">Best record ${best ? `(${recs[best].w}-${recs[best].l})` : ''}</div></div>
       <div class="kpi"><div class="v">${PHASE_TEXT[s.phase]}</div><div class="l">Phase</div></div>
     </div>
-    ${nx ? `<div class="card"><div class="row"><div><h2 style="margin:0">Up next: ${weekName(nx.week)} · ${DAY_NAMES[nx.day] || nx.day}</h2>
+    ${nx ? `<div class="card"><div class="row"><div><h2 style="margin:0">Up next: ${weekName(nx.week, s)} · ${DAY_NAMES[nx.day] || nx.day}</h2>
       <div class="muted small">${s.games.filter(g => g.week === nx.week && g.day === nx.day && !isFinal(g)).length} games that day</div></div><span class="spacer"></span>
       <a class="btn" href="#/schedule">Open schedule</a>
       <button class="btn" id="h-day">🎲 Sim next day</button>
-      <button class="btn primary" id="h-week">🎲 Sim ${weekName(nx.week)}</button></div></div>`
+      <button class="btn primary" id="h-week">🎲 Sim ${weekName(nx.week, s)}</button></div></div>`
       : s.phase === 'complete' && ctx.league.viewYear === ctx.league.currentYear ? `<div class="card"><div class="row"><div><h2 style="margin:0">On to the ${s.year + 1} offseason</h2><div class="muted small">Add teams and conferences, realign, and update coaches before the new schedule is built.</div></div><span class="spacer"></span><a class="btn primary" href="#/offseason">Open the offseason</a></div></div>`
       : s.phase === 'selection' ? `<div class="card"><div class="row"><h2 style="margin:0">The NCAA field is ready to announce</h2><span class="spacer"></span><a class="btn primary" href="#/postseason">Review the field</a></div></div>` : ''}
     <div class="grid" style="margin-top:16px">
@@ -63,11 +62,11 @@ export function renderHome() {
         <table><tbody>${leaders.map(({ c, top }) => `<tr><td style="width:30px"><a href="${confHref(c)}">${confLogo(c, 22)}</a></td><td>${top ? team(top.team) : '—'}</td><td class="num muted">${top ? `${top.cw}-${top.cl}` : ''}</td></tr>`).join('')}</tbody></table>
         <p class="small"><a href="#/standings">Standings →</a></p></div>
       <div class="card"><h2>Latest results</h2>
-        ${recent.length ? `<table><tbody>${recent.map(g => `<tr class="clickable" data-open="${g.id}"><td class="small muted" style="width:70px">${esc(weekName(g.week).replace('Week ', 'Wk '))} ${esc(g.day)}</td><td>${esc(resultText(g))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No games played yet.</p>'}</div>
+        ${recent.length ? `<table><tbody>${recent.map(g => `<tr class="clickable" data-open="${g.id}"><td class="small muted" style="width:70px">${esc(weekName(g.week, s).replace('Week ', 'Wk '))} ${esc(g.day)}</td><td>${esc(resultText(g))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No games played yet.</p>'}</div>
     </div>`;
   $$('[data-open]').forEach(r => (r.onclick = () => openGame(Number(r.dataset.open))));
   if ($('#h-day')) $('#h-day').onclick = () => simAndReport(g => g.week === nx.week && g.day === nx.day, `on ${DAY_NAMES[nx.day] || nx.day}`);
-  if ($('#h-week')) $('#h-week').onclick = () => simAndReport(g => g.week === nx.week, `in ${weekName(nx.week)}`);
+  if ($('#h-week')) $('#h-week').onclick = () => simAndReport(g => g.week === nx.week, `in ${weekName(nx.week, s)}`);
 }
 
 // ---------- Schedule ----------
@@ -91,13 +90,13 @@ export function renderSchedule() {
   const regLeft = s.games.filter(g => g.type === 'regular' && !isFinal(g)).length;
   app.innerHTML = `
     <div class="section-head"><h1>${s.year} Schedule</h1><span class="muted">${finals} of ${s.games.length} games final</span></div>
-    <div class="chips">${weeks.map(w => `<button class="chip ${w === ui.week ? 'active' : ''} ${isDone(w) ? 'done' : ''}" data-week="${w}">${w > REG_WEEKS ? esc(weekName(w)) : 'Wk ' + w}</button>`).join('')}</div>
+    <div class="chips">${weeks.map(w => `<button class="chip ${w === ui.week ? 'active' : ''} ${isDone(w) ? 'done' : ''}" data-week="${w}">${w > regWeeksOf(s) ? esc(weekName(w, s)) : 'Wk ' + w}</button>`).join('')}</div>
     <div class="row" style="margin-bottom:14px">
-      <h2 style="margin:0">${esc(weekName(ui.week))}</h2><span class="spacer"></span>
+      <h2 style="margin:0">${esc(weekName(ui.week, s))}</h2><span class="spacer"></span>
       ${firstOpenDay ? `<button class="btn" id="w-day">🎲 Sim ${DAY_NAMES[firstOpenDay] || firstOpenDay}</button>` : ''}
       ${unplayed.length ? `<button class="btn" id="w-sim">🎲 Sim week (${unplayed.length})</button>` : ''}
-      ${regLeft && ui.week <= REG_WEEKS ? `<button class="btn" id="w-rest">Sim rest of regular season (${regLeft})</button>` : ''}
-      ${ui.week <= REG_WEEKS ? '<button class="btn" id="w-add">+ Add game</button>' : ''}
+      ${regLeft && ui.week <= regWeeksOf(s) ? `<button class="btn" id="w-rest">Sim rest of regular season (${regLeft})</button>` : ''}
+      ${ui.week <= regWeeksOf(s) ? '<button class="btn" id="w-add">+ Add game</button>' : ''}
     </div>
     ${days.map(d => `<h3 class="day-head">${DAY_NAMES[d] || esc(d)} <span class="muted small">${games.filter(g => g.day === d).length} games</span></h3>
       <div class="games">${games.filter(g => g.day === d).map(gameCard).join('')}</div>`).join('') || '<div class="empty">No games this week.</div>'}
@@ -105,7 +104,7 @@ export function renderSchedule() {
   $$('[data-week]').forEach(b => (b.onclick = () => { ui.week = Number(b.dataset.week); renderSchedule(); }));
   bindGameCards();
   if ($('#w-day')) $('#w-day').onclick = () => simAndReport(g => g.week === ui.week && g.day === firstOpenDay, `on ${DAY_NAMES[firstOpenDay] || firstOpenDay}`);
-  if ($('#w-sim')) $('#w-sim').onclick = () => simAndReport(g => g.week === ui.week, `in ${weekName(ui.week)}`);
+  if ($('#w-sim')) $('#w-sim').onclick = () => simAndReport(g => g.week === ui.week, `in ${weekName(ui.week, s)}`);
   if ($('#w-rest')) $('#w-rest').onclick = () => {
     if (!confirm(`Simulate all ${regLeft} remaining regular-season games? Every result stays editable.`)) return;
     simAndReport(g => g.type === 'regular', 'in the regular season');
@@ -186,7 +185,7 @@ function renderPollTab(root) {
   const poll = s.polls[key];
   const prevKey = key === 'final' ? weeks.filter(w => w !== 'final').slice(-1)[0] : weeks.filter(w => w !== 'final' && w < key).slice(-1)[0];
   const prev = prevKey !== undefined ? pollRankMap(s.polls[prevKey]) : {};
-  const label = w => (w === 'final' ? 'Final' : w === 0 ? 'Pre' : w === WEEK.conf ? 'Post-tourney' : `Wk ${w}`);
+  const label = w => (w === 'final' ? 'Final' : w === 0 ? 'Pre' : w === postWeeks(s).conf ? 'Post-tourney' : `Wk ${w}`);
   const editing = ui.editPoll && ui.editPoll.key === key;
   const rows = editing ? ui.editPoll.ranks : poll.ranks;
   // Teams ranked in the previous poll but not in this one, with that week's results.
@@ -209,7 +208,7 @@ function renderPollTab(root) {
   root.innerHTML = `
     <div class="chips">${weeks.map(w => `<button class="chip ${String(w) === String(key) ? 'active' : ''}" data-pw="${w}">${label(w)}</button>`).join('')}</div>
     <div class="card">
-      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">${key === 'final' ? 'Final poll' : key === 0 ? 'Preseason poll' : key === WEEK.conf ? 'Poll after conference tournaments' : `Week ${key} poll`}</h2>
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">${key === 'final' ? 'Final poll' : key === 0 ? 'Preseason poll' : key === postWeeks(s).conf ? 'Poll after conference tournaments' : `Week ${key} poll`}</h2>
         ${poll.edited ? '<span class="badge manual">Commissioner edited</span>' : ''}<span class="spacer"></span>
         ${editing ? '<button class="btn" id="p-cancel">Cancel</button><button class="btn primary" id="p-save">Save poll</button>' : '<button class="btn" id="p-edit">Edit poll</button><button class="btn" id="p-regen">Regenerate</button>'}</div>
       <div class="table-wrap"><table>
@@ -319,7 +318,7 @@ function eventBracket(ev, seedFn) {
     for (const c of cols) {
       const first = nodes.find(n => n.col === c && !hidden.has(n.key));
       if (!first) continue;
-      const byDay = ev.kind === 'regional' || ev.kind === 'mcws';
+      const byDay = ev.kind === 'regional' || ev.kind === 'mcws' || ev.kind === 'de';
       heads.push({ x: c * BK.COLW, y: secTop - BK.HEAD, text: byDay ? DAY_NAMES[first.day] || first.day : first.label.replace(/ \(.*\)$/, ''), day: byDay ? null : first.day });
     }
     if (double) heads.push({ x: 0, y: top, text: sec === 'W' ? 'Winners bracket' : 'Elimination bracket', section: true });
@@ -328,12 +327,13 @@ function eventBracket(ev, seedFn) {
   // Championship column.
   const finals = ev.nodes.filter(n => secOf(n) === 'F');
   if (finals.length) {
-    const x = (maxCol + 1) * BK.COLW;
+    const x = sections.length ? (maxCol + 1) * BK.COLW : 0; // a lone best-of-three starts at the left edge
     const feeders = [finals[0].a, finals[0].b].map(r => r && pos[r.w || r.l]).filter(Boolean);
     const mid = feeders.length ? feeders.reduce((a, p) => a + p.y, 0) / feeders.length : BK.HEAD;
     const start = Math.max(BK.HEAD, mid - ((finals.length - 1) * BK.SLOT) / 2);
     finals.forEach((n, i) => { pos[n.key] = { x, y: start + i * BK.SLOT }; });
-    heads.push({ x, y: start - BK.HEAD, text: finals.length > 1 && ev.kind === 'mcws' ? 'Championship Series' : finals.length > 1 ? 'Regional final' : 'Championship', day: finals[0].day });
+    const finalsTitle = ev.kind === 'mcws' ? 'Championship Series' : ev.kind === 'series' ? 'Best of three' : ev.bracket ? 'Bracket final' : ev.kind === 'regional' || ev.kind === 'de' ? (ev.id.startsWith('reg') ? 'Regional final' : 'Final') : 'Championship';
+    heads.push({ x, y: start - BK.HEAD, text: finalsTitle, day: ev.kind === 'series' ? null : finals[0].day });
     top = Math.max(top, start + finals.length * BK.SLOT);
   }
   const width = Math.max(...Object.values(pos).map(p => p.x)) + BK.CW;
@@ -360,7 +360,8 @@ function eventBracket(ev, seedFn) {
       return placeholderCard(label, [t, 'BYE'], seedFn, { faded: true, note: 'First-round bye' });
     }
     const needed = nodeNeeded(ev, node);
-    const decided = (node.cond === 'g7' && byKey.G6?.winner) || (node.cond === 'f3' && byKey.F2?.winner);
+    const decidedBy = { g7: 'G6', f3: 'F2', s3: 'S2', ifnec: 'CH' }[node.cond];
+    const decided = !!(decidedBy && byKey[decidedBy]?.winner);
     const slotText = (t, ref) => t || (refLabel(ev, ref) ? { text: refLabel(ev, ref) } : null);
     return placeholderCard(label, [slotText(a, node.a), slotText(b, node.b)], seedFn, { faded: !!node.cond && !needed && !!decided, note: node.cond ? (decided && !needed ? 'Not needed' : 'If necessary') : '' });
   };
@@ -373,9 +374,10 @@ function eventBracket(ev, seedFn) {
 
 export function renderPostseason() {
   const s = S(), p = s.post || {};
-  const defaultTab = { regular: 'conf', conf: 'conf', selection: 'field', regionals: 'regionals', mcws: 'mcws', complete: 'mcws' }[s.phase];
-  if (!ui.postTab) ui.postTab = defaultTab;
-  const tabs = { conf: 'Conference tournaments', field: 'Selection', regionals: 'Regionals', mcws: s.settings.mcwsName.replace("Men's College World Series", 'MCWS') };
+  const cfg = ncaaConfig(s);
+  const defaultTab = { regular: 'conf', conf: 'conf', selection: 'field', regionals: 'regionals', supers: 'supers', mcws: 'mcws', complete: 'mcws' }[s.phase];
+  const tabs = { conf: 'Conference tournaments', field: 'Selection', regionals: 'Regionals', ...(hasSupers(cfg) ? { supers: 'Super Regionals' } : {}), mcws: s.settings.mcwsName.replace("Men's College World Series", 'MCWS') };
+  if (!ui.postTab || !tabs[ui.postTab]) ui.postTab = defaultTab;
   const left = s.games.filter(g => g.type !== 'regular' && !isFinal(g)).length + (s.phase === 'regular' ? 1 : 0);
   app.innerHTML = `
     <div class="section-head"><h1>${s.year} Postseason</h1><span class="muted">${PHASE_TEXT[s.phase]}</span><span class="spacer"></span>
@@ -389,7 +391,7 @@ export function renderPostseason() {
     simAndReport(g => g.type !== 'regular', 'in the postseason', { autoLock: true });
   };
   const root = $('#ps');
-  ({ conf: renderConfTourneys, field: renderField, regionals: renderRegionals, mcws: renderMcws })[ui.postTab](root);
+  ({ conf: renderConfTourneys, field: renderField, regionals: renderRegionals, supers: renderSupers, mcws: renderMcws })[ui.postTab](root);
   bindGameCards(root);
 }
 
@@ -448,18 +450,20 @@ function editSeeds(conf) {
 function renderField(root) {
   const s = S(), p = s.post || {};
   if (!p.field) {
-    root.innerHTML = `<div class="empty">The 16-team NCAA field is chosen once every conference tournament is finished. It has ${Object.keys(ctx.league.conferences).length ? 'one automatic bid per conference (the tournament champion, or the regular-season champion where there is no tournament)' : 'automatic bids'}, and the rest are at-large picks by the committee. The committee orders teams by RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%), and that order also sets the seeds.</div>`;
+    const cfg = ncaaConfig(s);
+    root.innerHTML = `<div class="empty">The ${fieldSize(cfg)}-team NCAA field is chosen once every conference tournament is finished. It has ${Object.keys(ctx.league.conferences).length ? 'one automatic bid per conference (the tournament champion, or the regular-season champion where there is no tournament)' : 'automatic bids'}, and the rest are at-large picks by the committee. The committee orders teams by RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%), and that order also sets the seeds.<br><br>${formatSummary(cfg)} <a href="#/settings">Change the format in Settings.</a></div>`;
     return;
   }
   const r = rpi(s), pr = cache.ranks(), recs = cache.recs();
   const editable = s.phase === 'selection';
   const field = [...p.field].sort((a, b) => a.seed - b.seed);
-  const podList = pods(field);
+  const cfg = ncaaConfig(s);
+  const podList = pods(field, cfg.regionals);
   const podOf = t => podList.findIndex(pd => pd.includes(t));
   const inField = new Set(field.map(f => f.team));
   root.innerHTML = `
-    ${editable ? `<div class="hint">This is the committee's proposed field, ordered and seeded by RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%). Swap any team or move seeds, then announce it to start the regionals. The top four national seeds host. Regionals are built serpentine: 1, 8, 9 and 16 in one, 2, 7, 10 and 15 in the next, and so on.</div>` : ''}
-    <div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">NCAA field</h2><span class="spacer"></span>
+    ${editable ? `<div class="hint">This is the committee's proposed field, ordered and seeded by RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%). Swap any team or move seeds, then announce it to start the regionals. The top ${cfg.regionals} national seeds host. Regionals are built serpentine, so seed 1's regional also gets seed ${cfg.regionals * 2}${cfg.perRegional > 2 ? `, ${cfg.regionals * 2 + 1}` : ''} and so on.<br>${formatSummary(cfg)}</div>` : ''}
+    <div class="card" style="margin-top:14px"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">NCAA field · ${field.length} teams</h2><span class="spacer"></span>
       ${editable ? '<button class="btn" id="f-redo">Re-run selection</button><button class="btn primary" id="f-lock">Announce field & start regionals</button>' : ''}</div>
       <div class="table-wrap"><table><thead><tr><th class="num">Seed</th><th>Team</th><th>Conf</th><th>Bid</th><th class="num">Record</th><th class="num">RPI</th><th class="num">Poll</th><th class="num">SOS</th><th>Regional</th>${editable ? '<th></th>' : ''}</tr></thead>
       <tbody>${field.map((f, i) => `<tr><td class="num"><b>${f.seed}</b></td>
@@ -493,19 +497,40 @@ function renderRegionals(root) {
   const seed = t => p.field.find(f => f.team === t)?.seed;
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="rg-sim">🎲 Sim regionals</button></div>' : ''}
     ${p.regionals.map(ev => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(ev.name)}</h2>${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}</div>
-      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)} (#${seed(t)})`).join(' · ')} · double elimination, hosted by ${esc(ev.host)}</div>
+      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)} (#${seed(t)})`).join(' · ')} · ${ev.kind === 'series' ? 'best of three' : 'double elimination'}, hosted by ${esc(ev.host)}</div>
       ${eventBracket(ev, seed)}</div>`).join('')}`;
   if ($('#rg-sim', root)) $('#rg-sim', root).onclick = () => simAndReport(g => g.type === 'regional', 'in the regionals');
 }
 
-function renderMcws(root) {
+function renderSupers(root) {
   const s = S(), p = s.post || {};
-  if (!p.mcws) { root.innerHTML = `<div class="empty">The four regional champions meet in the ${esc(s.settings.mcwsName)}: double elimination down to two teams, then a best-of-three Championship Series.</div>`; return; }
+  if (!p.supers) { root.innerHTML = '<div class="empty">Super regionals start once every regional is finished. Each one is a best-of-three series between two regional champions, hosted by the higher national seed.</div>'; return; }
+  const open = s.games.some(g => g.type === 'super' && !isFinal(g));
+  const seed = t => p.field.find(f => f.team === t)?.seed;
+  root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="sr-sim">🎲 Sim super regionals</button></div>' : ''}
+    <div class="grid">${p.supers.map(ev => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(ev.name)}</h2>${ev.champion ? `<span class="badge gold">To the MCWS: ${esc(ev.champion)}</span>` : ''}</div>
+      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' vs ')} · best of three at ${esc(ev.host)}</div>
+      ${eventBracket(ev, seed)}</div>`).join('')}</div>`;
+  if ($('#sr-sim', root)) $('#sr-sim', root).onclick = () => simAndReport(g => g.type === 'super', 'in the super regionals');
+}
+
+function renderMcws(root) {
+  const s = S(), p = s.post || {}, cfg = ncaaConfig(s);
+  const name = esc(s.settings.mcwsName);
+  if (!p.mcws && !p.mcwsBrackets) {
+    root.innerHTML = `<div class="empty">${cfg.wsSize === 8
+      ? `Eight teams reach the ${name}. They split into Bracket A and Bracket B, each a four-team double elimination with an "if necessary" bracket final. The two bracket winners play a best-of-three Championship Series.`
+      : `Four teams reach the ${name}: double elimination down to two teams, then a best-of-three Championship Series.`}</div>`;
+    return;
+  }
   const open = s.games.some(g => g.type === 'mcws' && !isFinal(g));
   const seed = t => p.field.find(f => f.team === t)?.seed;
+  const card = (ev, title, sub) => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${title}</h2>${ev.champion ? `<span class="badge gold">${ev.id === 'ws-F' || ev.id === 'mcws' ? 'Champion' : 'Bracket winner'}: ${esc(ev.champion)}</span>` : ''}</div>
+    <div class="small muted" style="margin-bottom:8px">${sub}</div>${eventBracket(ev, seed)}</div>`;
+  const list = ev => ev.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' · ');
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="mc-sim">🎲 Sim the MCWS</button></div>' : ''}
-    <div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(s.settings.mcwsName)}</h2>${p.mcws.champion ? `<span class="badge gold">Champion: ${esc(p.mcws.champion)}</span>` : ''}</div>
-    <div class="small muted" style="margin-bottom:8px">${p.mcws.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' · ')}</div>
-    ${eventBracket(p.mcws, seed)}</div>`;
+    ${p.mcws ? card(p.mcws, name, list(p.mcws)) : ''}
+    ${(p.mcwsBrackets || []).map(ev => card(ev, `${name} · ${esc(ev.name)}`, `${list(ev)} · double elimination`)).join('')}
+    ${p.mcwsBrackets ? (p.mcwsFinals ? card(p.mcwsFinals, `${name} · Championship Series`, `${list(p.mcwsFinals)} · best of three`) : '<div class="card"><h2>Championship Series</h2><p class="muted">The Bracket A and Bracket B winners meet in a best-of-three series.</p></div>') : ''}`;
   if ($('#mc-sim', root)) $('#mc-sim', root).onclick = () => simAndReport(g => g.type === 'mcws', 'in the MCWS');
 }

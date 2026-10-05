@@ -1,14 +1,23 @@
-// Regular-season schedule: 14 weeks. Weeks 1–4 are non-conference weekend
-// series, weeks 5–14 are conference series (round robin, three games each),
-// and from week 2 on every team also plays a Tuesday midweek game.
-// Teams without a conference series in a week get a non-conference series.
+// Regular-season schedule. Its length comes from the season's settings
+// (12 weeks by default). The last weeks are conference series (round robin,
+// three games each); there are as many as the largest conference needs, and
+// the weeks before them are non-conference weekend series. From week 2 on,
+// every team also plays a two-game midweek set: a Tuesday doubleheader or a
+// Tuesday and Wednesday game against the same opponent (or, in older
+// seasons, a single Tuesday game). Teams without a conference series in a
+// week get a non-conference series.
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261004214741';
+import { rng, shuffle, hashStr } from './util.js?v=20261005144512';
 
-export const REG_WEEKS = 14;
-export const NONCONF_WEEKS = 4;
+export const DEFAULT_REG_WEEKS = 12;
+export const MIDWEEK = { single: 'One game on Tuesday', doubleheader: 'Tuesday doubleheader', split: 'Tuesday and Wednesday', mixed: 'Mix of both' };
+
+// Conference weeks for a season of `regWeeks` weeks whose largest
+// conference round robin needs `rounds` weeks.
+export function confWeeksFor(regWeeks, rounds) { return Math.max(1, Math.min(regWeeks - 2, Math.max(rounds, regWeeks - 4))); }
+const rrRounds = n => (n < 2 ? 0 : n % 2 ? n : n - 1);
 export const DAY_ORDER = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 
 export function blankGame(season, fields) {
@@ -97,10 +106,14 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     metSeries.add(key(home, away));
   };
 
-  // Conference rounds placed into weeks 5–14.
-  const confWeeks = REG_WEEKS - NONCONF_WEEKS;
+  const REG = season.settings?.regWeeks ?? DEFAULT_REG_WEEKS;
+  const midweek = season.settings?.midweek ?? 'mixed';
+  season.regWeeks = REG;
   const byConf = {};
   for (const n of names) (byConf[teams[n].conference] ||= []).push(n);
+  // Conference rounds go in the last weeks of the season.
+  const confWeeks = confWeeksFor(REG, Math.max(0, ...Object.values(byConf).map(l => rrRounds(l.length))));
+  const NONCONF = REG - confWeeks;
   const weekPairs = {}; // week -> conference pairs
   for (const [conf, list] of Object.entries(byConf)) {
     if (list.length < 2) continue;
@@ -110,11 +123,12 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     const weeks = [];
     const open = confWeeks - rounds.length;
     const openWeeks = new Set(shuffle([...Array(confWeeks).keys()].slice(1), r).slice(0, open));
-    for (let w = 0; w < confWeeks; w++) if (!openWeeks.has(w)) weeks.push(NONCONF_WEEKS + 1 + w);
+    for (let w = 0; w < confWeeks; w++) if (!openWeeks.has(w)) weeks.push(NONCONF + 1 + w);
     rounds.forEach((pairs, i) => { (weekPairs[weeks[i]] ||= []).push(...pairs.filter(([a, b]) => a && b).map(p => [...p, conf])); });
   }
 
-  for (let week = 1; week <= REG_WEEKS; week++) {
+  let midNo = 1;
+  for (let week = 1; week <= REG; week++) {
     const busy = new Set();
     for (const [a, b] of weekPairs[week] || []) {
       const [h, aw] = orientConf(a, b);
@@ -128,8 +142,19 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
       const { pairs: mids } = crossPairs(names, teams, metMid, r, played);
       for (const [a, b] of mids) {
         const [h, aw] = orient(a, b);
-        games.push(blankGame(season, { week, day: 'Tue', order: DAY_ORDER.Tue, home: h, away: aw }));
-        homeCount[h]++; played[a]++; played[b]++; metMid.add(key(a, b));
+        const fmt = midweek === 'mixed' ? (r() < 0.5 ? 'doubleheader' : 'split') : midweek;
+        if (fmt === 'single') {
+          games.push(blankGame(season, { week, day: 'Tue', order: DAY_ORDER.Tue, home: h, away: aw }));
+          homeCount[h]++; played[a]++; played[b]++;
+        } else {
+          const sid = `${season.year}-m${midNo++}`;
+          const two = fmt === 'doubleheader'
+            ? [{ day: 'Tue', order: DAY_ORDER.Tue, label: 'Doubleheader · Game 1' }, { day: 'Tue', order: DAY_ORDER.Tue + 0.5, label: 'Doubleheader · Game 2' }]
+            : [{ day: 'Tue', order: DAY_ORDER.Tue }, { day: 'Wed', order: DAY_ORDER.Wed }];
+          for (const x of two) games.push(blankGame(season, { week, home: h, away: aw, series: sid, midweek: fmt, ...x }));
+          homeCount[h] += 2; played[a] += 2; played[b] += 2;
+        }
+        metMid.add(key(a, b));
       }
     }
   }

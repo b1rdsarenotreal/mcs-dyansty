@@ -1,16 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261004214741';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261004214741';
-import { ovr } from './sim.js?v=20261004214741';
-import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004214741';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261004214741';
-import { setRating } from './ratings.js?v=20261004214741';
-import { postseasonFinish } from './postseason.js?v=20261004214741';
-import { exportLeague, clearLeague } from './store.js?v=20261004214741';
-import { clamp } from './util.js?v=20261004214741';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005144512';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005144512';
+import { ovr } from './sim.js?v=20261005144512';
+import { latestPoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261005144512';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005144512';
+import { setRating } from './ratings.js?v=20261005144512';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005144512';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005144512';
+import { exportLeague, clearLeague } from './store.js?v=20261005144512';
+import { clamp } from './util.js?v=20261005144512';
 
-const ui = { confFilter: '' };
+const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
 
 function ratingBar(label, v, color, pre = null) {
@@ -240,7 +241,7 @@ export function renderTeamPage(name) {
   const rec = recs[name] || { w: 0, l: 0, cw: 0, cl: 0, rs: 0, ra: 0, streak: '', hw: 0, hl: 0, aw: 0, al: 0 };
   const games = s.games.filter(g => g.home === name || g.away === name).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id);
   const pollPts = Object.entries(s.polls || {}).sort((a, b) => (a[0] === 'final' ? 99 : +a[0]) - (b[0] === 'final' ? 99 : +b[0]))
-    .map(([w, p]) => ({ label: w === 'final' ? 'F' : w === '0' ? 'P' : w === '15' ? 'CT' : w, title: w === 'final' ? 'Final poll' : w === '0' ? 'Preseason' : w === '15' ? 'After conference tournaments' : `Week ${w}`, rank: pollRankMap(p)[name] ?? null }));
+    .map(([w, p]) => ({ label: w === 'final' ? 'F' : w === '0' ? 'P' : +w === postWeeks(s).conf ? 'CT' : w, title: w === 'final' ? 'Final poll' : w === '0' ? 'Preseason' : +w === postWeeks(s).conf ? 'After conference tournaments' : `Week ${w}`, rank: pollRankMap(p)[name] ?? null }));
   const history = Object.keys(ctx.league.seasons).map(Number).sort((a, b) => b - a).map(y => [y, ctx.league.seasons[y]]).filter(([, se]) => se.teams[name]).map(([y, se]) => [y, seasonSummary(se, name)]);
   const confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
   app.innerHTML = `
@@ -279,7 +280,7 @@ export function renderTeamPage(name) {
           const fin = isFinal(g), won = fin && winnerOf(g) === name;
           const inn = Math.max(g.homeLine.length, g.awayLine.length);
           const res = fin ? `<b class="${won ? 'good' : 'bad'}">${won ? 'W' : 'L'}</b> ${home ? g.homeR : g.awayR}-${home ? g.awayR : g.homeR}${inn !== 7 ? ` <span class="muted small">(${inn})</span>` : ''}` : '<span class="muted">—</span>';
-          return `<tr class="clickable" data-g="${g.id}"><td class="small">${g.week > 14 ? esc(weekName(g.week).replace('Conf. Tournaments', 'Conf T')) : g.week}</td><td class="small">${esc(g.day)}</td>
+          return `<tr class="clickable" data-g="${g.id}"><td class="small">${g.week > regWeeksOf(s) ? esc(weekName(g.week, s).replace('Conf. Tournaments', 'Conf T')) : g.week}</td><td class="small">${esc(g.day)}</td>
             <td class="num muted small">${fin && cache.ranksAt(g.week)[name] ? '#' + cache.ranksAt(g.week)[name] : ''}</td>
             <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
@@ -335,7 +336,7 @@ function coachCareers() {
       c.seasons.push({ y, school: t.school });
       if (se.post?.confT?.[t.conference]?.champion === t.school) c.ct++;
       if (se.post?.field?.some(f => f.team === t.school)) c.ncaa++;
-      if (se.post?.mcws?.seeds.includes(t.school)) c.mcws++;
+      if (wsTeams(se).includes(t.school)) c.mcws++;
       if (se.post?.champion === t.school) c.titles++;
     }
   }
@@ -374,7 +375,7 @@ export function renderCoachPage(id) {
     tot.w += h.rec.w; tot.l += h.rec.l; tot.cw += h.rec.cw; tot.cl += h.rec.cl;
     if (h.regChamp) tot.reg++; if (h.tChamp) tot.ct++;
     if (se.post?.field?.some(f => f.team === t.school)) tot.ncaa++;
-    if (se.post?.mcws?.seeds.includes(t.school)) tot.mcws++;
+    if (wsTeams(se).includes(t.school)) tot.mcws++;
     if (se.post?.champion === t.school) tot.titles++;
     if (h.finalRank) tot.top++;
     rows.push({ y, t, h, inProgress: se.phase !== 'complete' });
@@ -514,7 +515,7 @@ export function renderHistory() {
       const se = ctx.league.seasons[y], p = se.post || {};
       const top5 = se.polls?.final?.ranks.slice(0, 5).map(x => x.team) || [];
       return `<tr><td><b>${y}</b></td><td>${p.champion ? team(p.champion, { rank: false }) : '<span class="muted">In progress</span>'}</td><td>${p.runnerUp ? esc(p.runnerUp) : ''}</td>
-        <td class="small">${(p.mcws?.seeds || []).map(esc).join(', ')}</td><td class="small">${top5.map((t, i) => `${i + 1}. ${esc(t)}`).join('<br>')}</td>
+        <td class="small">${wsTeams(se).map(esc).join(', ')}</td><td class="small">${top5.map((t, i) => `${i + 1}. ${esc(t)}`).join('<br>')}</td>
         <td class="small">${Object.values(p.confT || {}).map(ev => `${esc(ev.conf)}: ${esc(ev.champion || '—')}`).join('<br>')}</td></tr>`;
     }).join('')}</tbody></table></div></div>`;
 }
@@ -524,6 +525,11 @@ export function renderHistory() {
 export function renderSettings() {
   const L = ctx.league, s = S(), st = s.settings;
   const isCurrent = L.viewYear === L.currentYear;
+  const cur = L.seasons[L.currentYear], cs = cur.settings;
+  const saved = { ...DEFAULT_NCAA, ...(cs.ncaa || {}) };
+  const nc = ui.ncaaDraft || saved;
+  const ncDirty = ['regionals', 'perRegional', 'wsSize'].some(k => nc[k] !== saved[k]);
+  const probs = ncaaProblems(nc, Object.keys(cur.teams).length);
   const canRebuild = !s.games.some(g => g.type === 'regular' && isFinal(g));
   app.innerHTML = `<div class="section-head"><h1>Settings</h1></div>
     <div class="grid">
@@ -545,12 +551,41 @@ export function renderSettings() {
         <button class="btn" id="s-rebuild" ${canRebuild ? '' : 'disabled'}>Rebuild ${s.year} schedule</button>
         <p class="small muted">${canRebuild ? 'Makes a new regular-season schedule from the current teams and conferences.' : 'Locked: regular-season games have been played.'}</p>
       </div>
+      <div class="card stack"><h2>Schedule format</h2>
+        <label class="field">Regular-season weeks <input type="number" id="s-weeks" min="8" max="16" value="${cs.regWeeks ?? DEFAULT_REG_WEEKS}"></label>
+        <label class="field">Midweek games <select id="s-mid">${Object.entries(MIDWEEK).map(([k, l]) => `<option value="${k}" ${(cs.midweek ?? 'mixed') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; from week 2 each team also plays a two-game midweek set (a Tuesday doubleheader or Tuesday and Wednesday games against one opponent). Conference play fills the last weeks, as many as the largest conference needs.</p>
+      </div>
+      <div class="card stack ncaa-card"><h2>NCAA tournament</h2>
+        <label class="field">Men's College World Series <select id="n-ws">${[[4, '4 teams: double elimination to two, then a best-of-three final'], [8, '8 teams: Bracket A and Bracket B, then a best-of-three final']].map(([v, l]) => `<option value="${v}" ${nc.wsSize === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Regionals <select id="n-reg">${[nc.wsSize, nc.wsSize * 2].map(v => `<option value="${v}" ${nc.regionals === v ? 'selected' : ''}>${v} regionals${v === nc.wsSize ? ': champions go straight to the MCWS' : `: champions meet in ${v / 2} best-of-three super regionals`}</option>`).join('')}</select></label>
+        <label class="field">Teams per regional <select id="n-per">${[[2, '2: best-of-three series'], [3, '3: double elimination'], [4, '4: double elimination (classic NCAA)'], [5, '5: double elimination'], [6, '6: double elimination']].map(([v, l]) => `<option value="${v}" ${nc.perRegional === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <div class="kpis kpis-sm" style="margin:0"><div class="kpi"><div class="v">${fieldSize(nc)}</div><div class="l">Qualifiers</div></div><div class="kpi"><div class="v">${Object.keys(ctx.league.conferences).filter(c => Object.values(cur.teams).some(t => t.conference === c)).length}</div><div class="l">Automatic bids</div></div><div class="kpi"><div class="v">${Math.max(0, fieldSize(nc) - Object.keys(ctx.league.conferences).filter(c => Object.values(cur.teams).some(t => t.conference === c)).length)}</div><div class="l">At-large</div></div></div>
+        <p class="small">${formatSummary(nc)}</p>
+        ${probs.length ? `<div class="hint warn">${probs.map(esc).join('<br>')}</div>` : ''}
+        <div class="row"><button class="btn primary" id="n-save" ${probs.length || !ncDirty ? 'disabled' : ''}>Save tournament format</button>${ncDirty ? '<button class="btn" id="n-cancel">Undo changes</button>' : ''}</div>
+        <p class="small muted">${cur.post?.cfg ? `The ${cur.year} field is already announced, so a new format starts in ${cur.year + 1}.` : `Applies to the ${cur.year} tournament and every season after.`} Each conference champion gets an automatic bid; the committee picks the rest and seeds the field. The top national seeds host the regionals.</p>
+      </div>
       <div class="card stack"><h2>Backups</h2>
         <p class="small muted">The dynasty is saved in this browser. Download a backup to keep a copy or move it to another device.</p>
         <div class="row"><button class="btn" id="s-export">Download backup</button><label class="btn">Restore backup <input type="file" id="s-import" accept="application/json,.json" hidden></label></div>
         <button class="btn danger" id="s-reset">Start over with a new league</button>
       </div>
     </div>`;
+  $('#s-weeks').onchange = e => { cs.regWeeks = Math.max(8, Math.min(16, Math.round(Number(e.target.value) || DEFAULT_REG_WEEKS))); changed({ progress: false }); toast(`New schedules will run ${cs.regWeeks} weeks.`); };
+  $('#s-mid').onchange = e => { cs.midweek = e.target.value; changed({ progress: false }); };
+  const draft = () => (ui.ncaaDraft ||= { ...nc });
+  $('#n-ws').onchange = e => { const d = draft(); d.wsSize = +e.target.value; if (d.regionals !== d.wsSize && d.regionals !== d.wsSize * 2) d.regionals = d.wsSize === 8 ? 8 : 4; renderSettings(); };
+  $('#n-reg').onchange = e => { draft().regionals = +e.target.value; renderSettings(); };
+  $('#n-per').onchange = e => { draft().perRegional = +e.target.value; renderSettings(); };
+  if ($('#n-cancel')) $('#n-cancel').onclick = () => { ui.ncaaDraft = null; renderSettings(); };
+  $('#n-save').onclick = () => {
+    cs.ncaa = { regionals: nc.regionals, perRegional: nc.perRegional, wsSize: nc.wsSize };
+    ui.ncaaDraft = null;
+    if (cur.phase === 'selection') proposeField(cur); // resize the proposed field to the new format
+    changed();
+    toast(cur.post?.cfg ? `Saved. The new format starts in ${cur.year + 1}.` : `Saved. The ${cur.year} tournament will use ${fieldSize(cs.ncaa)} qualifiers.`);
+  };
   $('#s-name').onchange = e => { L.name = e.target.value.trim() || L.name; changed({ progress: false }); };
   $('#s-mcws').onchange = e => { st.mcwsName = e.target.value.trim() || "Men's College World Series"; changed({ progress: false }); };
   $('#s-dev').onchange = e => { st.development = e.target.value; persist(); };

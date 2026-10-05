@@ -3,9 +3,9 @@
 // as games are played. They remember last week's poll, so teams move the
 // way real polls do. The commissioner can edit any published poll.
 
-import { rng, normal, hashStr } from './util.js?v=20261004214741';
-import { ovr } from './sim.js?v=20261004214741';
-import { records, rpi, isFinal } from './standings.js?v=20261004214741';
+import { rng, normal, hashStr } from './util.js?v=20261005144512';
+import { ovr } from './sim.js?v=20261005144512';
+import { records, rpi, isFinal } from './standings.js?v=20261005144512';
 
 export const VOTERS = 40;
 export const POLL_SIZE = 15;

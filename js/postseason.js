@@ -1,15 +1,59 @@
-// Postseason: conference tournaments (single or double elimination, week 15), a
-// 16-team NCAA field (week 16 regionals: four 4-team double-elimination
-// sites hosted by the top 4 national seeds), and the Men's College World
-// Series (week 17: the four regional champions play double elimination down
-// to two, then a best-of-three Championship Series).
+// Postseason: conference tournaments (single or double elimination), then
+// an NCAA tournament whose shape comes from the season's settings:
+//   - regionals: how many, and how many teams in each (2 = best-of-three
+//     series; 3 to 6 = double elimination with an "if necessary" final;
+//     4 uses the classic NCAA regional format),
+//   - super regionals (best of three between two regional champions) when
+//     there are twice as many regionals as Men's College World Series spots,
+//   - the MCWS: 4 teams (double elimination to two, then a best-of-three
+//     Championship Series) or 8 teams (Bracket A and Bracket B, each a
+//     4-team double elimination, then a best-of-three final between the
+//     bracket winners).
+// The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261004214741';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004214741';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004214741';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261005144512';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261005144512';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261005144512';
 
-export const WEEK = { conf: 15, regional: 16, mcws: 17 };
-export const FIELD_SIZE = 16;
+// ---------- tournament format ----------
+
+export const DEFAULT_NCAA = { regionals: 4, perRegional: 4, wsSize: 4 };
+export const fieldSize = cfg => cfg.regionals * cfg.perRegional;
+export const hasSupers = cfg => cfg.regionals === cfg.wsSize * 2;
+
+export function ncaaConfig(season) {
+  return { ...DEFAULT_NCAA, ...(season.post?.cfg || season.settings?.ncaa || {}) };
+}
+
+// Problems with a format, in plain words (empty when it works).
+export function ncaaProblems(cfg, teamCount) {
+  const out = [];
+  if (![4, 8].includes(cfg.wsSize)) out.push("The Men's College World Series must have 4 or 8 teams.");
+  if (cfg.regionals !== cfg.wsSize && cfg.regionals !== cfg.wsSize * 2) out.push(`With a ${cfg.wsSize}-team MCWS there must be ${cfg.wsSize} regionals (winners go straight to the MCWS) or ${cfg.wsSize * 2} (winners meet in super regionals).`);
+  if (!(cfg.perRegional >= 2 && cfg.perRegional <= 6)) out.push('Each regional needs 2 to 6 teams.');
+  if (fieldSize(cfg) > teamCount) out.push(`That's ${fieldSize(cfg)} qualifiers, but there are only ${teamCount} teams.`);
+  return out;
+}
+
+// One-paragraph description of a tournament format.
+export function formatSummary(cfg) {
+  const reg = cfg.perRegional === 2 ? 'best-of-three series' : cfg.perRegional === 4 ? '4-team double elimination' : `${cfg.perRegional}-team double elimination`;
+  const sup = hasSupers(cfg) ? ` Regional champions pair off in ${cfg.regionals / 2} best-of-three super regionals.` : '';
+  const ws = cfg.wsSize === 8 ? '8-team MCWS in Bracket A and Bracket B, then a best-of-three final' : '4-team MCWS, double elimination to two, then a best-of-three final';
+  return `<b>Format:</b> ${fieldSize(cfg)} qualifiers in ${cfg.regionals} regionals of ${cfg.perRegional} (${reg}).${sup} ${ws}.`;
+}
+
+// Weeks after the regular season, which runs weeks 1 to `regWeeks`.
+export function regWeeksOf(season) { return season.regWeeks ?? 14; }
+export function postWeeks(season) {
+  const R = regWeeksOf(season), cfg = ncaaConfig(season);
+  const w = { conf: R + 1, regional: R + 2 };
+  let n = R + 3;
+  if (hasSupers(cfg)) w.super = n++;
+  w.mcws = n++;
+  if (cfg.wsSize === 8) w.finals = n++;
+  return w;
+}
 
 export function defaultConfTourneySize(n) { return n >= 9 ? 6 : n >= 4 ? 4 : 0; }
 
@@ -101,6 +145,33 @@ function doubleElimConf(size) {
   return assignDays(nodes);
 }
 
+// Best of three between seeds[0] and seeds[1] (higher seed first).
+function seriesNodes(days = ['Fri', 'Sat', 'Sun']) {
+  return [
+    { key: 'S1', code: 'Game 1', a: { seed: 0 }, b: { seed: 1 }, day: days[0], t: 1, label: 'Game 1', sec: 'F', col: 0 },
+    { key: 'S2', code: 'Game 2', a: { seed: 1 }, b: { seed: 0 }, day: days[1], t: 2, label: 'Game 2', sec: 'F', col: 0, after: 'S1' },
+    { key: 'S3', code: 'Game 3', a: { seed: 0 }, b: { seed: 1 }, day: days[2], t: 3, label: 'Game 3 (if necessary)', cond: 's3', sec: 'F', col: 0 },
+  ];
+}
+
+// Double elimination with an "if necessary" final: the elimination-bracket
+// winner has to beat the winners-bracket winner twice.
+function doubleElimIfNec(size) {
+  const nodes = doubleElimConf(size);
+  const ch = nodes.find(n => n.key === 'CH');
+  ch.label = 'Final';
+  for (const n of nodes) n.t = n.depth;
+  nodes.push({ key: 'IF', code: 'Final (if necessary)', a: ch.a, b: ch.b, sec: 'F', col: 0, label: 'Final (if necessary)', cond: 'ifnec', day: 'Mon', t: ch.depth + 1 });
+  return nodes;
+}
+
+function regionalNodes(size) {
+  if (size === 2) return seriesNodes();
+  if (size === 4) return doubleElim('g7');
+  return doubleElimIfNec(size);
+}
+const regionalKind = size => (size === 2 ? 'series' : size === 4 ? 'regional' : 'de');
+
 function buildConfNodes(kind, size) { return kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size); }
 
 function doubleElim(final = 'g7') {
@@ -119,6 +190,21 @@ function doubleElim(final = 'g7') {
     n.push({ key: 'F1', code: 'Finals G1', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Sun', label: 'Championship Series · Game 1', after: 'G5', sec: 'F', col: 0 });
     n.push({ key: 'F2', code: 'Finals G2', a: { w: 'G5' }, b: { w: 'G4' }, day: 'Mon', label: 'Championship Series · Game 2', after: 'F1', sec: 'F', col: 0 });
     n.push({ key: 'F3', code: 'Finals G3', a: { w: 'G4' }, b: { w: 'G5' }, day: 'Tue', label: 'Championship Series · Game 3 (if necessary)', cond: 'f3', sec: 'F', col: 0 });
+  }
+  return n;
+}
+
+// One MCWS bracket (Bracket A or B): the 4-team NCAA double elimination,
+// shifted a day for Bracket B so the two brackets alternate.
+const SHIFT = { Fri: 'Sat', Sat: 'Sun', Sun: 'Mon', Mon: 'Tue', Tue: 'Wed' };
+const SLOT = { Thu: 0, Fri: 1, Sat: 2, Sun: 3, Mon: 4, Tue: 5, Wed: 6 };
+function wsBracketNodes(shift) {
+  const n = doubleElim('g7');
+  for (const x of n) {
+    if (shift) x.day = SHIFT[x.day];
+    x.t = SLOT[x.day] + (x.key === 'G6' ? 0.5 : 0);
+    if (x.key === 'G6') x.label = 'Bracket final';
+    if (x.key === 'G7') x.label = 'Bracket final (if necessary)';
   }
   return n;
 }
@@ -163,6 +249,8 @@ function condMet(ev, node) {
   if (node.after && !nodeOf(ev, node.after)?.winner) return false;
   if (node.cond === 'g7') { const g6 = nodeOf(ev, 'G6'); return !!g6.winner && g6.winner !== resolve(ev, { w: 'G4' }); }
   if (node.cond === 'f3') { const a = nodeOf(ev, 'F1'), b = nodeOf(ev, 'F2'); return !!a.winner && !!b.winner && a.winner !== b.winner; }
+  if (node.cond === 's3') { const a = nodeOf(ev, 'S1'), b = nodeOf(ev, 'S2'); return !!a.winner && !!b.winner && a.winner !== b.winner; }
+  if (node.cond === 'ifnec') { const ch = nodeOf(ev, 'CH'); return !!ch.winner && ch.winner !== resolve(ev, ch.a); }
   return true;
 }
 
@@ -202,13 +290,15 @@ function advanceEvent(season, ev, { type, week, name }) {
       if (a === BYE || b === BYE) { node.winner = a === BYE ? b : a; node.loser = BYE; changed = true; continue; }
       const ia = ev.seeds.indexOf(a), ib = ev.seeds.indexOf(b);
       let home = ia <= ib ? a : b, away = home === a ? b : a;
-      if (node.key === 'F2') [home, away] = [away, home];
+      if (node.key === 'F2' || node.key === 'S2') [home, away] = [away, home];
       const hosted = ev.host && (home === ev.host || away === ev.host);
       if (hosted && away === ev.host) [home, away] = [away, home];
       const g = blankGame(season, {
-        type, week, day: node.day, order: DAY_ORDER[node.day] + (type !== 'conf' && ['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0) + (node.depth || 0) * 0.01,
+        type, week, day: node.day,
+        order: node.t != null ? node.t : DAY_ORDER[node.day] + (type !== 'conf' && ['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0) + (node.depth || 0) * 0.01,
         home, away, neutral: !hosted, event: ev.id, node: node.key,
         label: `${name} · ${node.label}`,
+        ...(ev.kind === 'series' ? { series: ev.id, bestOf: 3 } : node.key[0] === 'F' && ev.kind === 'mcws' ? { series: `${ev.id}-finals`, bestOf: 3 } : {}),
       });
       season.games.push(g);
       node.gameId = g.id;
@@ -219,6 +309,12 @@ function advanceEvent(season, ev, { type, week, name }) {
   return ev.champion;
 }
 
+function seriesChampion(ev, keys) {
+  const wins = {};
+  for (const k of keys) { const w = nodeOf(ev, k)?.winner; if (w) wins[w] = (wins[w] || 0) + 1; }
+  return Object.keys(wins).find(t => wins[t] >= 2) || null;
+}
+
 function eventChampion(ev) {
   if (ev.kind === 'single' || ev.kind === 'double') { const w = ev.nodes[ev.nodes.length - 1].winner; return w && w !== BYE ? w : null; }
   if (ev.kind === 'regional') {
@@ -227,15 +323,21 @@ function eventChampion(ev) {
     if (g6.winner && g6.winner === resolve(ev, { w: 'G4' })) return g6.winner;
     return null;
   }
-  const wins = {};
-  for (const k of ['F1', 'F2', 'F3']) { const w = nodeOf(ev, k).winner; if (w) wins[w] = (wins[w] || 0) + 1; }
-  return Object.keys(wins).find(t => wins[t] >= 2) || null;
+  if (ev.kind === 'de') {
+    const ch = nodeOf(ev, 'CH'), ifn = nodeOf(ev, 'IF');
+    if (ifn.winner) return ifn.winner;
+    if (ch.winner && ch.winner === resolve(ev, ch.a)) return ch.winner;
+    return null;
+  }
+  if (ev.kind === 'series') return seriesChampion(ev, ['S1', 'S2', 'S3']);
+  return seriesChampion(ev, ['F1', 'F2', 'F3']);
 }
 
 export function runnerUp(ev) {
   if (!ev?.champion) return null;
-  const finals = ev.kind === 'mcws' ? ['F1'] : ev.kind === 'regional' ? ['G6'] : [ev.nodes[ev.nodes.length - 1].key];
-  const n = nodeOf(ev, finals[0]);
+  if (ev.kind === 'series') return ev.seeds.find(t => t !== ev.champion) || null;
+  const finalKey = ev.kind === 'mcws' ? 'F1' : ev.kind === 'regional' ? 'G6' : ev.kind === 'de' ? 'CH' : ev.nodes[ev.nodes.length - 1].key;
+  const n = nodeOf(ev, finalKey);
   return n.winner === ev.champion ? n.loser : n.winner;
 }
 
@@ -295,7 +397,7 @@ export function autoBids(season) {
   return out;
 }
 
-export function proposeField(season, size = FIELD_SIZE) {
+export function proposeField(season, size = Math.min(fieldSize(ncaaConfig(season)), Object.keys(season.teams).length)) {
   const order = committeeOrder(season);
   const autos = autoBids(season);
   const autoSet = new Set(Object.values(autos).filter(Boolean));
@@ -308,62 +410,135 @@ export function proposeField(season, size = FIELD_SIZE) {
   season.phase = 'selection';
 }
 
-// Serpentine pods: regional 1 gets seeds 1, 8, 9, 16 and so on.
-export function pods(field) {
-  const n = field.length / 4, out = Array.from({ length: n }, () => []);
+// Serpentine pods: with 4 regionals, regional 1 gets seeds 1, 8, 9, 16,
+// regional 2 gets 2, 7, 10, 15, and so on. Regional k is hosted by seed k+1.
+export function pods(field, regionals = 4) {
+  const n = regionals, out = Array.from({ length: n }, () => []);
   field.forEach((f, i) => { const rnd = Math.floor(i / n); const k = rnd % 2 === 0 ? i % n : n - 1 - (i % n); out[k].push(f.team); });
   return out;
 }
 
 export function lockField(season) {
-  const field = [...season.post.field].sort((a, b) => a.seed - b.seed);
-  season.post.regionals = pods(field).map((teams, i) => ({
-    id: `reg-${i + 1}`, kind: 'regional', seeds: teams, host: teams[0], nodes: doubleElim('g7'), champion: null,
-    name: `${teams[0]} Regional`,
+  const p = season.post;
+  p.cfg = { ...DEFAULT_NCAA, ...(season.settings.ncaa || {}) };
+  const field = [...p.field].sort((a, b) => a.seed - b.seed);
+  p.regionals = pods(field, p.cfg.regionals).map((teams, i) => ({
+    id: `reg-${i + 1}`, kind: regionalKind(teams.length), seeds: teams, host: teams[0], nodes: regionalNodes(teams.length), champion: null,
+    name: `${teams[0]} Regional`, path: i,
   }));
   season.phase = 'regionals';
 }
 
+const nationalSeed = (season, t) => season.post.field?.find(f => f.team === t)?.seed ?? 99;
+
+// Super regionals: regional k meets regional (n-1-k), so the 1 seed's
+// regional pairs with the last host's. The higher national seed hosts.
+function buildSupers(season) {
+  const regs = season.post.regionals, n = regs.length;
+  return Array.from({ length: n / 2 }, (_, i) => {
+    const pair = [regs[i].champion, regs[n - 1 - i].champion].sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b));
+    return { id: `sup-${i + 1}`, kind: 'series', seeds: pair, host: pair[0], nodes: seriesNodes(), champion: null, name: `${pair[0]} Super Regional`, path: i };
+  });
+}
+
+// Teams reaching the MCWS, in bracket-path order (path k = national seed k+1's side).
+function wsQualifiers(season) {
+  const p = season.post, cfg = ncaaConfig(season);
+  const stage = hasSupers(cfg) ? p.supers : p.regionals;
+  if (!stage?.length || !stage.every(ev => ev.champion)) return null;
+  return stage.map((ev, i) => [ev.path ?? i, ev.champion]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+
+// 8-team MCWS brackets: Bracket A holds paths 1, 4, 5, 8 (games 1 vs 8 and
+// 4 vs 5); Bracket B holds paths 2, 3, 6, 7 (2 vs 7 and 3 vs 6).
+function buildWsBrackets(q) {
+  return [
+    { id: 'ws-A', kind: 'regional', bracket: 'A', seeds: [q[0], q[3], q[4], q[7]], host: null, nodes: wsBracketNodes(false), champion: null, name: 'Bracket A' },
+    { id: 'ws-B', kind: 'regional', bracket: 'B', seeds: [q[1], q[2], q[5], q[6]], host: null, nodes: wsBracketNodes(true), champion: null, name: 'Bracket B' },
+  ];
+}
+
 // ---------- driver ----------
+
+// Keep a stage (super regionals, the MCWS, its finals) in step with the
+// stage before it. `sig` names the teams that should be in it, or is null
+// while the earlier stage is unfinished. A stage whose teams no longer match
+// is rebuilt, unless it already has results (the commissioner's call).
+function syncStage(season, key, sig, build) {
+  const p = season.post;
+  p.sigs ||= {};
+  if (p[key] && p.sigs[key] !== sig) {
+    const evs = Array.isArray(p[key]) ? p[key] : [p[key]];
+    const ids = new Set(evs.map(e => e.id));
+    const played = season.games.some(g => ids.has(g.event) && isFinal(g));
+    if (!played) {
+      season.games = season.games.filter(g => !ids.has(g.event));
+      delete p[key]; delete p.sigs[key];
+    } else if (p.sigs[key] === undefined) p.sigs[key] = sig; // saved before stages were tracked: keep it as is
+  }
+  if (!p[key] && sig) { p[key] = build(); p.sigs[key] = sig; }
+  return p[key];
+}
 
 // Advance everything that can advance. Call after any result changes.
 export function progress(season) {
   if (!season.post) season.post = {};
   const p = season.post;
   for (const ev of allEvents(season)) ensureLayout(ev);
+  const W = postWeeks(season);
   if (season.phase === 'regular' && regularSeasonDone(season) && season.games.some(g => g.type === 'regular')) setupConfTourneys(season);
-  if (p.confT) for (const ev of Object.values(p.confT)) advanceEvent(season, ev, { type: 'conf', week: WEEK.conf, name: `${ev.conf} Tournament` });
+  if (p.confT) for (const ev of Object.values(p.confT)) advanceEvent(season, ev, { type: 'conf', week: W.conf, name: `${ev.conf} Tournament` });
   if (season.phase === 'conf' && Object.values(p.confT || {}).every(ev => ev.champion)) proposeField(season);
-  if (p.regionals) for (const ev of p.regionals) advanceEvent(season, ev, { type: 'regional', week: WEEK.regional, name: ev.name });
-  if (season.phase === 'regionals' && p.regionals.every(ev => ev.champion)) {
-    const seedOf = t => p.field.find(f => f.team === t)?.seed ?? 99;
-    const teams = p.regionals.map(ev => ev.champion).sort((a, b) => seedOf(a) - seedOf(b));
-    p.mcws = { id: 'mcws', kind: 'mcws', seeds: teams, host: null, nodes: doubleElim('series'), champion: null };
-    season.phase = 'mcws';
+  if (!p.regionals) return;
+
+  const cfg = ncaaConfig(season);
+  for (const ev of p.regionals) advanceEvent(season, ev, { type: 'regional', week: W.regional, name: ev.name });
+
+  if (hasSupers(cfg)) {
+    const done = p.regionals.every(ev => ev.champion);
+    syncStage(season, 'supers', done ? p.regionals.map(ev => ev.champion).join('|') : null, () => buildSupers(season));
+    for (const ev of p.supers || []) advanceEvent(season, ev, { type: 'super', week: W.super, name: ev.name });
   }
-  if (p.regionals && season.phase !== 'regionals' && !p.regionals.every(ev => ev.champion)) {
-    // A regional result was changed after the MCWS was set; rebuild it if it hasn't started.
-    const started = season.games.some(g => g.type === 'mcws' && isFinal(g));
-    if (!started) { season.games = season.games.filter(g => g.type !== 'mcws'); p.mcws = null; p.champion = null; p.runnerUp = null; delete season.polls.final; season.phase = 'regionals'; }
+
+  const q = wsQualifiers(season);
+  const wsName = season.settings.mcwsName || "Men's College World Series";
+  if (cfg.wsSize === 8) {
+    syncStage(season, 'mcwsBrackets', q ? q.join('|') : null, () => buildWsBrackets(q));
+    for (const ev of p.mcwsBrackets || []) advanceEvent(season, ev, { type: 'mcws', week: W.mcws, name: `${wsName} · ${ev.name}` });
+    const bw = p.mcwsBrackets?.every(ev => ev.champion) ? p.mcwsBrackets.map(ev => ev.champion).sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b)) : null;
+    syncStage(season, 'mcwsFinals', bw ? bw.join('|') : null, () => ({ id: 'ws-F', kind: 'series', seeds: bw, host: null, nodes: seriesNodes(), champion: null, name: 'Championship Series' }));
+    if (p.mcwsFinals) advanceEvent(season, p.mcwsFinals, { type: 'mcws', week: W.finals, name: `${wsName} Finals` });
+  } else {
+    const seeded = q ? [...q].sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b)) : null;
+    syncStage(season, 'mcws', seeded ? seeded.join('|') : null, () => ({ id: 'mcws', kind: 'mcws', seeds: seeded, host: null, nodes: doubleElim('series'), champion: null }));
+    if (p.mcws) advanceEvent(season, p.mcws, { type: 'mcws', week: W.mcws, name: wsName });
   }
-  if (p.mcws) {
-    advanceEvent(season, p.mcws, { type: 'mcws', week: WEEK.mcws, name: season.settings.mcwsName || "Men's College World Series" });
-    if (!p.mcws.champion && season.phase === 'complete') { p.champion = null; p.runnerUp = null; delete season.polls.final; season.phase = 'mcws'; }
-    if (p.mcws.champion && season.phase !== 'complete') {
-      p.champion = p.mcws.champion;
-      p.runnerUp = runnerUp(p.mcws);
-      season.phase = 'complete';
-      season.polls.final = generatePoll(season, 'final', { final: true, postBonus: postseasonBonus(season) });
-    }
-  }
+
+  // Phase and champion follow from the stages.
+  const finalEv = cfg.wsSize === 8 ? p.mcwsFinals : p.mcws;
+  const champ = finalEv?.champion || null;
+  const wasComplete = season.phase === 'complete';
+  p.champion = champ;
+  p.runnerUp = champ ? runnerUp(finalEv) : null;
+  season.phase = champ ? 'complete' : (p.mcws || p.mcwsBrackets) ? 'mcws' : p.supers ? 'supers' : 'regionals';
+  if (champ && (!wasComplete || !season.polls.final)) season.polls.final = generatePoll(season, 'final', { final: true, postBonus: postseasonBonus(season) });
+  if (!champ && season.polls.final) delete season.polls.final;
+}
+
+// Teams in the MCWS (either format).
+export function wsTeams(season) {
+  const p = season.post || {};
+  return p.mcws?.seeds || (p.mcwsBrackets || []).flatMap(ev => ev.seeds);
 }
 
 export function postseasonBonus(season) {
   const p = season.post, b = {};
   const add = (t, x) => { if (t) b[t] = Math.max(b[t] || 0, x); };
   for (const ev of Object.values(p.confT || {})) add(ev.champion, 0.3);
-  for (const ev of p.regionals || []) { for (const t of ev.seeds) add(t, 0.6); add(runnerUp(ev), 1.5); }
-  for (const t of p.mcws?.seeds || []) add(t, 5);
+  for (const ev of p.regionals || []) { for (const t of ev.seeds) add(t, 0.6); add(ev.champion, 2); }
+  for (const ev of p.supers || []) { for (const t of ev.seeds) add(t, 2); }
+  for (const t of wsTeams(season)) add(t, 5);
+  for (const ev of p.mcwsBrackets || []) add(ev.champion, 7);
   add(p.runnerUp, 8); add(p.champion, 10);
   return b;
 }
@@ -373,7 +548,8 @@ export function postseasonFinish(season, team) {
   const p = season.post || {};
   if (p.champion === team) return 'National champion';
   if (p.runnerUp === team) return 'MCWS runner-up';
-  if (p.mcws?.seeds.includes(team)) return 'Men\'s College World Series';
+  if (wsTeams(season).includes(team)) return 'Men\'s College World Series';
+  if (p.supers?.some(ev => ev.seeds.includes(team))) return 'Super Regional';
   const reg = p.regionals?.find(ev => ev.seeds.includes(team));
   if (reg) return reg.champion === team ? 'Regional champion' : 'NCAA Regional';
   return null;
@@ -381,7 +557,7 @@ export function postseasonFinish(season, team) {
 
 export function allEvents(season) {
   const p = season.post || {};
-  return [...Object.values(p.confT || {}), ...(p.regionals || []), ...(p.mcws ? [p.mcws] : [])];
+  return [...Object.values(p.confT || {}), ...(p.regionals || []), ...(p.supers || []), ...(p.mcws ? [p.mcws] : []), ...(p.mcwsBrackets || []), ...(p.mcwsFinals ? [p.mcwsFinals] : [])];
 }
 
 // The two teams a bracket node will have (null where still undecided).

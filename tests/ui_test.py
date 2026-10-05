@@ -83,6 +83,14 @@ try:
         pg.screenshot(path=f"{OUT}/13-conferences.png")
         pg.goto(url + "#/conference/Horizon"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/14-conference.png", full_page=True)
+        # NCAA tournament editor: 16 two-team regionals, super regionals, 8-team MCWS for next season
+        pg.goto(url + "#/settings"); pg.wait_for_selector("#n-ws")
+        pg.select_option("#n-ws", "8"); pg.wait_for_timeout(150)
+        pg.select_option("#n-reg", "16"); pg.wait_for_timeout(150)
+        pg.select_option("#n-per", "2"); pg.wait_for_timeout(150)
+        assert "32 qualifiers" in pg.content()
+        pg.screenshot(path=f"{OUT}/14b-ncaa-editor.png", full_page=True)
+        pg.click("#n-save"); pg.wait_for_timeout(300)
         # Offseason: new conference, move teams, add a team, start the season
         pg.goto(url + "#/offseason"); pg.wait_for_selector("#o-start")
         pg.screenshot(path=f"{OUT}/15-offseason.png", full_page=True)
@@ -110,6 +118,23 @@ try:
         pg.screenshot(path=f"{OUT}/16e-coach-page.png", full_page=True)
         pg.goto(url + "#/home"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16-new-season.png", full_page=True)
+        # 2017 runs 12 weeks with midweek doubleheaders / Tue-Wed sets
+        pg.goto(url + "#/schedule"); pg.wait_for_selector(".chip")
+        chips = pg.evaluate("[...document.querySelectorAll('.chip[data-week]')].map(c => c.textContent.trim())")
+        assert chips[-1] == "Wk 12", chips
+        pg.click(".chip[data-week='3']"); pg.wait_for_timeout(200)
+        pg.screenshot(path=f"{OUT}/16f-midweek.png")
+        pg.click("#w-rest"); pg.wait_for_timeout(2500)
+        pg.goto(url + "#/postseason"); pg.wait_for_timeout(300)
+        pg.click("#ps-all"); pg.wait_for_timeout(4000)
+        pg.goto(url + "#/postseason"); pg.wait_for_timeout(300)
+        tabs = pg.evaluate("[...document.querySelectorAll('[data-pt]')].map(a => a.textContent)")
+        assert "Super Regionals" in tabs, tabs
+        pg.click("[data-pt=supers]"); pg.wait_for_timeout(300)
+        pg.screenshot(path=f"{OUT}/16g-supers.png", full_page=True)
+        pg.click("[data-pt=mcws]"); pg.wait_for_timeout(300)
+        assert "Bracket A" in pg.content() and "Bracket B" in pg.content() and "Championship Series" in pg.content()
+        pg.screenshot(path=f"{OUT}/16h-mcws8.png", full_page=True)
         pg.goto(url + "#/history"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16b-history.png")
         # reload keeps data

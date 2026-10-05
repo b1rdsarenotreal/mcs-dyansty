@@ -1,20 +1,22 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261004214741';
-import { generateSchedule, blankGame, DAY_ORDER } from './schedule.js?v=20261004214741';
-import { simulateGame } from './sim.js?v=20261004214741';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261004214741';
-import { replayRatings, ensureBase } from './ratings.js?v=20261004214741';
-import { progress, lockField, WEEK } from './postseason.js?v=20261004214741';
-import { isFinal } from './standings.js?v=20261004214741';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261004214741';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261005144512';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261005144512';
+import { simulateGame } from './sim.js?v=20261005144512';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261005144512';
+import { replayRatings, ensureBase } from './ratings.js?v=20261005144512';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA } from './postseason.js?v=20261005144512';
+import { isFinal } from './standings.js?v=20261005144512';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261005144512';
 
-export const SCHEMA_VERSION = 3;
-export const LAST_POLL_WEEK = 15;
+export const SCHEMA_VERSION = 4;
 
 export function defaultSettings() {
-  return { volatility: 1, runRule: true, tiebreaker: true, confTourney: {}, confFormat: {}, mcwsName: "Men's College World Series", development: 'normal', form: 'normal' };
+  return {
+    volatility: 1, runRule: true, tiebreaker: true, confTourney: {}, confFormat: {}, mcwsName: "Men's College World Series", development: 'normal', form: 'normal',
+    regWeeks: DEFAULT_REG_WEEKS, midweek: 'mixed', ncaa: { ...DEFAULT_NCAA },
+  };
 }
 
 export function newSeason(year, teams, settings = defaultSettings(), prev = null) {
@@ -101,7 +103,7 @@ export function simResult(season, g, seed) {
 export function afterChange(season) {
   replayRatings(season);
   progress(season);
-  releaseDuePolls(season, LAST_POLL_WEEK);
+  releaseDuePolls(season, postWeeks(season).conf);
 }
 
 // Simulate unplayed games matching `filter`, in calendar order. Postseason
@@ -163,7 +165,8 @@ export function renameTeam(league, season, from, to) {
     for (const g of s.games) { g.home = swap(g.home); g.away = swap(g.away); }
     for (const p of Object.values(s.polls || {})) { for (const r of p.ranks) r.team = swap(r.team); for (const r of p.others || []) r.team = swap(r.team); }
     const post = s.post || {};
-    for (const ev of [...Object.values(post.confT || {}), ...(post.regionals || []), ...(post.mcws ? [post.mcws] : [])]) {
+    for (const k of Object.keys(post.sigs || {})) if (post.sigs[k]) post.sigs[k] = post.sigs[k].split('|').map(swap).join('|');
+    for (const ev of allEvents(s)) {
       ev.seeds = ev.seeds.map(swap); ev.champion = swap(ev.champion); if (ev.host) ev.host = swap(ev.host);
       for (const n of ev.nodes) { n.winner = swap(n.winner); n.loser = swap(n.loser); }
     }
@@ -263,7 +266,9 @@ export function draftWarnings(league) {
   for (const t of Object.values(league.draft.teams)) count[t.conference] = (count[t.conference] || 0) + 1;
   for (const [c, n] of Object.entries(count)) {
     if (n === 1) out.push(`${c} has only one team, so it has no conference games. It still gets an automatic bid.`);
-    if (n > 11) out.push(`${c} has ${n} teams. The 10 conference weeks fit 11 teams at most, so some members won't play each other.`);
+    const R = currentSeason(league).settings.regWeeks ?? DEFAULT_REG_WEEKS;
+    const rounds = n % 2 ? n : n - 1, fits = confWeeksFor(R, rounds);
+    if (rounds > fits) out.push(`${c} has ${n} teams. A ${R}-week season has room for ${fits} conference weeks, so some members won't play each other.`);
   }
   if (Object.keys(league.draft.teams).length < 16) out.push('The NCAA field needs at least 16 teams.');
   const open = Object.values(league.draft.teams).filter(t => !t.coachId).map(t => t.school).sort();
@@ -290,14 +295,37 @@ export function seasonWeeks(season) {
   return weeks;
 }
 
-export const WEEK_NAMES = { [WEEK.conf]: 'Conf. Tournaments', [WEEK.regional]: 'Regionals', [WEEK.mcws]: 'MCWS' };
-export const weekName = w => WEEK_NAMES[w] || `Week ${w}`;
+// Name of a week in `season`: regular-season weeks are "Week n"; the weeks
+// after are named for their stage.
+export function weekName(w, season) {
+  if (season) {
+    const W = postWeeks(season);
+    const names = { [W.conf]: 'Conf. Tournaments', [W.regional]: 'Regionals', [W.mcws]: 'MCWS' };
+    if (W.super) names[W.super] = 'Super Regionals';
+    if (W.finals) names[W.finals] = 'MCWS Finals';
+    if (names[w]) return names[w];
+  }
+  return `Week ${w}`;
+}
+export const isRegularWeek = (w, season) => w <= regWeeksOf(season);
 
 // Bring an older save up to date: no pitching staffs (v2), coaches as
-// people and preseason ratings for in-season movement (v3).
+// people and preseason ratings for in-season movement (v3), season length,
+// midweek format and NCAA tournament format as settings (v4).
 export function migrateLeague(league) {
   const v = league.schema || 1;
   if (v >= SCHEMA_VERSION) return league;
+  if (v < 4) {
+    for (const se of Object.values(league.seasons)) {
+      // Seasons already scheduled keep their length; new schedules use the settings.
+      se.regWeeks ??= Math.max(1, ...se.games.filter(g => g.type === 'regular').map(g => g.week)) || 14;
+      se.settings.regWeeks ??= DEFAULT_REG_WEEKS;
+      se.settings.midweek ??= 'mixed';
+      se.settings.ncaa ??= { ...DEFAULT_NCAA };
+      if (se.post?.regionals && !se.post.cfg) se.post.cfg = { ...DEFAULT_NCAA };
+      (se.post?.regionals || []).forEach((ev, i) => { ev.path ??= i; });
+    }
+  }
   const allTeams = () => [...Object.keys(league.seasons).map(Number).sort((a, b) => a - b).map(y => league.seasons[y].teams), ...(league.draft ? [league.draft.teams] : [])];
   for (const se of Object.values(league.seasons)) {
     for (const g of se.games) { for (const k of ['pitching', 'wp', 'lp', 'sv', 'homeStarter', 'awayStarter', 'homeSlot', 'awaySlot']) delete g[k]; }

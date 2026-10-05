@@ -34,7 +34,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 
 ## The season
 
-- **Schedule:** a new one is built every season. 14 weeks and 52–55 games per team. Weeks 1–4 are non-conference weekend series. Weeks 5–14 are a conference round robin of three-game series (Friday, Saturday, Sunday). Every week from week 2 also has a Tuesday midweek game. Conference opponents who met the year before **swap home and away**.
+- **Schedule:** a new one is built every season, **12 weeks** by default (Settings → Schedule format). Weekends are three-game series. From week 2, each team also plays a **two-game midweek set** against one opponent: a **Tuesday doubleheader** or a **Tuesday and Wednesday** pair (Settings can pick one or mix both). Conference play fills the last weeks, as many as the largest conference's round robin needs, and the weeks before are non-conference. Conference opponents who met the year before **swap home and away**. A season keeps the length it was scheduled with, so changing the setting affects the next schedule.
 - **Standings:** conference record first, then head-to-head, then RPI. You can override any regular-season champion.
 - **RPI:** 25% winning percentage, 50% opponents' winning percentage (not counting games against the team) and 25% opponents' opponents' winning percentage.
 - **Rankings page:** the Top 15 poll (with a **Dropped out** list showing who fell out, their old rank and that week's record), the RPI, **strength of schedule** and power ratings. Strength of schedule is ⅔ opponents' winning percentage plus ⅓ opponents' opponents', with each team's opponents' combined record.
@@ -43,12 +43,21 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 
 ## The postseason
 
-The field is smaller than the real NCAA's 64 teams, so the format is scaled down:
+The NCAA tournament's shape is set in **Settings → NCAA tournament**, so it can change without touching the code:
 
-1. **Conference tournaments (week 15):** each conference picks **single or double elimination** and how many teams make it. By default, conferences with 9 or more teams take their top 6 and the rest take their top 4. Both are set on the Standings page. You can also switch a tournament's format or edit its seeds on the Postseason page until its first game. Double elimination has a winners bracket and an elimination bracket. The two bracket winners then meet in **one championship game, with no "if necessary" game**. The champion gets the automatic bid.
-2. **Selection:** a **16-team field**, with one automatic bid per conference and at-large picks by the committee. The committee orders teams by **RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%)**. That order picks the at-large teams and seeds the field 1–16. You can swap teams or move seeds before announcing it, and the page shows the last four in and first four out.
-3. **Regionals (week 16):** four 4-team **double-elimination** regionals hosted by the top four seeds, built serpentine (1-8-9-16, 2-7-10-15 and so on). There's a Game 7 if necessary.
-4. **Men's College World Series (week 17):** the four regional champions play double elimination down to two teams, then a **best-of-three Championship Series**. You can rename the championship in Settings.
+- **Regionals:** how many, and how many teams in each. Two-team regionals are a best-of-three series. Three to six teams play double elimination with an "if necessary" final; four is the classic NCAA format. The top national seeds host, and the field is placed serpentine (with 4 regionals: 1-8-9-16, 2-7-10-15 and so on).
+- **Qualifiers:** regionals × teams per regional. Each conference champion gets an automatic bid and the committee picks the rest.
+- **Super regionals:** used when there are twice as many regionals as MCWS spots. Two regional champions play a best-of-three series at the higher seed (the 1 seed's regional meets the last host's).
+- **Men's College World Series:** **4 teams** play double elimination down to two, then a best-of-three Championship Series. **8 teams** split into **Bracket A** (paths 1, 4, 5, 8) and **Bracket B** (2, 3, 6, 7), each a four-team double elimination with an "if necessary" bracket final. The two bracket winners then play a **best-of-three final**, as in today's baseball and softball World Series.
+
+The editor checks that the format works: the MCWS needs as many regionals as teams, or twice as many with super regionals, and the field can't be bigger than the league. A new format applies to the current season's tournament if its field hasn't been announced, and otherwise starts the next season. Once the field is announced, that season's format is locked in.
+
+The default is a 16-team field in four 4-team regionals and a 4-team MCWS. Each stage runs in the week after the last:
+
+1. **Conference tournaments:** each conference picks **single or double elimination** and how many teams make it. By default, conferences with 9 or more teams take their top 6 and the rest take their top 4. Both are set on the Standings page. You can also switch a tournament's format or edit its seeds on the Postseason page until its first game. Double elimination has a winners bracket and an elimination bracket. The two bracket winners then meet in **one championship game, with no "if necessary" game**. The champion gets the automatic bid.
+2. **Selection:** the committee orders teams by **RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%)**. That order picks the at-large teams and seeds the field. You can swap teams or move seeds before announcing it, and the page shows the last four in and first four out.
+3. **Regionals**, then **Super Regionals** if the format has them.
+4. **Men's College World Series**, plus **MCWS Finals** week for the 8-team format.
 
 The final poll comes out after the championship, with the national champion at #1.
 
@@ -89,6 +98,8 @@ Coaches are people in the dynasty, not just names on a team. Each coach has a **
 | Change the NCAA field or seeds | Postseason → Selection |
 | Edit a poll | Rankings → Edit poll |
 | New schedule (before any games) | Settings → Rebuild schedule |
+| Season length, midweek format | Settings → Schedule format |
+| Regionals, qualifiers, super regionals, MCWS size | Settings → NCAA tournament |
 
 ## Logos
 

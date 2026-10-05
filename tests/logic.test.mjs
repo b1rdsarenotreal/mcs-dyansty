@@ -1,23 +1,32 @@
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
-import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, LAST_POLL_WEEK, coachName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { setConfFormat } from '../js/postseason.js';
+import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
+import { setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal } from '../js/standings.js';
-import { REG_WEEKS } from '../js/schedule.js';
 
 const t0 = Date.now();
 const league = newLeague();
 const s = currentSeason(league);
 assert.equal(Object.keys(s.teams).length, 45);
 
-// Schedule shape
+// Schedule shape: 12 weeks, weekend series, two-game midweek sets
+assert.equal(s.regWeeks, 12);
 const reg = s.games.filter(g => g.type === 'regular');
+assert.equal(Math.max(...reg.map(g => g.week)), 12);
+assert.ok(reg.every(g => ['Fri', 'Sat', 'Sun', 'Tue', 'Wed'].includes(g.day)), 'games only on weekends, Tuesdays and Wednesdays');
+const mids = {};
+for (const g of reg.filter(g => g.day === 'Tue' || g.day === 'Wed')) (mids[g.series] ||= []).push(g);
+const midSets = Object.values(mids);
+assert.ok(midSets.every(set => set.length === 2 && set[0].home === set[1].home && set[0].away === set[1].away), 'every midweek set is two games against one opponent');
+const dh = midSets.filter(set => set.every(g => g.day === 'Tue')).length, split = midSets.filter(set => set.some(g => g.day === 'Wed')).length;
+console.log(`midweek sets: ${dh} Tuesday doubleheaders, ${split} Tuesday/Wednesday`);
+assert.ok(dh > 20 && split > 20, 'a mix of doubleheaders and Tue/Wed sets');
 const per = {};
 for (const g of reg) { per[g.home] = (per[g.home] || 0) + 1; per[g.away] = (per[g.away] || 0) + 1; assert.notEqual(g.home, g.away); }
 const counts = Object.values(per);
 const hist={}; counts.forEach(c=>hist[c]=(hist[c]||0)+1); console.log('games-per-team histogram', JSON.stringify(hist));
 console.log('games per team', Math.min(...counts), '-', Math.max(...counts), 'total', reg.length);
-assert.ok(Math.min(...counts) >= 45, 'every team plays a full schedule');
+assert.ok(Math.min(...counts) >= 50, 'every team plays a full schedule');
 for (const conf of ['Horizon', 'Big Ten', 'MAC']) {
   const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school);
   for (const t of teams) {
@@ -27,7 +36,8 @@ for (const conf of ['Horizon', 'Big Ten', 'MAC']) {
 }
 // No team plays twice on the same day
 const slot = new Set();
-for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.week}|${g.day}`; assert.ok(!slot.has(k), k); slot.add(k); }
+for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.week}|${g.day}|${g.order}`; assert.ok(!slot.has(k), k); slot.add(k); }
+for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => x !== g && x.week === g.week && x.day === g.day && !x.series !== !g.series && (x.home === t || x.away === t) && x.series !== g.series), 'one opponent per day');
 
 assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
 
@@ -75,7 +85,7 @@ assert.ok(moved > 30, 'ratings change during the season');
 assert.ok(Math.max(...drift) <= 30, 'changes stay modest');
 assert.equal(s.phase, 'complete');
 assert.ok(s.games.every(isFinal));
-for (let w = 1; w <= LAST_POLL_WEEK; w++) assert.ok(s.polls[w], `poll week ${w}`);
+for (let w = 1; w <= postWeeks(s).conf; w++) assert.ok(s.polls[w], `poll week ${w}`);
 assert.ok(s.polls.final);
 assert.equal(s.polls.final.ranks[0].team, s.post.champion);
 assert.equal(s.post.field.length, 16);
@@ -83,7 +93,7 @@ assert.equal(new Set(s.post.field.map(f => f.team)).size, 16);
 for (const ev of Object.values(s.post.confT)) assert.ok(s.post.field.some(f => f.team === ev.champion), 'auto bid in field');
 const recs = records(s), r = rpi(s);
 console.log('champion', s.post.champion, recs[s.post.champion].w + '-' + recs[s.post.champion].l, 'runner-up', s.post.runnerUp);
-console.log('MCWS', s.post.mcws.seeds.join(', '));
+console.log('MCWS', wsTeams(s).join(', '));
 console.log('final top 5', s.polls.final.ranks.slice(0, 5).map(x => `${x.team} ${x.record}`).join(' | '));
 console.log('Big Ten', confStandings(s, 'Big Ten').map(x => `${x.team} ${x.cw}-${x.cl}`).join(', '));
 const g = s.games.filter(x => x.type === 'regular');
@@ -145,4 +155,69 @@ assert.ok(s2.teams['Oregon St.']);
 simGames(s2, undefined, { autoLock: true });
 assert.equal(s2.phase, 'complete');
 console.log('2017 champion', s2.post.champion);
+
+// ---------- Tournament formats ----------
+// Each season after this one uses a different format set in the editor.
+assert.deepEqual(ncaaProblems({ regionals: 4, perRegional: 4, wsSize: 8 }, 46).length, 1, 'an 8-team MCWS needs 8 or 16 regionals');
+assert.ok(ncaaProblems({ regionals: 16, perRegional: 4, wsSize: 8 }, 46).some(x => /only 46 teams/.test(x)), 'too many qualifiers');
+function runFormat(cfg, check) {
+  currentSeason(league).settings.ncaa = cfg;
+  beginOffseason(league);
+  const se = startNextSeason(league);
+  assert.equal(se.regWeeks, 12);
+  se.settings.confFormat = {};
+  simGames(se, undefined, { autoLock: true });
+  assert.equal(se.phase, 'complete', `${se.year} finishes`);
+  assert.ok(se.games.every(isFinal), `${se.year}: every game played`);
+  assert.equal(se.post.field.length, fieldSize(cfg));
+  assert.equal(new Set(se.post.field.map(f => f.team)).size, fieldSize(cfg));
+  assert.equal(se.post.regionals.length, cfg.regionals);
+  assert.ok(se.post.regionals.every(ev => ev.seeds.length === cfg.perRegional && ev.champion));
+  assert.equal(wsTeams(se).length, cfg.wsSize);
+  assert.equal(se.polls.final.ranks[0].team, se.post.champion);
+  const W = postWeeks(se);
+  const weeks = [...new Set(se.games.filter(g => g.type !== 'regular').map(g => weekName(g.week, se)))];
+  console.log(`${se.year}: ${fieldSize(cfg)} qualifiers, ${cfg.regionals}×${cfg.perRegional}, MCWS ${cfg.wsSize} → champion ${se.post.champion} over ${se.post.runnerUp} · weeks: ${weeks.join(', ')}`);
+  check(se, W);
+}
+// 8-team MCWS: Bracket A and B, then a best-of-three final
+runFormat({ regionals: 8, perRegional: 4, wsSize: 8 }, (se, W) => {
+  const [A, B] = se.post.mcwsBrackets;
+  const q = se.post.regionals.map(ev => ev.champion);
+  assert.deepEqual(A.seeds, [q[0], q[3], q[4], q[7]], 'Bracket A: paths 1, 4, 5, 8');
+  assert.deepEqual(B.seeds, [q[1], q[2], q[5], q[6]], 'Bracket B: paths 2, 3, 6, 7');
+  assert.ok(A.champion && B.champion);
+  assert.deepEqual([...se.post.mcwsFinals.seeds].sort(), [A.champion, B.champion].sort());
+  const fin = se.games.filter(g => g.event === 'ws-F');
+  assert.ok(fin.length >= 2 && fin.length <= 3, 'finals are best of three');
+  assert.ok(fin.every(g => g.week === W.finals));
+  assert.ok(!se.post.supers, 'no super regionals');
+  assert.ok([A.champion, B.champion].includes(se.post.champion));
+});
+// Super regionals into a 4-team MCWS, with 3-team regionals
+runFormat({ regionals: 8, perRegional: 3, wsSize: 4 }, (se, W) => {
+  assert.equal(se.post.supers.length, 4);
+  for (const ev of se.post.supers) {
+    const gs = se.games.filter(g => g.event === ev.id);
+    assert.ok(gs.length >= 2 && gs.length <= 3 && gs.every(g => g.home === ev.host && g.week === W.super), 'supers: best of three at the higher seed');
+    assert.ok(ev.seeds.includes(ev.champion));
+  }
+  assert.deepEqual([...wsTeams(se)].sort(), se.post.supers.map(ev => ev.champion).sort());
+  // A 3-team double elimination never makes a team lose three times
+  for (const ev of se.post.regionals) {
+    const losses = {};
+    for (const g of se.games.filter(g => g.event === ev.id)) { const l = g.homeR > g.awayR ? g.away : g.home; losses[l] = (losses[l] || 0) + 1; }
+    assert.ok(Object.values(losses).every(n => n <= 2));
+    assert.ok((losses[ev.champion] || 0) <= 1);
+  }
+});
+// Two-team regionals (best of three) into a 4-team MCWS
+runFormat({ regionals: 4, perRegional: 2, wsSize: 4 }, se => {
+  for (const ev of se.post.regionals) assert.ok(se.games.filter(g => g.event === ev.id).length <= 3);
+});
+// 32 teams, 16 two-team regionals, 8 supers, 8-team MCWS
+runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
+  assert.equal(se.post.supers.length, 8);
+  assert.equal(se.post.mcwsBrackets.length, 2);
+});
 console.log(`ok in ${Date.now() - t0} ms`);
