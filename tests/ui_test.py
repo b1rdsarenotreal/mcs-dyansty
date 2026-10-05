@@ -53,8 +53,12 @@ try:
         pg.screenshot(path=f"{OUT}/04-standings.png", full_page=True)
         pg.goto(url + "#/rankings"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/05-poll.png", full_page=True)
+        assert pg.locator(".dropped").count() + pg.get_by_text("No teams dropped out").count() >= 1, "dropped-out list shown"
         pg.click("[data-tab=rpi]"); pg.wait_for_timeout(200)
         pg.screenshot(path=f"{OUT}/06-rpi.png")
+        pg.click("[data-tab=sos]"); pg.wait_for_timeout(200)
+        assert "Strength of schedule =" in pg.content()
+        pg.screenshot(path=f"{OUT}/06b-sos.png")
         pg.goto(url + "#/postseason"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/07-conf-tourneys.png", full_page=True)
         pg.click("#ct-sim"); pg.wait_for_timeout(800)
@@ -101,6 +105,9 @@ try:
         pg.goto(url + "#/coaches"); pg.wait_for_timeout(300)
         assert "Sam Newman" in pg.content() and "JT Gasso" in pg.content()
         pg.screenshot(path=f"{OUT}/16d-coaches.png", full_page=True)
+        pg.click("a.team-link:has-text('Roman Foore')"); pg.wait_for_timeout(300)
+        assert "Green Bay" in pg.content() and "Oklahoma" in pg.content(), "career shows both programs"
+        pg.screenshot(path=f"{OUT}/16e-coach-page.png", full_page=True)
         pg.goto(url + "#/home"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16-new-season.png", full_page=True)
         pg.goto(url + "#/history"); pg.wait_for_timeout(300)
@@ -141,7 +148,7 @@ try:
           const cut = [...document.querySelectorAll('.bg-team .team-link, .line.sb .team-link, .kpi .team-link')].filter(e => vis(e) && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent);
           return { problems: [...new Set(out)].slice(0, 12), truncated: cut.slice(0, 8), truncatedCount: cut.length };
         }"""
-        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/coaches", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/settings"]
+        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/coaches", "#/coach/c3", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/settings"]
         layout_issues = []
         for w in [1400, 1024, 768, 390]:
             lp = b.new_page(viewport={"width": w, "height": 900})

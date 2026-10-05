@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct } from './util.js?v=20261004185818';
+import { pct } from './util.js?v=20261004210717';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -68,10 +68,19 @@ export function rpi(season, filter = null) {
   const out = {};
   for (const t of teams) {
     const oowp = opps[t].length ? opps[t].reduce((s, o) => s + (owp[o] ?? 0), 0) / opps[t].length : 0;
-    out[t] = { wp: wp(t), owp: owp[t], oowp, rpi: 0.25 * wp(t) + 0.5 * owp[t] + 0.25 * oowp, games: wl[t].n };
+    // Strength of schedule: opponents' winning pct (2/3) and their
+    // opponents' (1/3), the NCAA's usual SOS formula.
+    let ow = 0, ol = 0;
+    for (const o of new Set(opps[t])) {
+      const times = opps[t].filter(x => x === o).length, a = wl[o], v = vs[o][t] || { w: 0, n: 0 };
+      if (!a) continue;
+      ow += times * (a.w - v.w); ol += times * ((a.n - v.n) - (a.w - v.w));
+    }
+    out[t] = { wp: wp(t), owp: owp[t], oowp, rpi: 0.25 * wp(t) + 0.5 * owp[t] + 0.25 * oowp, sos: (2 * owp[t] + oowp) / 3, oppW: ow, oppL: ol, games: wl[t].n };
   }
   const ranked = teams.filter(t => out[t].games).sort((a, b) => out[b].rpi - out[a].rpi);
   ranked.forEach((t, i) => { out[t].rank = i + 1; });
+  teams.filter(t => out[t].games).sort((a, b) => out[b].sos - out[a].sos).forEach((t, i) => { out[t].sosRank = i + 1; });
   return out;
 }
 

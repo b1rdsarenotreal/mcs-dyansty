@@ -4,9 +4,9 @@
 // Series (week 17: the four regional champions play double elimination down
 // to two, then a best-of-three Championship Series).
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261004185818';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004185818';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004185818';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261004210717';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004210717';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004210717';
 
 export const WEEK = { conf: 15, regional: 16, mcws: 17 };
 export const FIELD_SIZE = 16;
@@ -273,12 +273,15 @@ export function reseedConfTourney(season, conf, seeds) {
 
 // ---------- selection ----------
 
-// The committee's order: RPI rank and the latest poll, weighted 60/40.
+// The committee's order, used to pick at-large teams and seed the field:
+// RPI rank 50%, poll rank 30%, strength-of-schedule rank 20%.
+export const COMMITTEE_WEIGHTS = { rpi: 0.5, poll: 0.3, sos: 0.2 };
 export function committeeOrder(season) {
   const r = rpi(season);
   const pr = pollRankMap(latestPoll(season));
   const teams = Object.keys(season.teams);
-  const score = t => 0.6 * (r[t].rank ?? 99) + 0.4 * (pr[t] ?? 22);
+  const W = COMMITTEE_WEIGHTS;
+  const score = t => W.rpi * (r[t].rank ?? 99) + W.poll * (pr[t] ?? 22) + W.sos * (r[t].sosRank ?? 99);
   return teams.sort((a, b) => score(a) - score(b) || r[b].rpi - r[a].rpi);
 }
 

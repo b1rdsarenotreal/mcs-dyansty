@@ -365,3 +365,6 @@ select.coach-sel.vacant { border-color: var(--accent); color: var(--accent); fon
 .bk .bg-team .team-link, .bk .bg-team .team > span:last-child:not(.logo):not(.tbadge) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 .bk .bg-n.bg-r { font-size: 14px; }
 .bk .bgame { padding: 6px 9px 7px; }
+.dropped { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel-2); display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 13px; }
+.drop-item { display: inline-flex; align-items: center; gap: 6px; }
+.coach-initials { font: 700 30px var(--display); color: #fff; }

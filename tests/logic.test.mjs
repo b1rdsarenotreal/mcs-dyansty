@@ -61,6 +61,12 @@ simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
 
+// Strength of schedule is computed and ranked for every team
+const rr = rpi(s);
+assert.ok(Object.values(rr).every(x => x.sos > 0 && x.sosRank >= 1), 'every team has an SOS rank');
+const sosTop = Object.keys(rr).sort((a, b) => rr[a].sosRank - rr[b].sosRank).slice(0, 3);
+console.log('toughest schedules:', sosTop.map(t => `${t} (${s.teams[t].conference}, opp ${rr[t].oppW}-${rr[t].oppL})`).join('; '));
+
 // Ratings moved with results
 const moved = Object.entries(s.teams).filter(([k, t]) => t.off !== pre[k].off || t.pit !== pre[k].pit || t.def !== pre[k].def).length;
 const drift = Object.entries(s.teams).map(([k, t]) => Math.abs(t.off - pre[k].off) + Math.abs(t.pit - pre[k].pit) + Math.abs(t.def - pre[k].def));

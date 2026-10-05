@@ -36,6 +36,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 - **Schedule:** a new one is built every season. 14 weeks and 52–55 games per team. Weeks 1–4 are non-conference weekend series. Weeks 5–14 are a conference round robin of three-game series (Friday, Saturday, Sunday). Every week from week 2 also has a Tuesday midweek game. Conference opponents who met the year before **swap home and away**.
 - **Standings:** conference record first, then head-to-head, then RPI. You can override any regular-season champion.
 - **RPI:** 25% winning percentage, 50% opponents' winning percentage (not counting games against the team) and 25% opponents' opponents' winning percentage.
+- **Rankings page:** the Top 15 poll (with a **Dropped out** list showing who fell out, their old rank and that week's record), the RPI, **strength of schedule** and power ratings. Strength of schedule is ⅔ opponents' winning percentage plus ⅓ opponents' opponents', with each team's opponents' combined record.
 - **Top 15 poll:** 40 simulated voters release a poll each week, starting with a preseason poll. Early in the season they lean on OVR, and later on record and RPI. They remember last week's poll, so teams move the way real polls do. Each poll shows points, first-place votes and others receiving votes. You can edit or regenerate any poll.
 - **Ranks at game time:** played games on the Schedule and team pages show each team's rank from the poll in effect when the game was played. Week 1 games use the preseason poll. Games not yet played show the latest poll.
 
@@ -44,7 +45,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 The field is smaller than the real NCAA's 64 teams, so the format is scaled down:
 
 1. **Conference tournaments (week 15):** each conference picks **single or double elimination** and how many teams make it. By default, conferences with 9 or more teams take their top 6 and the rest take their top 4. Both are set on the Standings page. You can also switch a tournament's format or edit its seeds on the Postseason page until its first game. Double elimination has a winners bracket and an elimination bracket. The two bracket winners then meet in **one championship game, with no "if necessary" game**. The champion gets the automatic bid.
-2. **Selection:** a **16-team field**, with one automatic bid per conference and at-large picks by the committee: **RPI rank 60%, poll rank 40%**. The field is seeded 1–16. You can swap teams or move seeds before announcing it, and the page shows the last four in and first four out.
+2. **Selection:** a **16-team field**, with one automatic bid per conference and at-large picks by the committee. The committee orders teams by **RPI rank (50%), poll rank (30%) and strength-of-schedule rank (20%)**. That order picks the at-large teams and seeds the field 1–16. You can swap teams or move seeds before announcing it, and the page shows the last four in and first four out.
 3. **Regionals (week 16):** four 4-team **double-elimination** regionals hosted by the top four seeds, built serpentine (1-8-9-16, 2-7-10-15 and so on). There's a Game 7 if necessary.
 4. **Men's College World Series (week 17):** the four regional champions play double elimination down to two teams, then a **best-of-three Championship Series**. You can rename the championship in Settings.
 
@@ -67,7 +68,7 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 
 ## Coaches
 
-Coaches are people in the dynasty, not just names on a team. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
+Coaches are people in the dynasty, not just names on a team. Each coach has a **profile page** with his career record, titles, a season-by-season table across every program he has led, and a way to hire him if he's available. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
 
 ## Commissioner controls
 
