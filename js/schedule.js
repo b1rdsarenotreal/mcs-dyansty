@@ -1,17 +1,19 @@
 // Regular-season schedule. Its length comes from the season's settings
 // (12 weeks by default). The last weeks are conference series (round robin,
 // three games each); there are as many as the largest conference needs, and
-// the weeks before them are non-conference weekend series. From week 2 on,
-// every team also plays a two-game midweek set: a Tuesday doubleheader or a
+// the weeks before them are non-conference weekend series. From week 4
+// (a setting) until the week before the last, every team also plays a
+// two-game midweek set: a Tuesday doubleheader or a
 // Tuesday and Wednesday game against the same opponent (or, in older
 // seasons, a single Tuesday game). Teams without a conference series in a
 // week get a non-conference series.
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261005150016';
+import { rng, shuffle, hashStr } from './util.js?v=20261005153206';
 
 export const DEFAULT_REG_WEEKS = 12;
+export const DEFAULT_MIDWEEK_START = 4;
 export const MIDWEEK = { single: 'One game on Tuesday', doubleheader: 'Tuesday doubleheader', split: 'Tuesday and Wednesday', mixed: 'Mix of both' };
 
 // Conference weeks for a season of `regWeeks` weeks whose largest
@@ -47,14 +49,18 @@ export function roundRobin(teams, r) {
 }
 
 // Pair teams across conferences, avoiding repeat opponents when possible.
-function crossPairs(pool, teams, met, r, played = null) {
-  // With an odd number, the team that has played the most sits out.
+function crossPairs(pool, teams, met, r, played = null, sat = null) {
+  // With an odd number, one team sits out: whoever has played the most,
+  // then whoever has sat out least.
   let idle = [];
   if (pool.length % 2 && played) {
     const most = Math.max(...pool.map(t => played[t]));
-    const cands = pool.filter(t => played[t] === most);
+    const top = pool.filter(t => played[t] === most);
+    const fewest = Math.min(...top.map(t => sat?.[t] || 0));
+    const cands = top.filter(t => (sat?.[t] || 0) === fewest);
     idle = [cands[Math.floor(r() * cands.length)]];
     pool = pool.filter(t => t !== idle[0]);
+    if (sat) sat[idle[0]] = (sat[idle[0]] || 0) + 1;
   }
   for (let attempt = 0; attempt < 200; attempt++) {
     const left = shuffle(pool, r), pairs = [];
@@ -108,6 +114,8 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
 
   const REG = season.settings?.regWeeks ?? DEFAULT_REG_WEEKS;
   const midweek = season.settings?.midweek ?? 'mixed';
+  const midStart = season.settings?.midweekStart ?? DEFAULT_MIDWEEK_START;
+  const midSkipLast = season.settings?.midweekSkipLast ?? true;
   season.regWeeks = REG;
   const byConf = {};
   for (const n of names) (byConf[teams[n].conference] ||= []).push(n);
@@ -115,19 +123,26 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   const confWeeks = confWeeksFor(REG, Math.max(0, ...Object.values(byConf).map(l => rrRounds(l.length))));
   const NONCONF = REG - confWeeks;
   const weekPairs = {}; // week -> conference pairs
-  for (const [conf, list] of Object.entries(byConf)) {
+  // Conferences' open weeks are staggered so that every conference week has
+  // some teams free for non-conference series (otherwise a team with a bye
+  // can be left without an opponent).
+  const openCount = Array(confWeeks).fill(0);
+  const confOrder = Object.entries(byConf).sort((a, b) => rrRounds(a[1].length) - rrRounds(b[1].length) || a[0].localeCompare(b[0]));
+  for (const [conf, list] of confOrder) {
     if (list.length < 2) continue;
     let rounds = roundRobin(list, r);
     if (rounds.length > confWeeks) rounds = rounds.slice(0, confWeeks);
-    // Spread open weeks through the conference season.
     const weeks = [];
     const open = confWeeks - rounds.length;
-    const openWeeks = new Set(shuffle([...Array(confWeeks).keys()].slice(1), r).slice(0, open));
+    const slots = shuffle([...Array(confWeeks).keys()], r).sort((a, b) => openCount[a] - openCount[b]);
+    const openWeeks = new Set(slots.slice(0, open));
+    for (const w of openWeeks) openCount[w]++;
     for (let w = 0; w < confWeeks; w++) if (!openWeeks.has(w)) weeks.push(NONCONF + 1 + w);
     rounds.forEach((pairs, i) => { (weekPairs[weeks[i]] ||= []).push(...pairs.filter(([a, b]) => a && b).map(p => [...p, conf])); });
   }
 
   let midNo = 1;
+  const satWeekend = {}, satMid = {};
   for (let week = 1; week <= REG; week++) {
     const busy = new Set();
     for (const [a, b] of weekPairs[week] || []) {
@@ -135,11 +150,11 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
       addSeries(week, h, aw, true); busy.add(a); busy.add(b);
     }
     const free = names.filter(n => !busy.has(n));
-    const { pairs } = crossPairs(free, teams, metSeries, r, played);
+    const { pairs } = crossPairs(free, teams, metSeries, r, played, satWeekend);
     for (const [a, b] of pairs) { const [h, aw] = orient(a, b); addSeries(week, h, aw, false); }
 
-    if (week >= 2) {
-      const { pairs: mids } = crossPairs(names, teams, metMid, r, played);
+    if (week >= midStart && week <= REG - (midSkipLast ? 1 : 0)) {
+      const { pairs: mids } = crossPairs(names, teams, metMid, r, played, satMid);
       for (const [a, b] of mids) {
         const [h, aw] = orient(a, b);
         const fmt = midweek === 'mixed' ? (r() < 0.5 ? 'doubleheader' : 'split') : midweek;

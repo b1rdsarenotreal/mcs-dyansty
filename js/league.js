@@ -1,21 +1,21 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261005150016';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261005150016';
-import { simulateGame } from './sim.js?v=20261005150016';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261005150016';
-import { replayRatings, ensureBase } from './ratings.js?v=20261005150016';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA } from './postseason.js?v=20261005150016';
-import { isFinal } from './standings.js?v=20261005150016';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261005150016';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261005153206';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261005153206';
+import { simulateGame } from './sim.js?v=20261005153206';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261005153206';
+import { replayRatings, ensureBase } from './ratings.js?v=20261005153206';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA } from './postseason.js?v=20261005153206';
+import { isFinal } from './standings.js?v=20261005153206';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261005153206';
 
 export const SCHEMA_VERSION = 4;
 
 export function defaultSettings() {
   return {
     volatility: 1, runRule: true, tiebreaker: true, confTourney: {}, confFormat: {}, mcwsName: "Men's College World Series", development: 'normal', form: 'normal',
-    regWeeks: DEFAULT_REG_WEEKS, midweek: 'mixed', ncaa: { ...DEFAULT_NCAA },
+    regWeeks: DEFAULT_REG_WEEKS, midweek: 'mixed', midweekStart: 4, midweekSkipLast: true, ncaa: { ...DEFAULT_NCAA },
   };
 }
 

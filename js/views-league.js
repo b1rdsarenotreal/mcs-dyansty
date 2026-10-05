@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005150016';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005150016';
-import { ovr } from './sim.js?v=20261005150016';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005150016';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005150016';
-import { setRating } from './ratings.js?v=20261005150016';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005150016';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005150016';
-import { exportLeague, clearLeague } from './store.js?v=20261005150016';
-import { clamp } from './util.js?v=20261005150016';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005153206';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005153206';
+import { ovr } from './sim.js?v=20261005153206';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005153206';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005153206';
+import { setRating } from './ratings.js?v=20261005153206';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005153206';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005153206';
+import { exportLeague, clearLeague } from './store.js?v=20261005153206';
+import { clamp } from './util.js?v=20261005153206';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -523,6 +523,15 @@ export function renderHistory() {
 
 // ---------- Settings ----------
 
+// Rough games per team for the schedule settings (a week off here and there
+// for teams left without a weekend opponent).
+function gamesEstimate(cs) {
+  const R = cs.regWeeks ?? 12, start = cs.midweekStart ?? 4, skip = (cs.midweekSkipLast ?? true) ? 1 : 0;
+  const mid = Math.max(0, R - skip - start + 1) * ((cs.midweek ?? 'mixed') === 'single' ? 1 : 2);
+  const top = R * 3 + mid;
+  return `${top - 3}–${top}`;
+}
+
 export function renderSettings() {
   const L = ctx.league, s = S(), st = s.settings;
   const isCurrent = L.viewYear === L.currentYear;
@@ -557,7 +566,10 @@ export function renderSettings() {
       <div class="card stack"><h2>Schedule format</h2>
         <label class="field">Regular-season weeks <input type="number" id="s-weeks" min="8" max="16" value="${cs.regWeeks ?? DEFAULT_REG_WEEKS}"></label>
         <label class="field">Midweek games <select id="s-mid">${Object.entries(MIDWEEK).map(([k, l]) => `<option value="${k}" ${(cs.midweek ?? 'mixed') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; from week 2 each team also plays a two-game midweek set (a Tuesday doubleheader or Tuesday and Wednesday games against one opponent). Conference play fills the last weeks, as many as the largest conference needs.</p>
+        <label class="field">Midweek games start in <select id="s-midstart">${Array.from({ length: 6 }, (_, i) => i + 1).map(w => `<option value="${w}" ${(cs.midweekStart ?? 4) === w ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></label>
+        <label class="check"><input type="checkbox" id="s-midskip" ${(cs.midweekSkipLast ?? true) ? 'checked' : ''}> No midweek games in the last regular-season week</label>
+        <p class="small">About <b>${gamesEstimate(cs)}</b> games per team.</p>
+        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; midweek sets are two games against one opponent (a Tuesday doubleheader or Tuesday and Wednesday games). Conference play fills the last weeks, as many as the largest conference needs.</p>
       </div>
       <div class="card stack ncaa-card"><h2>NCAA tournament</h2>
         <label class="field">Men's College World Series <select id="n-ws">${[[4, '4 teams: double elimination to two, then a best-of-three final'], [8, '8 teams: Bracket A and Bracket B, then a best-of-three final']].map(([v, l]) => `<option value="${v}" ${nc.wsSize === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -578,6 +590,8 @@ export function renderSettings() {
   $('#s-poll').onchange = e => { cs.pollSize = +e.target.value; changed({ progress: false }); toast(`Polls from now on will be a Top ${cs.pollSize}.`); };
   $('#s-weeks').onchange = e => { cs.regWeeks = Math.max(8, Math.min(16, Math.round(Number(e.target.value) || DEFAULT_REG_WEEKS))); changed({ progress: false }); toast(`New schedules will run ${cs.regWeeks} weeks.`); };
   $('#s-mid').onchange = e => { cs.midweek = e.target.value; changed({ progress: false }); };
+  $('#s-midstart').onchange = e => { cs.midweekStart = +e.target.value; changed({ progress: false }); };
+  $('#s-midskip').onchange = e => { cs.midweekSkipLast = e.target.checked; changed({ progress: false }); };
   const draft = () => (ui.ncaaDraft ||= { ...nc });
   $('#n-ws').onchange = e => { const d = draft(); d.wsSize = +e.target.value; if (d.regionals !== d.wsSize && d.regionals !== d.wsSize * 2) d.regionals = d.wsSize === 8 ? 8 : 4; renderSettings(); };
   $('#n-reg').onchange = e => { draft().regionals = +e.target.value; renderSettings(); };

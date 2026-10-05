@@ -20,13 +20,15 @@ const midSets = Object.values(mids);
 assert.ok(midSets.every(set => set.length === 2 && set[0].home === set[1].home && set[0].away === set[1].away), 'every midweek set is two games against one opponent');
 const dh = midSets.filter(set => set.every(g => g.day === 'Tue')).length, split = midSets.filter(set => set.some(g => g.day === 'Wed')).length;
 console.log(`midweek sets: ${dh} Tuesday doubleheaders, ${split} Tuesday/Wednesday`);
-assert.ok(dh > 20 && split > 20, 'a mix of doubleheaders and Tue/Wed sets');
+assert.ok(dh > 15 && split > 15, 'a mix of doubleheaders and Tue/Wed sets');
 const per = {};
 for (const g of reg) { per[g.home] = (per[g.home] || 0) + 1; per[g.away] = (per[g.away] || 0) + 1; assert.notEqual(g.home, g.away); }
 const counts = Object.values(per);
 const hist={}; counts.forEach(c=>hist[c]=(hist[c]||0)+1); console.log('games-per-team histogram', JSON.stringify(hist));
 console.log('games per team', Math.min(...counts), '-', Math.max(...counts), 'total', reg.length);
-assert.ok(Math.min(...counts) >= 50, 'every team plays a full schedule');
+assert.ok(Math.min(...counts) >= 46 && Math.max(...counts) <= 52, 'about 48-52 games per team');
+assert.ok(counts.filter(c => c >= 48).length >= counts.length - 2, 'nearly every team plays 48-52');
+assert.ok(!reg.some(g => (g.day === 'Tue' || g.day === 'Wed') && (g.week < 4 || g.week === 12)), 'midweek games run weeks 4-11');
 for (const conf of ['Horizon', 'Big Ten', 'MAC']) {
   const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school);
   for (const t of teams) {
