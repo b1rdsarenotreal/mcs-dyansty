@@ -4,9 +4,9 @@
 // Series (week 17: the four regional champions play double elimination down
 // to two, then a best-of-three Championship Series).
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261004210717';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004210717';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004210717';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261004212143';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261004212143';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261004212143';
 
 export const WEEK = { conf: 15, regional: 16, mcws: 17 };
 export const FIELD_SIZE = 16;

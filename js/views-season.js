@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004210717';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004210717';
-import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004210717';
-import { ovr } from './sim.js?v=20261004210717';
-import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004210717';
-import { REG_WEEKS } from './schedule.js?v=20261004210717';
-import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004210717';
-import { fmtPct } from './util.js?v=20261004210717';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261004212143';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261004212143';
+import { latestPoll, generatePoll, pollRankMap, POLL_SIZE } from './polls.js?v=20261004212143';
+import { ovr } from './sim.js?v=20261004212143';
+import { simGames, addGame, weekName, LAST_POLL_WEEK } from './league.js?v=20261004212143';
+import { REG_WEEKS } from './schedule.js?v=20261004212143';
+import { WEEK, FIELD_SIZE, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261004212143';
+import { fmtPct, hashStr } from './util.js?v=20261004212143';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -78,7 +78,11 @@ export function renderSchedule() {
   const s = S();
   const weeks = weeksOf(s);
   if (ui.week === null || !weeks.includes(ui.week)) ui.week = nextGame(s)?.week ?? weeks[weeks.length - 1] ?? 1;
-  const games = s.games.filter(g => g.week === ui.week).sort((a, b) => a.order - b.order || a.id - b.id);
+  // Within a day, mix conferences like a real scoreboard. The sort key comes
+  // from the series (or the game), so a weekend series keeps its spot
+  // Friday through Sunday and the order stays the same between visits.
+  const mixKey = g => hashStr(`${s.year}|${g.series || 'g' + g.id}`);
+  const games = s.games.filter(g => g.week === ui.week).sort((a, b) => a.order - b.order || (a.type === 'regular' && b.type === 'regular' ? mixKey(a) - mixKey(b) : 0) || a.id - b.id);
   const unplayed = games.filter(g => !isFinal(g));
   const days = [...new Set(games.map(g => g.day))];
   const firstOpenDay = unplayed[0]?.day;
