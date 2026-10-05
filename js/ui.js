@@ -1,15 +1,15 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261004212143';
-import { logoFor } from './logos.js?v=20261004212143';
-import { LOGO_ALIASES } from './data.js?v=20261004212143';
-import { ovr, winProbability } from './sim.js?v=20261004212143';
-import { records, isFinal, winnerOf } from './standings.js?v=20261004212143';
-import { latestPoll, pollRankMap } from './polls.js?v=20261004212143';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004212143';
-import { DAY_ORDER } from './schedule.js?v=20261004212143';
-import { esc } from './util.js?v=20261004212143';
+import { saveLeague } from './store.js?v=20261004212524';
+import { logoFor } from './logos.js?v=20261004212524';
+import { LOGO_ALIASES } from './data.js?v=20261004212524';
+import { ovr, winProbability } from './sim.js?v=20261004212524';
+import { records, isFinal, winnerOf } from './standings.js?v=20261004212524';
+import { latestPoll, pollRankMap } from './polls.js?v=20261004212524';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261004212524';
+import { DAY_ORDER } from './schedule.js?v=20261004212524';
+import { esc } from './util.js?v=20261004212524';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -43,7 +43,7 @@ export function toast(msg, error = false) {
 // Per-render caches.
 export const cache = {
   _recs: null, _ranks: null,
-  reset() { this._recs = null; this._ranks = null; this._at = {}; },
+  reset() { this._recs = null; this._ranks = null; this._at = {}; this._series = null; },
   recs() { return (this._recs ||= records(S())); },
   ranks() { return (this._ranks ||= pollRankMap(latestPoll(S()))); },
   // Ranks as they stood when a game in `week` was played: the most recent
@@ -166,7 +166,7 @@ export function gameCard(g) {
       <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
       ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
-  const head = `<div class="line sb head" style="--q:${n}"><div></div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
+  const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
   let meta = '';
   if (g.label) meta += `<span class="badge gold">${esc(g.label.split(' · ').slice(-1)[0])}</span>`;
   if (fin) {
@@ -182,6 +182,46 @@ export function gameCard(g) {
   const confAttrs = conf ? ` conf-game" style="--cc:${esc(confColor(conf))}` : '';
   const corner = conf ? `<a class="corner-logo" href="${confHref(conf)}" title="${esc(conf)}${confGame ? ' game' : ' Tournament'}">${confLogo(conf, 20)}</a>` : '';
   return `<div class="game${confAttrs}" data-game="${g.id}" tabindex="0">${corner}${head}${line(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${line(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}<div class="meta">${meta}</div></div>`;
+}
+
+// ---------- series tally ----------
+// Weekend series (and the MCWS Championship Series): where it stands after
+// this game, or going into it if it hasn't been played.
+function seriesKey(g) {
+  if (g.series) return g.series;
+  if (g.type === 'mcws' && /^F\d/.test(g.node || '')) return `${g.event}-finals`;
+  return null;
+}
+export function seriesStatus(g, maxChars = 31) {
+  const key = seriesKey(g);
+  if (!key) return '';
+  const s = S();
+  cache._series ||= {};
+  const all = (cache._series[key] ||= s.games.filter(x => seriesKey(x) === key).sort((a, b) => a.order - b.order || a.id - b.id));
+  if (all.length < 2 && g.type !== 'mcws') return '';
+  const idx = all.indexOf(g);
+  const fin = isFinal(g);
+  const upto = all.slice(0, fin ? idx + 1 : idx).filter(isFinal);
+  const wins = {};
+  for (const x of upto) { const w = winnerOf(x); wins[w] = (wins[w] || 0) + 1; }
+  const wa = wins[g.home] || 0, wb = wins[g.away] || 0;
+  const leader = wa > wb ? g.home : g.away, hi = Math.max(wa, wb), lo = Math.min(wa, wb);
+  // Full school name when the sentence fits the corner; the abbreviation when it doesn't.
+  const fits = t => `${t} leads series 10-10`.length <= maxChars;
+  const name = t => (fits(t) ? `<span class="tn-full">${esc(t)}</span><span class="tn-abbr">${esc(teamInfo(t)?.abbr || t)}</span>` : esc(teamInfo(t)?.abbr || t));
+  // Weekend series play every game; the MCWS finals stop at two wins.
+  const total = g.type === 'mcws' ? 3 : all.length;
+  const left = total - upto.length;
+  const clinched = g.type === 'mcws' ? hi >= 2 : hi > lo + left;
+  const over = g.type === 'mcws' ? clinched : left === 0;
+  let text;
+  if (!upto.length) text = g.type === 'mcws' ? 'Championship Series · best of 3' : `Game 1 of ${total}`;
+  else if (wa === wb) text = over ? `Series split ${wa}-${wb}` : `Series tied ${wa}-${wb}`;
+  else if (clinched) text = `${name(leader)} wins series ${hi}-${lo}`;
+  else text = `${name(leader)} leads series ${hi}-${lo}`;
+  const prefix = !fin && upto.length ? `Game ${idx + 1} · ` : '';
+  const plain = (prefix + text.replace(/<span class="tn-full">([^<]*)<\/span><span class="tn-abbr">[^<]*<\/span>/g, '$1')).replace(/<[^>]+>/g, '');
+  return `<span class="series-text" title="${esc(plain)}">${prefix}${text}</span>`;
 }
 
 export function bindGameCards(root = app) {

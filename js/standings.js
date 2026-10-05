@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct } from './util.js?v=20261004212143';
+import { pct } from './util.js?v=20261004212524';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);

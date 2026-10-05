@@ -144,6 +144,7 @@ try:
           }
           // Bracket cards must hold their content.
           for (const el of document.querySelectorAll('.bk-node > .bgame')) if (el.scrollHeight > el.clientHeight + 1) out.push('bracket card overflows: ' + name(el));
+          for (const el of document.querySelectorAll('.series-tag')) if (vis(el) && el.scrollWidth > el.clientWidth + 1) out.push('series text cut off: ' + name(el));
           // Truncated names (not an error, but counted).
           const cut = [...document.querySelectorAll('.bg-team .team-link, .line.sb .team-link, .kpi .team-link')].filter(e => vis(e) && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent);
           return { problems: [...new Set(out)].slice(0, 12), truncated: cut.slice(0, 8), truncatedCount: cut.length };

@@ -368,3 +368,7 @@ select.coach-sel.vacant { border-color: var(--accent); color: var(--accent); fon
 .dropped { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel-2); display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 13px; }
 .drop-item { display: inline-flex; align-items: center; gap: 6px; }
 .coach-initials { font: 700 30px var(--display); color: #fff; }
+/* Series tally in the empty top-left corner of a game box */
+.game .line.sb.head .series-tag { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 10.5px var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); align-self: center; }
+.game .line.sb.head .series-tag .tn-abbr { display: none; }
+@container (max-width: 380px) { .game .line.sb.head .series-tag .tn-full { display: none; } .game .line.sb.head .series-tag .tn-abbr { display: inline; } }
