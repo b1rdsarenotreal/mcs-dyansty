@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct } from './util.js?v=20261005225714';
+import { pct, hashStr } from './util.js?v=20261005230901';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -84,40 +84,90 @@ export function rpi(season, filter = null) {
   return out;
 }
 
-function h2h(season, group) {
-  const set = new Set(group), res = {};
-  for (const t of group) res[t] = { w: 0, l: 0 };
+// Conference games only: each team's record against a set of opponents.
+function recordVs(season, teams, opps) {
+  const tset = new Set(teams), oset = new Set(opps), res = {};
+  for (const t of teams) res[t] = { w: 0, l: 0 };
   for (const g of season.games) {
-    if (!isFinal(g) || g.type !== 'regular' || !g.confGame || !set.has(g.home) || !set.has(g.away)) continue;
-    const w = winnerOf(g), l = loserOf(g);
-    res[w].w++; res[l].l++;
+    if (!isFinal(g) || g.type !== 'regular' || !g.confGame) continue;
+    for (const [t, o] of [[g.home, g.away], [g.away, g.home]]) {
+      if (!tset.has(t) || !oset.has(o) || t === o) continue;
+      winnerOf(g) === t ? res[t].w++ : res[t].l++;
+    }
   }
   return res;
 }
 
-// Conference table, best first, with games-back.
+// Split `group` into tiers by a score (higher first). Returns null when the
+// score doesn't separate anyone.
+function tiers(group, score) {
+  const vals = new Map(group.map(t => [t, score(t)]));
+  const distinct = [...new Set(vals.values())].sort((a, b) => b - a);
+  if (distinct.length < 2) return null;
+  return distinct.map(v => group.filter(t => vals.get(t) === v));
+}
+
+export const TIEBREAKERS = [
+  'Conference winning percentage',
+  'Head-to-head among all the tied teams (teams still tied start over with head-to-head among just them)',
+  'Winning percentage against common conference opponents, starting with the highest-placed opponent and working down',
+  'RPI',
+  'Coin flip',
+];
+
+// Order teams tied on conference winning percentage. Each step that splits
+// the group sends every smaller group that is still tied back to
+// head-to-head. `why[t]` records the step that last separated a team.
+function breakTie(season, conf, group, others, r, why) {
+  if (group.length < 2) return group;
+  const recurse = (split, label) => split.flatMap(sub => {
+    if (sub.length === 1) { why[sub[0]] = label; return sub; }
+    for (const t of sub) why[t] = label;
+    return breakTie(season, conf, sub, others, r, why);
+  });
+  // Head-to-head, only when every tied team has played the others.
+  const hh = recordVs(season, group, group);
+  if (group.every(t => hh[t].w + hh[t].l > 0)) {
+    const split = tiers(group, t => pct(hh[t].w, hh[t].l));
+    if (split) return recurse(split, { step: 'h2h', text: 'Head-to-head' });
+  }
+  // Common opponents, from the top of the standings down. Opponents tied
+  // with each other are taken together.
+  const vs = t => new Set(season.games.filter(g => isFinal(g) && g.type === 'regular' && g.confGame && (g.home === t || g.away === t)).map(g => (g.home === t ? g.away : g.home)));
+  const played = group.map(vs);
+  for (const block of others) {
+    const common = block.filter(o => played.every(p => p.has(o)));
+    if (!common.length) continue;
+    const rec = recordVs(season, group, common);
+    const split = tiers(group, t => pct(rec[t].w, rec[t].l));
+    if (split) return recurse(split, { step: 'common', text: `Record vs ${common.join(', ')}` });
+  }
+  const byRpi = tiers(group, t => r[t]?.rpi ?? 0);
+  if (byRpi) return recurse(byRpi, { step: 'rpi', text: 'RPI' });
+  // Coin flip: fixed for the season, so the order doesn't change on reload.
+  const flip = t => hashStr(`${season.year}|${conf}|${[...group].sort().join('|')}|${t}`);
+  for (const t of group) why[t] = { step: 'coin', text: 'Coin flip' };
+  return [...group].sort((a, b) => flip(a) - flip(b));
+}
+
+// Conference table, best first, with games-back. Each row's `tb` says which
+// tiebreaker placed it, when it was tied.
 export function confStandings(season, conf, recs = records(season), r = rpi(season)) {
   const teams = Object.values(season.teams).filter(t => t.conference === conf).map(t => t.school);
   const cp = t => pct(recs[t].cw, recs[t].cl);
-  const sorted = [...teams].sort((a, b) => cp(b) - cp(a) || recs[b].cw - recs[a].cw);
-  // Break ties: head-to-head within the tied group, then RPI.
-  const out = [];
-  for (let i = 0; i < sorted.length;) {
-    let j = i + 1;
-    while (j < sorted.length && cp(sorted[j]) === cp(sorted[i]) && recs[sorted[j]].cw === recs[sorted[i]].cw) j++;
-    const grp = sorted.slice(i, j);
-    if (grp.length > 1) {
-      const hh = h2h(season, grp);
-      grp.sort((a, b) => pct(hh[b].w, hh[b].l) - pct(hh[a].w, hh[a].l) || (r[b]?.rpi ?? 0) - (r[a]?.rpi ?? 0));
-    }
-    out.push(...grp);
-    i = j;
+  const groups = [];
+  for (const t of [...teams].sort((a, b) => cp(b) - cp(a) || a.localeCompare(b))) {
+    const last = groups[groups.length - 1];
+    if (last && cp(last[0]) === cp(t)) last.push(t); else groups.push([t]);
   }
+  const why = {};
+  const out = groups.flatMap(g => breakTie(season, conf, g, groups.filter(x => x !== g), r, why));
   const lead = out[0];
   return out.map(t => ({
     team: t, ...recs[t],
     gb: lead ? ((recs[lead].cw - recs[t].cw) + (recs[t].cl - recs[lead].cl)) / 2 : 0,
     rpiRank: r[t]?.rank ?? null,
+    tb: why[t] || null,
   }));
 }
 

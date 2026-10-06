@@ -68,6 +68,22 @@ for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => 
   assert.ok(g.homeH + g.homeE + g.awayE >= 0 && g.heEstimated);
   g.final = false; g.homeR = g.awayR = null; g.homeLine = []; g.awayLine = []; g.source = null; delete g.heEstimated;
 }
+// Conference tiebreakers: pct, head-to-head (restarting for teams still
+// tied), common opponents from the top down, RPI, coin flip.
+{
+  const teams = {};
+  for (const t of 'ABCDE') teams[t] = { school: t, conference: 'X' };
+  for (const t of 'FG') teams[t] = { school: t, conference: 'Y' };
+  const games = [['A', 'B'], ['B', 'C'], ['C', 'A'], ['A', 'D'], ['D', 'B'], ['D', 'C'], ['E', 'A'], ['B', 'E'], ['C', 'E']]
+    .map(([w, l], i) => ({ id: i, type: 'regular', confGame: true, final: true, week: 1, order: i, home: w, away: l, homeR: 2, awayR: 1 }));
+  const mini = { year: 2030, teams, games };
+  const st = confStandings(mini, 'X', records(mini), rpi(mini));
+  assert.deepEqual(st.map(x => x.team), ['D', 'A', 'B', 'C', 'E'], 'three-way tie: common opponent D breaks it, then B beats C head-to-head');
+  assert.equal(st[1].tb.step, 'common'); assert.equal(st[2].tb.step, 'h2h'); assert.equal(st[3].tb.step, 'h2h'); assert.equal(st[0].tb, null);
+  const y = confStandings(mini, 'Y', records(mini), rpi(mini));
+  assert.ok(y.every(x => x.tb.step === 'coin'), 'nothing else separates them: coin flip');
+  assert.deepEqual(confStandings(mini, 'Y', records(mini), rpi(mini)).map(x => x.team), y.map(x => x.team), 'the coin flip is the same every time');
+}
 assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
 assert.equal(Object.keys(s.polls[0].ballots).length, 23, '23 voters each turn in a ballot');
 assert.ok(Object.values(s.polls[0].ballots).every(b => b.length === 15 && new Set(b).size === 15));
