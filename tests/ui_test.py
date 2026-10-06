@@ -80,6 +80,12 @@ try:
         pg.screenshot(path=f"{OUT}/06b-sos.png")
         pg.goto(url + "#/postseason"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/07-conf-tourneys.png", full_page=True)
+        # change a tournament host
+        sel = pg.locator("select[data-host='MAC']")
+        opts = sel.locator("option").all_inner_texts(); cur = sel.input_value()
+        new_host = next(o for o in opts if o != cur)
+        sel.select_option(new_host); pg.wait_for_timeout(300)
+        assert f"Hosted by {new_host}" in pg.locator(".card", has_text="MAC Tournament").first.inner_text().replace("\n", " "), "host changed"
         pg.click("#ct-sim"); pg.wait_for_timeout(800)
         pg.goto(url + "#/postseason"); pg.click("[data-pt=conf]"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/07b-conf-brackets.png", full_page=True)

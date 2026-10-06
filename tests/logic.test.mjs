@@ -1,8 +1,8 @@
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
-import { estimateHE, backfillHitsErrors, applyResult } from '../js/league.js';
+import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
+import { setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp } from '../js/standings.js';
 
 const t0 = Date.now();
@@ -122,7 +122,10 @@ for (const [conf, ev] of Object.entries(s.post.confT)) {
     const nonChampLosses = Object.entries(losses).filter(([t]) => t !== ev.champion);
     assert.ok(nonChampLosses.length >= ev.size - 1, `${conf}: every other team lost`);
   }
-  console.log(`${conf} (${ev.kind}, ${ev.size} teams): ${gs.length} games, champion ${ev.champion}`);
+  // Tournament host: a school in the conference; the host is at home, every other game is at its site (neutral).
+  assert.equal(s.teams[ev.host]?.conference, conf, `${conf}: host is in the conference`);
+  for (const g of gs) assert.ok((g.home === ev.host || g.away === ev.host) ? (!g.neutral && g.home === ev.host) : g.neutral, `${conf}: game site follows the host`);
+  console.log(`${conf} (${ev.kind}, ${ev.size} teams): ${gs.length} games, champion ${ev.champion}, at ${ev.host}`);
 }
 assert.equal(s.post.confT['Big Ten'].kind, 'double');
 assert.equal(s.post.confT['Big Ten'].size, 8);
@@ -131,6 +134,21 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
+
+// Changing a host rebuilds the games not yet played at the new site.
+{
+  const L2 = newLeague(), s2 = currentSeason(L2);
+  simGames(s2, g => g.type === 'regular');
+  const ev = s2.post.confT['Big Ten'];
+  const other = Object.values(s2.teams).find(t => t.conference === 'Big Ten' && t.school !== ev.host && ev.seeds.includes(t.school)).school;
+  setConfHost(s2, 'Big Ten', other); afterChange(s2);
+  assert.equal(ev.host, other);
+  const gs = s2.games.filter(g => g.event === ev.id);
+  assert.ok(gs.length && gs.every(g => (g.home === other || g.away === other) ? g.home === other && !g.neutral : g.neutral), 'new host is home, others at its site');
+  // Next season picks new hosts, not last year's when there's a choice.
+  const nxt = newSeason(s2.year + 1, JSON.parse(JSON.stringify(s2.teams)), s2.settings, s2);
+  for (const c of Object.keys(s2.confHosts)) assert.notEqual(nxt.confHosts[c], s2.confHosts[c], `${c}: new host next year`);
+}
 
 // Strength of schedule is computed and ranked for every team
 const rr = rpi(s);

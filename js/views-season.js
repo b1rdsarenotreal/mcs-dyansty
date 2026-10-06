@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261006113505';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006113505';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006113505';
-import { ovr } from './sim.js?v=20261006113505';
-import { simGames, addGame, weekName } from './league.js?v=20261006113505';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261006113505';
-import { fmtPct, hashStr } from './util.js?v=20261006113505';
-import { DAY_ORDER } from './schedule.js?v=20261006113505';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006114707';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006114707';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006114707';
+import { ovr } from './sim.js?v=20261006114707';
+import { simGames, addGame, weekName } from './league.js?v=20261006114707';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006114707';
+import { fmtPct, hashStr } from './util.js?v=20261006114707';
+import { DAY_ORDER } from './schedule.js?v=20261006114707';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -453,8 +453,10 @@ function renderConfTourneys(root) {
         const size = Math.min(n, s.settings.confTourney?.[c] ?? defaultConfTourneySize(n));
         const seeds = confTourneySeeds(s, c).slice(0, size);
         return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, ${size >= 3 && s.settings.confFormat?.[c] === 'double' ? 'double' : 'single'} elimination` : 'No tournament: regular-season champion gets the bid'}</span></div>
+          ${size ? hostPicker(s, c) : ''}
           <ol class="seedlist">${seeds.map(t => `<li>${team(t)}</li>`).join('')}</ol></div>`;
       }).join('')}</div>`;
+    bindHostPickers(root);
     return;
   }
   const evs = Object.values(p.confT || {});
@@ -465,15 +467,35 @@ function renderConfTourneys(root) {
       return `<div class="card"><div class="row" style="margin-bottom:10px"><a href="${confHref(ev.conf)}">${confLogo(ev.conf, 28)}</a><h2 style="margin:0">${esc(ev.conf)} Tournament</h2>
         ${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}<span class="spacer"></span>
         ${started ? `<span class="muted small">${ev.kind === 'double' ? 'Double' : 'Single'} elimination</span>` : `${ev.size >= 3 ? `<select class="sm-select" data-cformat="${esc(ev.conf)}" aria-label="${esc(ev.conf)} tournament format">${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${ev.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
+        ${hostPicker(s, ev.conf, ev)}
         <div class="small muted" style="margin-bottom:8px">Seeds: ${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)}`).join(' · ')}</div>
         ${eventBracket(ev, t => ev.seeds.indexOf(t) + 1 || null)}</div>`;
     }).join('')}
     ${!evs.length ? '<div class="empty">No conference tournaments this season.</div>' : ''}`;
   if ($('#ct-sim', root)) $('#ct-sim', root).onclick = () => simAndReport(g => g.type === 'conf', 'in the conference tournaments');
   $$('[data-reseed]', root).forEach(b => (b.onclick = () => editSeeds(b.dataset.reseed)));
+  bindHostPickers(root);
   $$('[data-cformat]', root).forEach(sel => (sel.onchange = () => {
     try { setConfFormat(s, sel.dataset.cformat, sel.value); } catch (e) { return toast(e.message, true); }
     changed(); toast(`${sel.dataset.cformat} Tournament is now ${sel.value} elimination.`);
+  }));
+}
+
+// Tournament host: any school in the conference. It can be changed until
+// the tournament is over; games already played stay where they were.
+function hostPicker(s, conf, ev = null) {
+  const host = ev?.host || confHost(s, conf);
+  const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school).sort();
+  const locked = !!ev?.champion;
+  const inField = !ev || ev.seeds.includes(host);
+  return `<div class="row small host-row" style="margin:6px 0 8px;gap:8px">${logoImg(teamInfo(host), 18)}<span>Hosted by <b>${esc(host)}</b>${inField ? '' : ' <span class="muted">(didn't qualify; every game is still played there)</span>'}</span>
+    ${locked ? '' : `<label class="muted" style="display:inline-flex;align-items:center;gap:6px">Change <select class="sm-select" data-host="${esc(conf)}" aria-label="${esc(conf)} tournament host">${teamOptions(host, { blank: false, list: teams })}</select></label>`}</div>`;
+}
+function bindHostPickers(root) {
+  const s = S();
+  $$('[data-host]', root).forEach(sel => (sel.onchange = () => {
+    setConfHost(s, sel.dataset.host, sel.value);
+    changed(); toast(`The ${sel.dataset.host} Tournament is now at ${sel.value}.`);
   }));
 }
 

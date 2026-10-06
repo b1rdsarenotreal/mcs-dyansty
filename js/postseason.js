@@ -11,9 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006113505';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006113505';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006113505';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006114707';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006114707';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006114707';
+import { hashStr } from './util.js?v=20261006114707';
 
 // ---------- tournament format ----------
 
@@ -357,6 +358,42 @@ export function confTourneySeeds(season, conf) {
   return confStandings(season, conf, recs, r).map(x => x.team);
 }
 
+// Conference tournament hosts. Each season every conference's tournament is
+// played at one of its schools, picked at random (not last year's host when
+// there's a choice). The commissioner can change it. Hosting doesn't change
+// the bracket: the host plays its games at home and every other game is at
+// the host's site.
+export function pickConfHosts(season, prev = null) {
+  season.confHosts ||= {};
+  for (const conf of conferences(season)) confHost(season, conf, prev?.confHosts?.[conf]);
+  return season.confHosts;
+}
+export function confHost(season, conf, avoid = null) {
+  season.confHosts ||= {};
+  const teams = Object.values(season.teams).filter(t => t.conference === conf).map(t => t.school).sort();
+  if (!teams.length) return null;
+  let h = season.confHosts[conf];
+  if (!h || !teams.includes(h)) {
+    const pool = teams.length > 1 && avoid ? teams.filter(t => t !== avoid) : teams;
+    h = pool[hashStr(`${season.year}|${conf}|host`) % pool.length];
+    season.confHosts[conf] = h;
+  }
+  return h;
+}
+// Change a tournament's host. Games already played keep their site; games
+// not yet played are rebuilt at the new host.
+export function setConfHost(season, conf, team) {
+  season.confHosts ||= {};
+  season.confHosts[conf] = team;
+  const ev = season.post?.confT?.[conf];
+  if (ev) moveConfTourney(season, ev, team);
+}
+function moveConfTourney(season, ev, host) {
+  ev.host = host;
+  const ids = new Set(ev.nodes.map(n => n.gameId).filter(Boolean));
+  season.games = season.games.filter(g => !ids.has(g.id) || isFinal(g));
+}
+
 export function setupConfTourneys(season) {
   season.post ||= {};
   season.post.confT = {};
@@ -366,7 +403,7 @@ export function setupConfTourneys(season) {
     if (size < 2) continue;
     const seeds = confTourneySeeds(season, conf).slice(0, size);
     const kind = size >= 3 && season.settings.confFormat?.[conf] === 'double' ? 'double' : 'single';
-    season.post.confT[conf] = { id: `ct-${conf}`, kind, conf, size, seeds, nodes: buildConfNodes(kind, size), champion: null };
+    season.post.confT[conf] = { id: `ct-${conf}`, kind, conf, size, seeds, nodes: buildConfNodes(kind, size), champion: null, host: confHost(season, conf) };
   }
   season.phase = 'conf';
 }
@@ -497,6 +534,8 @@ export function progress(season) {
   for (const ev of allEvents(season)) ensureLayout(ev);
   const W = postWeeks(season);
   if (season.phase === 'regular' && regularSeasonDone(season) && season.games.some(g => g.type === 'regular')) setupConfTourneys(season);
+  // Tournaments set up before hosts existed get one now.
+  if (p.confT) for (const ev of Object.values(p.confT)) if (ev.host === undefined) moveConfTourney(season, ev, confHost(season, ev.conf));
   if (p.confT) for (const ev of Object.values(p.confT)) advanceEvent(season, ev, { type: 'conf', week: W.conf, name: `${ev.conf} Tournament` });
   if (season.phase === 'conf' && Object.values(p.confT || {}).every(ev => ev.champion)) proposeField(season);
   if (!p.regionals) return;
