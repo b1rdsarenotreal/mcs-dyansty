@@ -1,12 +1,12 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005230901';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, TIEBREAKERS } from './standings.js?v=20261005230901';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005230901';
-import { ovr } from './sim.js?v=20261005230901';
-import { simGames, addGame, weekName } from './league.js?v=20261005230901';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005230901';
-import { fmtPct, hashStr } from './util.js?v=20261005230901';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005231332';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, TIEBREAKERS } from './standings.js?v=20261005231332';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005231332';
+import { ovr } from './sim.js?v=20261005231332';
+import { simGames, addGame, weekName } from './league.js?v=20261005231332';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005231332';
+import { fmtPct, hashStr } from './util.js?v=20261005231332';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -117,8 +117,6 @@ export function renderSchedule() {
 
 // ---------- Standings ----------
 
-const TB_LABEL = { h2h: 'H2H', common: 'CO', rpi: 'RPI', coin: 'Coin' };
-
 export function renderStandings() {
   const s = S(), recs = cache.recs(), r = rpi(s);
   const regRecs = records(s, g => g.type === 'regular');
@@ -137,7 +135,7 @@ export function renderStandings() {
         <thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">GB</th><th class="num">Overall</th><th class="num">Home</th><th class="num">Away</th><th class="num">Strk</th></tr></thead>
         <tbody>${st.map((x, i) => `<tr class="${i === size - 1 && size < n ? 'cutline' : ''}"><td class="num muted">${i + 1}</td>
           <td>${team(x.team)}</td>
-          <td class="num"><b>${x.cw}-${x.cl}</b>${x.tb ? `<span class="tb-mark" title="Tiebreaker: ${esc(x.tb.text)}">${TB_LABEL[x.tb.step]}</span>` : ''}</td><td class="num">${x.gb ? x.gb.toFixed(1).replace('.0', '') : '—'}</td>
+          <td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${x.gb ? x.gb.toFixed(1).replace('.0', '') : '—'}</td>
           <td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${x.hw}-${x.hl}</td><td class="num">${x.aw}-${x.al}</td>
           <td class="num">${x.streak || ''}</td></tr>`).join('')}</tbody></table></div>
       <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
@@ -148,9 +146,9 @@ export function renderStandings() {
     </div>`;
   };
   app.innerHTML = `
-    <div class="section-head"><h1>${s.year} Standings</h1><span class="muted">Ordered by conference winning percentage. The line marks the conference tournament cut. A tag next to a record shows which tiebreaker placed that team (hover for details).</span></div>
+    <div class="section-head"><h1>${s.year} Standings</h1><span class="muted">Ordered by conference winning percentage. The line marks the conference tournament cut.</span></div>
     <details class="card small" style="margin-bottom:16px"><summary><b>Tiebreakers</b></summary><ol style="margin:8px 0 0 18px">${TIEBREAKERS.map(t => `<li>${esc(t)}</li>`).join('')}</ol>
-      <p class="muted" style="margin:6px 0 0">Tags: H2H head-to-head · CO common opponents · RPI · Coin coin flip. The same order seeds the conference tournaments.</p></details>
+      <p class="muted" style="margin:6px 0 0">The same order seeds the conference tournaments.</p></details>
     <div class="grid wide">${confs.map(card).join('')}</div>`;
   $$('[data-champ]').forEach(sel => (sel.onchange = () => {
     s.overrides.regChamps ||= {};
