@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006123234';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006123234';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006123234';
-import { ovr } from './sim.js?v=20261006123234';
-import { simGames, addGame, weekName } from './league.js?v=20261006123234';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006123234';
-import { fmtPct, hashStr } from './util.js?v=20261006123234';
-import { DAY_ORDER } from './schedule.js?v=20261006123234';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006124605';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006124605';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006124605';
+import { ovr } from './sim.js?v=20261006124605';
+import { simGames, addGame, weekName } from './league.js?v=20261006124605';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory } from './postseason.js?v=20261006124605';
+import { fmtPct, hashStr } from './util.js?v=20261006124605';
+import { DAY_ORDER } from './schedule.js?v=20261006124605';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -424,7 +424,7 @@ export function renderPostseason() {
   const s = S(), p = s.post || {};
   const cfg = ncaaConfig(s);
   const defaultTab = { regular: 'conf', conf: 'conf', selection: 'field', regionals: 'regionals', supers: 'supers', mcws: 'mcws', complete: 'mcws' }[s.phase];
-  const tabs = { conf: 'Conference tournaments', field: 'Selection', regionals: 'Regionals', ...(hasSupers(cfg) ? { supers: 'Super Regionals' } : {}), mcws: s.settings.mcwsName.replace("Men's College World Series", 'MCWS') };
+  const tabs = { conf: 'Conference tournaments', field: 'Selection', regionals: 'Regionals', ...(hasSupers(cfg) ? { supers: 'Super Regionals' } : {}), participants: 'Participants', mcws: s.settings.mcwsName.replace("Men's College World Series", 'MCWS') };
   if (!ui.postTab || !tabs[ui.postTab]) ui.postTab = defaultTab;
   const left = s.games.filter(g => g.type !== 'regular' && !isFinal(g)).length + (s.phase === 'regular' ? 1 : 0);
   app.innerHTML = `
@@ -439,7 +439,7 @@ export function renderPostseason() {
     simAndReport(g => g.type !== 'regular', 'in the postseason', { autoLock: true });
   };
   const root = $('#ps');
-  ({ conf: renderConfTourneys, field: renderField, regionals: renderRegionals, supers: renderSupers, mcws: renderMcws })[ui.postTab](root);
+  ({ conf: renderConfTourneys, field: renderField, regionals: renderRegionals, supers: renderSupers, participants: renderParticipants, mcws: renderMcws })[ui.postTab](root);
   bindGameCards(root);
 }
 
@@ -614,6 +614,47 @@ function renderSupers(root) {
       <div class="small muted" style="margin-bottom:8px">${ev.seeds.map(named).join(' vs ')} · best of three at ${esc(ev.host)}</div>
       ${eventBracket(ev, seed)}</div>`).join('')}</div>`;
   if ($('#sr-sim', root)) $('#sr-sim', root).onclick = () => simAndReport(g => g.type === 'super', 'in the super regionals');
+}
+
+// The MCWS field, like the "Participants" table on a tournament's encyclopedia
+// page: each qualifier's record entering the MCWS, coach, the regional (or
+// super regional) it won, and its MCWS history in this dynasty before this season.
+const ordinal = n => `${n}${(n % 100 >= 11 && n % 100 <= 13) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+function renderParticipants(root) {
+  const s = S(), p = s.post || {}, cfg = ncaaConfig(s);
+  const supers = hasSupers(cfg);
+  const stage = (supers ? p.supers : p.regionals) || [];
+  const stageName = supers ? 'Super Regional' : 'Regional';
+  if (!stage.length) {
+    root.innerHTML = `<div class="empty">The ${esc(s.settings.mcwsName)} field fills in as ${supers ? 'super regionals' : 'regionals'} finish. Each ${stageName.toLowerCase()} champion advances.</div>`;
+    return;
+  }
+  const entering = records(s, g => g.type !== 'mcws');
+  const order = [...stage].map((ev, i) => [ev.path ?? i, ev]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  const coachCell = t => {
+    const id = s.teams[t]?.coachId, c = id && ctx.league.coaches?.[id];
+    return c ? `<a class="team-link" href="#/coach/${encodeURIComponent(id)}">${esc(c.name)}</a>` : '<span class="muted">—</span>';
+  };
+  const rows = order.map(ev => {
+    const t = ev.champion;
+    const where = esc(ev.name || `${ev.host} ${stageName}`);
+    if (!t) return `<tr class="muted"><td colspan="4"><i>Winner of the ${where}</i></td><td>${where}</td><td colspan="3"></td></tr>`;
+    const r = entering[t], c = s.teams[t].conference, h = mcwsHistory(ctx.league, t, s.year);
+    const history = h.apps
+      ? `<td class="c">${h.apps}<div class="small muted">(last: ${h.last})</div></td>
+         <td class="c">${h.best ? `${h.best.tied ? 'T-' : ''}${ordinal(h.best.place)}<div class="small muted">(${h.bestYears.join(', ')})</div>` : '—'}</td>
+         <td class="c">${h.w}–${h.l}</td>`
+      : '<td colspan="3" class="c"><i>First appearance</i></td>';
+    return `<tr><td>${team(t, { rank: false, seed: shownSeed(s, t) })}</td>
+      <td><span class="row" style="gap:6px;flex-wrap:nowrap">${confLogo(c, 18)}<span>${esc(c)}</span></span></td>
+      <td class="c">${r.w}–${r.l}<div class="small muted">(${r.cw}–${r.cl})</div></td>
+      <td>${coachCell(t)}</td><td>${where}</td>${history}</tr>`;
+  }).join('');
+  const done = order.filter(ev => ev.champion).length;
+  root.innerHTML = `<div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">${esc(s.settings.mcwsName)} participants</h2><span class="spacer"></span><span class="muted small">${done} of ${order.length} spots filled</span></div>
+    <div class="table-wrap"><table class="participants"><thead><tr><th>School</th><th>Conference</th><th class="c">Record<div class="small">(Conf)</div></th><th>Head coach</th><th>${stageName}</th><th class="c">Previous MCWS<div class="small">appearances</div></th><th class="c">MCWS best<div class="small">finish</div></th><th class="c">MCWS W–L<div class="small">record</div></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Records are before the ${esc(s.settings.mcwsName)}, with the conference record in parentheses. MCWS history counts seasons in this dynasty before ${s.year}.</p></div>`;
 }
 
 function renderMcws(root) {

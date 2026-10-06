@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
+import { mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp } from '../js/standings.js';
 
 const t0 = Date.now();
@@ -314,4 +314,22 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.equal(se.post.supers.length, 8);
   assert.equal(se.post.mcwsBrackets.length, 2);
 });
+// MCWS places and history (Participants tab)
+{
+  const done = Object.values(league.seasons).filter(se => se.post?.champion);
+  for (const se of done) {
+    const pl = mcwsPlaces(se), ws = wsTeams(se);
+    assert.equal(Object.keys(pl).length, ws.length, `${se.year}: every MCWS team has a place`);
+    assert.equal(pl[se.post.champion].place, 1); assert.equal(pl[se.post.runnerUp].place, 2);
+    if (ws.length === 8) assert.deepEqual(Object.values(pl).map(x => x.place).sort((a, b) => a - b), [1, 2, 3, 3, 5, 5, 7, 7], '8-team MCWS places tie');
+    if (ws.length === 4) assert.deepEqual(Object.values(pl).map(x => x.place).sort((a, b) => a - b), [1, 2, 3, 4], '4-team MCWS places');
+  }
+  const last = Math.max(...done.map(se => se.year));
+  const champ = league.seasons[last].post.champion;
+  const h = mcwsHistory(league, champ, last + 1);
+  assert.ok(h.apps >= 1 && h.last === last && h.best.place === 1 && h.bestYears.includes(last) && h.w > 0, 'history counts the title');
+  const games = done.reduce((n, se) => n + se.games.filter(g => g.type === 'mcws' && (g.home === champ || g.away === champ)).length, 0);
+  assert.equal(h.w + h.l, games, 'MCWS W-L counts every MCWS game');
+  assert.equal(mcwsHistory(league, champ, done[0].year).apps, 0, 'nothing before the first season');
+}
 console.log(`ok in ${Date.now() - t0} ms`);

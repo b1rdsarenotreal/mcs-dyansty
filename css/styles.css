@@ -411,3 +411,5 @@ table.voters tr.sel td { background: var(--chip); }
 }
 @media (max-width: 640px) { .reg-prev-list { grid-template-columns: minmax(0, 1fr); } }
 .stack-tight { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+table.participants .c { text-align: center; font-variant-numeric: tabular-nums; }
+table.participants td { vertical-align: middle; }

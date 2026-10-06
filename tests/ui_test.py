@@ -165,6 +165,11 @@ try:
         pg.click("[data-pt=mcws]"); pg.wait_for_timeout(300)
         assert "Bracket A" in pg.content() and "Bracket B" in pg.content() and "Championship Series" in pg.content()
         pg.screenshot(path=f"{OUT}/16h-mcws8.png", full_page=True)
+        assert tabs.index("Participants") == tabs.index("Super Regionals") + 1, tabs
+        pg.click("[data-pt=participants]"); pg.wait_for_timeout(300)
+        assert pg.locator("table.participants tbody tr").count() == 8, "eight MCWS participants"
+        assert "8 of 8 spots filled" in pg.content()
+        pg.screenshot(path=f"{OUT}/16i-participants.png", full_page=True)
         pg.goto(url + "#/history"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16b-history.png")
         # reload keeps data
@@ -212,7 +217,7 @@ try:
             for path in pages:
                 lp.goto(url + path); lp.wait_for_timeout(250)
                 if path == "#/postseason":
-                    for tab in ["conf", "field", "regionals", "mcws"]:
+                    for tab in ["conf", "field", "regionals", "participants", "mcws"]:
                         if lp.locator(f"[data-pt={tab}]").count():
                             lp.click(f"[data-pt={tab}]"); lp.wait_for_timeout(150)
                             r = lp.evaluate(CHECK)

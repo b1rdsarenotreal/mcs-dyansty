@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006123234';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006123234';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006123234';
-import { hashStr } from './util.js?v=20261006123234';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006124605';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006124605';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006124605';
+import { hashStr } from './util.js?v=20261006124605';
 
 // ---------- tournament format ----------
 
@@ -613,6 +613,46 @@ export function postseasonBonus(season) {
 }
 
 // How far each team got (for team pages and history).
+// Final MCWS places for a finished season: { team: { place, tied } }.
+// Champion 1st, runner-up 2nd; everyone else by the round they went out in
+// (teams knocked out in the same round tie, e.g. T-3rd in an 8-team MCWS).
+const ELIM_ROUND = { G6: 3, G7: 3, G5: 2, G3: 1 };
+export function mcwsPlaces(season) {
+  const p = season.post || {}, out = {};
+  const teams = wsTeams(season);
+  if (!p.champion || !teams.length) return out;
+  out[p.champion] = { place: 1, tied: false };
+  if (p.runnerUp) out[p.runnerUp] = { place: 2, tied: false };
+  const ws = season.games.filter(g => g.type === 'mcws' && isFinal(g)).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id);
+  const round = {};
+  for (const t of teams) {
+    if (out[t]) continue;
+    const lost = ws.filter(g => loserOf(g) === t);
+    round[t] = ELIM_ROUND[lost[lost.length - 1]?.node] ?? 0;
+  }
+  const others = Object.keys(round);
+  for (const t of others) {
+    const better = others.filter(o => round[o] > round[t]).length;
+    out[t] = { place: 3 + better, tied: others.filter(o => round[o] === round[t]).length > 1 };
+  }
+  return out;
+}
+// A team's MCWS history before `year`: appearances, last one, best finish
+// (and the years it came), and wins and losses in MCWS games.
+export function mcwsHistory(league, team, year) {
+  const h = { apps: 0, last: null, best: null, bestYears: [], w: 0, l: 0 };
+  for (const [y, se] of Object.entries(league.seasons).map(([y, se]) => [Number(y), se]).sort((a, b) => a[0] - b[0])) {
+    if (y >= year || !wsTeams(se).includes(team)) continue;
+    h.apps++; h.last = y;
+    for (const g of se.games) if (g.type === 'mcws' && isFinal(g) && (g.home === team || g.away === team)) winnerOf(g) === team ? h.w++ : h.l++;
+    const pl = mcwsPlaces(se)[team];
+    if (!pl) continue;
+    if (!h.best || pl.place < h.best.place) { h.best = pl; h.bestYears = [y]; }
+    else if (pl.place === h.best.place) h.bestYears.push(y);
+  }
+  return h;
+}
+
 export function postseasonFinish(season, team) {
   const p = season.post || {};
   if (p.champion === team) return 'National champion';
