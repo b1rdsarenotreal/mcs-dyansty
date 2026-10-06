@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006114707';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006114707';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006114707';
-import { ovr } from './sim.js?v=20261006114707';
-import { simGames, addGame, weekName } from './league.js?v=20261006114707';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006114707';
-import { fmtPct, hashStr } from './util.js?v=20261006114707';
-import { DAY_ORDER } from './schedule.js?v=20261006114707';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006115645';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006115645';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006115645';
+import { ovr } from './sim.js?v=20261006115645';
+import { simGames, addGame, weekName } from './league.js?v=20261006115645';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006115645';
+import { fmtPct, hashStr } from './util.js?v=20261006115645';
+import { DAY_ORDER } from './schedule.js?v=20261006115645';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -488,7 +488,7 @@ function hostPicker(s, conf, ev = null) {
   const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school).sort();
   const locked = !!ev?.champion;
   const inField = !ev || ev.seeds.includes(host);
-  return `<div class="row small host-row" style="margin:6px 0 8px;gap:8px">${logoImg(teamInfo(host), 18)}<span>Hosted by <b>${esc(host)}</b>${inField ? '' : ' <span class="muted">(didn't qualify; every game is still played there)</span>'}</span>
+  return `<div class="row small host-row" style="margin:6px 0 8px;gap:8px">${logoImg(teamInfo(host), 18)}<span>Hosted by <b>${esc(host)}</b>${inField ? '' : ` <span class="muted">(didn't qualify; every game is still played there)</span>`}</span>
     ${locked ? '' : `<label class="muted" style="display:inline-flex;align-items:center;gap:6px">Change <select class="sm-select" data-host="${esc(conf)}" aria-label="${esc(conf)} tournament host">${teamOptions(host, { blank: false, list: teams })}</select></label>`}</div>`;
 }
 function bindHostPickers(root) {
