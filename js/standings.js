@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct, hashStr } from './util.js?v=20261005231332';
+import { pct, hashStr } from './util.js?v=20261006113505';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -179,7 +179,19 @@ export function regularSeasonDone(season) {
   return season.games.filter(g => g.type === 'regular').every(isFinal);
 }
 
-// Regular-season champion (commissioner override wins).
+// Regular-season champions: every team tied for the best conference winning
+// percentage shares the title (a commissioner override names one champion).
+export function regSeasonChamps(season, conf, recs = records(season, g => g.type === 'regular'), r = rpi(season, g => g.type === 'regular')) {
+  if (season.overrides?.regChamps?.[conf]) return [season.overrides.regChamps[conf]];
+  const st = confStandings(season, conf, recs, r);
+  if (!st.length || st[0].cw + st[0].cl === 0) return [];
+  const best = pct(st[0].cw, st[0].cl);
+  return st.filter(x => x.cw + x.cl > 0 && pct(x.cw, x.cl) === best).map(x => x.team);
+}
+
+// The one team that takes the top spot: the regular-season champion, or the
+// co-champion that wins the tiebreakers (commissioner override wins). This is
+// the tournament's top seed and, with no tournament, the automatic bid.
 export function regSeasonChamp(season, conf, recs, r) {
   if (season.overrides?.regChamps?.[conf]) return season.overrides.regChamps[conf];
   const st = confStandings(season, conf, recs, r);

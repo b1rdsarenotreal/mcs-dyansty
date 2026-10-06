@@ -410,3 +410,4 @@ table.voters tr.sel td { background: var(--chip); }
   .reg-prev-list { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 }
 @media (max-width: 640px) { .reg-prev-list { grid-template-columns: minmax(0, 1fr); } }
+.stack-tight { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }

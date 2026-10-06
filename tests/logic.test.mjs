@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
-import { records, rpi, confStandings, isFinal } from '../js/standings.js';
+import { shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
+import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp } from '../js/standings.js';
 
 const t0 = Date.now();
 const league = newLeague();
@@ -83,6 +83,20 @@ for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => 
   const y = confStandings(mini, 'Y', records(mini), rpi(mini));
   assert.ok(y.every(x => x.tb.step === 'coin'), 'nothing else separates them: coin flip');
   assert.deepEqual(confStandings(mini, 'Y', records(mini), rpi(mini)).map(x => x.team), y.map(x => x.team), 'the coin flip is the same every time');
+  // A tie at the top: both teams share the regular-season title; the
+  // tiebreaker winner is the top seed.
+  teams.H = { school: 'H', conference: 'Z' }; teams.I = { school: 'I', conference: 'Z' }; teams.J = { school: 'J', conference: 'Z' };
+  games.push(...[['H', 'I'], ['I', 'H'], ['H', 'J'], ['I', 'J']].map(([w, l], i) => ({ id: 100 + i, type: 'regular', confGame: true, final: true, week: 2, order: i, home: w, away: l, homeR: 3, awayR: 1 })));
+  const zc = regSeasonChamps(mini, 'Z');
+  assert.deepEqual([...zc].sort(), ['H', 'I'], 'tied teams share the regular-season title');
+  assert.equal(regSeasonChamp(mini, 'Z', records(mini, g => g.type === 'regular'), rpi(mini, g => g.type === 'regular')), confStandings(mini, 'Z', records(mini), rpi(mini))[0].team, 'the tiebreaker winner is the top seed');
+  mini.overrides = { regChamps: { Z: 'I' } };
+  assert.deepEqual(regSeasonChamps(mini, 'Z'), ['I'], 'a commissioner override names one champion');
+}
+// Only regional hosts show a national seed.
+{
+  const fake = { settings: { ncaa: { regionals: 4, perRegional: 4, wsSize: 4 } }, post: { field: Array.from({ length: 16 }, (_, i) => ({ team: 'T' + i, seed: i + 1 })) } };
+  assert.equal(shownSeed(fake, 'T3'), 4); assert.equal(shownSeed(fake, 'T4'), null);
 }
 assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
 assert.equal(Object.keys(s.polls[0].ballots).length, 23, '23 voters each turn in a ballot');

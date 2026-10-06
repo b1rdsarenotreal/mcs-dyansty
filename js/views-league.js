@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005231332';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005231332';
-import { ovr } from './sim.js?v=20261005231332';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005231332';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261005231332';
-import { setRating } from './ratings.js?v=20261005231332';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005231332';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005231332';
-import { exportLeague, clearLeague } from './store.js?v=20261005231332';
-import { clamp } from './util.js?v=20261005231332';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261006113505';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261006113505';
+import { ovr } from './sim.js?v=20261006113505';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261006113505';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261006113505';
+import { setRating } from './ratings.js?v=20261006113505';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261006113505';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261006113505';
+import { exportLeague, clearLeague } from './store.js?v=20261006113505';
+import { clamp } from './util.js?v=20261006113505';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -231,7 +231,7 @@ function seasonSummary(season, name) {
   const st = confStandings(season, season.teams[name].conference, reg);
   const pos = st.findIndex(x => x.team === name) + 1;
   const fp = season.polls?.final ? pollRankMap(season.polls.final)[name] : null;
-  return { rec: recs[name], pos, confSize: st.length, tChamp: season.post?.confT?.[season.teams[name].conference]?.champion === name, regChamp: regSeasonChamp(season, season.teams[name].conference, reg, rpi(season, g => g.type === 'regular')) === name && (reg[name].cw + reg[name].cl > 0), finish: postseasonFinish(season, name), finalRank: fp };
+  return { rec: recs[name], pos, confSize: st.length, tChamp: season.post?.confT?.[season.teams[name].conference]?.champion === name, ...(() => { const cs = regSeasonChamps(season, season.teams[name].conference, reg, rpi(season, g => g.type === 'regular')); return { regChamp: cs.includes(name), regShared: cs.includes(name) && cs.length > 1 }; })(), finish: postseasonFinish(season, name), finalRank: fp };
 }
 
 export function renderTeamPage(name) {
@@ -286,7 +286,7 @@ export function renderTeamPage(name) {
             <td>${g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
     <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ' <span class="badge">Reg. season champ</span>' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
@@ -406,7 +406,7 @@ export function renderCoachPage(id) {
       <thead><tr><th>Season</th><th>Program</th><th>Conference</th><th class="num">Record</th><th class="num">Conf</th><th>Conference finish</th><th>Postseason</th><th class="num">Final rank</th></tr></thead>
       <tbody>${rows.map(({ y, t, h, inProgress }) => `<tr><td>${y}${inProgress ? ' <span class="muted small">(in progress)</span>' : ''}</td><td>${team(t.school, { rank: false })}</td><td>${confLogo(t.conference, 18)} <span class="small">${esc(t.conference)}</span></td>
         <td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td>
-        <td>${h.pos && h.rec.cw + h.rec.cl ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp && !inProgress ? ' <span class="badge">Reg. season champ</span>' : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td>
+        <td>${h.pos && h.rec.cw + h.rec.cl ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp && !inProgress ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td>
         <td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">No seasons as a head coach yet.</td></tr>'}</tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><button class="btn" id="cp-rename">Rename coach</button>
@@ -472,7 +472,7 @@ export function renderConferencePage(c) {
     const rg = records(se, g => g.type === 'regular');
     const bids = (se.post?.field || []).filter(f => f.conf === c);
     const best = bids.map(f => postseasonFinish(se, f.team)).filter(Boolean);
-    return { y, reg: regSeasonChamp(se, c, rg, rpi(se, g => g.type === 'regular')), t: se.post?.confT?.[c]?.champion, bids: bids.length, best: best.includes('National champion') ? 'National champion' : best.includes('MCWS runner-up') ? 'MCWS runner-up' : best.find(b => /World Series/.test(b)) || best[0] || '' };
+    return { y, reg: regSeasonChamps(se, c, rg, rpi(se, g => g.type === 'regular')), t: se.post?.confT?.[c]?.champion, bids: bids.length, best: best.includes('National champion') ? 'National champion' : best.includes('MCWS runner-up') ? 'MCWS runner-up' : best.find(b => /World Series/.test(b)) || best[0] || '' };
   }).filter(Boolean);
   app.innerHTML = `
     <div class="conf-hero" style="border-bottom-color:${esc(info.color)}"><div class="conf-hero-logo">${confLogo(c, 76)}</div><div style="flex:1"><div class="team-hero-name">${esc(c)}</div><div class="team-hero-sub">${st.length} teams</div></div><a class="btn" href="#/conferences">All conferences</a></div>
@@ -480,7 +480,7 @@ export function renderConferencePage(c) {
       <div class="card"><h2>${s.year} standings</h2><div class="table-wrap"><table><thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">Overall</th><th class="num">OVR</th></tr></thead><tbody>
         ${st.map((x, i) => `<tr><td class="num muted">${i + 1}</td><td>${team(x.team)}</td><td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${ovr(s.teams[x.team])}</td></tr>`).join('')}</tbody></table></div></div>
       <div class="card"><h2>Champions</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Regular season</th><th>Tournament</th><th class="num">NCAA bids</th><th>Best finish</th></tr></thead><tbody>
-        ${hist.map(h => `<tr><td>${h.y}</td><td>${h.reg ? team(h.reg, { rank: false }) : '—'}</td><td>${h.t ? team(h.t, { rank: false }) : '—'}</td><td class="num">${h.bids || ''}</td><td class="small">${esc(h.best)}</td></tr>`).join('')}</tbody></table></div></div>
+        ${hist.map(h => `<tr><td>${h.y}</td><td>${h.reg.length ? `<div class="stack-tight">${h.reg.map(t => team(t, { rank: false })).join('')}</div>${h.reg.length > 1 ? '<div class="small muted">Shared</div>' : ''}` : '—'}</td><td>${h.t ? team(h.t, { rank: false }) : '—'}</td><td class="num">${h.bids || ''}</td><td class="small">${esc(h.best)}</td></tr>`).join('')}</tbody></table></div></div>
     </div>
     <div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:1;min-width:160px">Name <input type="text" id="ce-name" value="${esc(c)}"></label>

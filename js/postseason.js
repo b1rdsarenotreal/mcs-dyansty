@@ -11,9 +11,9 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261005231332';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261005231332';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261005231332';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006113505';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006113505';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006113505';
 
 // ---------- tournament format ----------
 
@@ -23,6 +23,15 @@ export const hasSupers = cfg => cfg.regionals === cfg.wsSize * 2;
 
 export function ncaaConfig(season) {
   return { ...DEFAULT_NCAA, ...(season.post?.cfg || season.settings?.ncaa || {}) };
+}
+
+// The national seed shown for a team: only the regional hosts (the top
+// national seeds, one per regional) carry a seed on screen. Everyone else is
+// still seeded for building the regionals, just not displayed.
+export function shownSeed(season, team) {
+  const p = season.post;
+  const f = p?.field?.find(x => x.team === team);
+  return f && f.seed <= ncaaConfig(season).regionals ? f.seed : null;
 }
 
 // Problems with a format, in plain words (empty when it works).

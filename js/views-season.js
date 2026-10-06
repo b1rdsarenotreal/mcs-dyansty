@@ -1,12 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005231332';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, TIEBREAKERS } from './standings.js?v=20261005231332';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005231332';
-import { ovr } from './sim.js?v=20261005231332';
-import { simGames, addGame, weekName } from './league.js?v=20261005231332';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005231332';
-import { fmtPct, hashStr } from './util.js?v=20261005231332';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261006113505';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006113505';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006113505';
+import { ovr } from './sim.js?v=20261006113505';
+import { simGames, addGame, weekName } from './league.js?v=20261006113505';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261006113505';
+import { fmtPct, hashStr } from './util.js?v=20261006113505';
+import { DAY_ORDER } from './schedule.js?v=20261006113505';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -81,7 +82,23 @@ export function renderSchedule() {
   // from the series (or the game), so a weekend series keeps its spot
   // Friday through Sunday and the order stays the same between visits.
   const mixKey = g => hashStr(`${s.year}|${g.series || 'g' + g.id}`);
-  const games = s.games.filter(g => g.week === ui.week).sort((a, b) => a.order - b.order || (a.type === 'regular' && b.type === 'regular' ? mixKey(a) - mixKey(b) : 0) || a.id - b.id);
+  // Postseason days mix the same way: each event's games keep their order
+  // (Game 1 before Game 2), but the events are shuffled together, so the
+  // day's first games from every tournament come first in a mixed order,
+  // then the next ones, and so on.
+  const week = s.games.filter(g => g.week === ui.week);
+  const post = week.filter(g => g.type !== 'regular');
+  const dayKey = g => DAY_ORDER[g.day] + (g.type !== 'conf' && ['Mon', 'Tue'].includes(g.day) ? 7 : 0);
+  const slot = {};
+  const byEventDay = {};
+  for (const g of post) (byEventDay[`${g.event || g.type}|${g.day}`] ||= []).push(g);
+  for (const list of Object.values(byEventDay)) list.sort((a, b) => a.order - b.order || a.id - b.id).forEach((g, i) => { slot[g.id] = i; });
+  const postKey = g => hashStr(`${s.year}|${g.event || g.type}|${g.day}|${slot[g.id]}`);
+  const games = week.sort((a, b) => {
+    if (a.type === 'regular' && b.type === 'regular') return a.order - b.order || mixKey(a) - mixKey(b) || a.id - b.id;
+    if (a.type !== 'regular' && b.type !== 'regular') return dayKey(a) - dayKey(b) || slot[a.id] - slot[b.id] || postKey(a) - postKey(b) || a.id - b.id;
+    return a.order - b.order || a.id - b.id;
+  });
   const unplayed = games.filter(g => !isFinal(g));
   const days = [...new Set(games.map(g => g.day))];
   const firstOpenDay = unplayed[0]?.day;
@@ -139,7 +156,7 @@ export function renderStandings() {
           <td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${x.hw}-${x.hl}</td><td class="num">${x.aw}-${x.al}</td>
           <td class="num">${x.streak || ''}</td></tr>`).join('')}</tbody></table></div>
       <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
-        <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamp({ ...s, overrides: {} }, c, regRecs, r) || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
+        <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamps({ ...s, overrides: {} }, c, regRecs, r).join(' & ') || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
         <label class="field">Tournament format <select data-format="${esc(c)}" ${canSize ? '' : 'disabled'}>${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${(s.settings.confFormat?.[c] || 'single') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Tournament teams <select data-size="${esc(c)}" ${canSize ? '' : 'disabled'}>${[0, 2, 3, 4, 5, 6, 7, 8].filter(k => k <= n).map(k => `<option value="${k}" ${k === size ? 'selected' : ''}>${k ? `Top ${k}` : 'No tournament'}</option>`).join('')}</select></label>
       </div>${canSize ? '' : `<p class="muted">Tournament size and format are locked once the tournaments are set. You can still switch a tournament's format on the Postseason page until its first game.</p>`}</details>
@@ -554,10 +571,11 @@ function renderRegionals(root) {
   const s = S(), p = s.post || {};
   if (!p.regionals) { root.innerHTML = '<div class="empty">Regionals begin once the NCAA field is announced.</div>'; return; }
   const open = s.games.some(g => g.type === 'regional' && !isFinal(g));
-  const seed = t => p.field.find(f => f.team === t)?.seed;
+  const seed = t => shownSeed(s, t);
+  const named = t => `${esc(t)}${seed(t) ? ` (${seed(t)})` : ''}`;
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="rg-sim">🎲 Sim regionals</button></div>' : ''}
     ${p.regionals.map(ev => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(ev.name)}</h2>${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}</div>
-      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)} (#${seed(t)})`).join(' · ')} · ${ev.kind === 'series' ? 'best of three' : 'double elimination'}, hosted by ${esc(ev.host)}</div>
+      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map(named).join(' · ')} · ${ev.kind === 'series' ? 'best of three' : 'double elimination'}, hosted by ${esc(ev.host)}</div>
       ${eventBracket(ev, seed)}</div>`).join('')}`;
   if ($('#rg-sim', root)) $('#rg-sim', root).onclick = () => simAndReport(g => g.type === 'regional', 'in the regionals');
 }
@@ -566,10 +584,11 @@ function renderSupers(root) {
   const s = S(), p = s.post || {};
   if (!p.supers) { root.innerHTML = '<div class="empty">Super regionals start once every regional is finished. Each one is a best-of-three series between two regional champions, hosted by the higher national seed.</div>'; return; }
   const open = s.games.some(g => g.type === 'super' && !isFinal(g));
-  const seed = t => p.field.find(f => f.team === t)?.seed;
+  const seed = t => shownSeed(s, t);
+  const named = t => `${esc(t)}${seed(t) ? ` (${seed(t)})` : ''}`;
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="sr-sim">🎲 Sim super regionals</button></div>' : ''}
     <div class="grid">${p.supers.map(ev => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${esc(ev.name)}</h2>${ev.champion ? `<span class="badge gold">To the MCWS: ${esc(ev.champion)}</span>` : ''}</div>
-      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' vs ')} · best of three at ${esc(ev.host)}</div>
+      <div class="small muted" style="margin-bottom:8px">${ev.seeds.map(named).join(' vs ')} · best of three at ${esc(ev.host)}</div>
       ${eventBracket(ev, seed)}</div>`).join('')}</div>`;
   if ($('#sr-sim', root)) $('#sr-sim', root).onclick = () => simAndReport(g => g.type === 'super', 'in the super regionals');
 }
@@ -584,10 +603,11 @@ function renderMcws(root) {
     return;
   }
   const open = s.games.some(g => g.type === 'mcws' && !isFinal(g));
-  const seed = t => p.field.find(f => f.team === t)?.seed;
+  const seed = t => shownSeed(s, t);
+  const named = t => `${esc(t)}${seed(t) ? ` (${seed(t)})` : ''}`;
   const card = (ev, title, sub) => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${title}</h2>${ev.champion ? `<span class="badge gold">${ev.id === 'ws-F' || ev.id === 'mcws' ? 'Champion' : 'Bracket winner'}: ${esc(ev.champion)}</span>` : ''}</div>
     <div class="small muted" style="margin-bottom:8px">${sub}</div>${eventBracket(ev, seed)}</div>`;
-  const list = ev => ev.seeds.map(t => `${esc(t)} (#${seed(t)})`).join(' · ');
+  const list = ev => ev.seeds.map(named).join(' · ');
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="mc-sim">🎲 Sim the MCWS</button></div>' : ''}
     ${p.mcws ? card(p.mcws, name, list(p.mcws)) : ''}
     ${(p.mcwsBrackets || []).map(ev => card(ev, `${name} · ${esc(ev.name)}`, `${list(ev)} · double elimination`)).join('')}

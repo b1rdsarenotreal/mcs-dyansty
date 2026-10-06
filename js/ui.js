@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261005231332';
-import { logoFor } from './logos.js?v=20261005231332';
-import { LOGO_ALIASES } from './data.js?v=20261005231332';
-import { ovr, winProbability } from './sim.js?v=20261005231332';
-import { records, isFinal, winnerOf } from './standings.js?v=20261005231332';
-import { latestPoll, pollRankMap } from './polls.js?v=20261005231332';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261005231332';
-import { regWeeksOf } from './postseason.js?v=20261005231332';
-import { DAY_ORDER } from './schedule.js?v=20261005231332';
-import { esc } from './util.js?v=20261005231332';
+import { saveLeague } from './store.js?v=20261006113505';
+import { logoFor } from './logos.js?v=20261006113505';
+import { LOGO_ALIASES } from './data.js?v=20261006113505';
+import { ovr, winProbability } from './sim.js?v=20261006113505';
+import { records, isFinal, winnerOf } from './standings.js?v=20261006113505';
+import { latestPoll, pollRankMap } from './polls.js?v=20261006113505';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261006113505';
+import { regWeeksOf, shownSeed } from './postseason.js?v=20261006113505';
+import { DAY_ORDER } from './schedule.js?v=20261006113505';
+import { esc } from './util.js?v=20261006113505';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -95,7 +95,8 @@ export function team(name, { rank = true, record = false, seed = null, link = tr
   if (!name) return '<span class="muted">TBD</span>';
   const t = teamInfo(name);
   const rk = (ranks || cache.ranks())[name];
-  const r = seed ? `<span class="rank" title="National seed">(${seed})</span>` : rank && rk ? `<span class="rank">${rk}</span>` : '';
+  // Seed in parentheses, then the poll ranking, both right before the name.
+  const r = (seed ? `<span class="rank seed" title="Seed">(${seed})</span>` : '') + (rank && rk ? `<span class="rank" title="Poll ranking">${rk}</span>` : '');
   let rec = '';
   if (record && S().teams[name]) { const x = cache.recs()[name]; rec = ` <span class="muted small">${x.w}-${x.l}</span>`; }
   // abbrAlt: also carry the abbreviation, shown instead when the card is narrow.
@@ -143,9 +144,13 @@ export function imageFileToDataUrl(file, max = 256) {
 
 // ---------- game cards ----------
 
+// Seed shown on a postseason game: the conference tournament seed, or the
+// national seed for NCAA regional hosts only.
 export function seedOf(g, t) {
+  const s = S();
+  if (g.type === 'conf') { const ev = Object.values(s.post?.confT || {}).find(e => e.id === g.event); const i = ev ? ev.seeds.indexOf(t) : -1; return i >= 0 ? i + 1 : null; }
   if (!['regional', 'super', 'mcws'].includes(g.type)) return null;
-  return S().post?.field?.find(f => f.team === t)?.seed ?? null;
+  return shownSeed(s, t);
 }
 
 export function resultText(g) {
@@ -437,7 +442,7 @@ export function compactCard(g, seedFn = () => null) {
   const w = fin ? winnerOf(g) : null;
   const inn = Math.max(g.homeLine.length, g.awayLine.length);
   const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner' : 'loser') : ''}">
-      <span class="bg-team">${seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${team(t, { rank: false, size: 16 })}</span>
+      <span class="bg-team">${team(t, { seed: seedFn(t), size: 16, ranks: fin ? cache.ranksAt(g.week) : null })}</span>
       <span class="bg-n bg-r">${fin ? R : ''}</span><span class="bg-n">${fin ? H : ''}</span><span class="bg-n">${fin ? E : ''}</span></div>`;
   let foot = '';
   if (fin) foot = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
@@ -460,7 +465,7 @@ export function placeholderCard(label, teams, seedFn = () => null, { faded = fal
     let inner;
     if (t === 'BYE') inner = '<span class="muted">Bye</span>';
     else if (t && typeof t === 'object') inner = `<span class="muted slot-ref">${esc(t.text)}</span>`;
-    else if (t) inner = `${seedFn(t) ? `<span class="rank">${seedFn(t)}</span>` : ''}${team(t, { rank: false, size: 16 })}`;
+    else if (t) inner = team(t, { seed: seedFn(t), size: 16 });
     else inner = '<span class="muted">TBD</span>';
     return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
   };
