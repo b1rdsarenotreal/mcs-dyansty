@@ -134,6 +134,13 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
+// Regional weekend: Fri G1-G2, Sat G3-G5, Sun final and if-necessary game (after the final).
+for (const ev of s.post.regionals) {
+  const day = Object.fromEntries(ev.nodes.map(n => [n.key, n.day]));
+  assert.deepEqual(day, { G1: 'Fri', G2: 'Fri', G3: 'Sat', G4: 'Sat', G5: 'Sat', G6: 'Sun', G7: 'Sun' }, 'regional days');
+  const gs = s.games.filter(g => g.event === ev.id).sort((a, b) => a.order - b.order);
+  assert.deepEqual(gs.map(g => g.node), ev.nodes.filter(n => n.gameId).sort((a, b) => a.t - b.t).map(n => n.key), 'regional games in order');
+}
 
 // Changing a host rebuilds the games not yet played at the new site.
 {

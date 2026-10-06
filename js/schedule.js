@@ -10,7 +10,7 @@
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261006122329';
+import { rng, shuffle, hashStr } from './util.js?v=20261006123234';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;

@@ -52,7 +52,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 
 The NCAA tournament's shape is set in **Settings → NCAA tournament**, so it can change without touching the code:
 
-- **Regionals:** how many, and how many teams in each. Two-team regionals are a best-of-three series. Three to six teams play double elimination with an "if necessary" final; four is the classic NCAA format. The top national seeds host, and the field is placed serpentine (with 4 regionals: 1-8-9-16, 2-7-10-15 and so on).
+- **Regionals:** how many, and how many teams in each. Two-team regionals are a best-of-three series. Three to six teams play double elimination with an "if necessary" final; four is the classic NCAA format: Friday Games 1 and 2, Saturday Games 3, 4 and 5, Sunday the regional final and, if needed, a second final. The top national seeds host, and the field is placed serpentine (with 4 regionals: 1-8-9-16, 2-7-10-15 and so on).
 - **Qualifiers:** regionals × teams per regional. Each conference champion gets an automatic bid and the committee picks the rest.
 - **Super regionals:** used when there are twice as many regionals as MCWS spots. Two regional champions play a best-of-three series at the higher seed (the 1 seed's regional meets the last host's).
 - **Men's College World Series:** **4 teams** play double elimination down to two, then a best-of-three Championship Series. **8 teams** split into **Bracket A** (paths 1, 4, 5, 8) and **Bracket B** (2, 3, 6, 7), each a four-team double elimination with an "if necessary" bracket final. The two bracket winners then play a **best-of-three final**, as in today's baseball and softball World Series.

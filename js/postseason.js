@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006122329';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006122329';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006122329';
-import { hashStr } from './util.js?v=20261006122329';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006123234';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006123234';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006123234';
+import { hashStr } from './util.js?v=20261006123234';
 
 // ---------- tournament format ----------
 
@@ -177,8 +177,28 @@ function doubleElimIfNec(size) {
 
 function regionalNodes(size) {
   if (size === 2) return seriesNodes();
-  if (size === 4) return doubleElim('g7');
+  if (size === 4) return fourTeamRegional(doubleElim('g7'));
   return doubleElimIfNec(size);
+}
+// Four-team regional weekend: Friday G1 and G2; Saturday G3, G4 and G5;
+// Sunday the regional final and, if needed, the second final.
+const REGIONAL_DAYS = { G1: ['Fri', 1], G2: ['Fri', 1.1], G3: ['Sat', 2], G4: ['Sat', 2.1], G5: ['Sat', 2.2], G6: ['Sun', 3], G7: ['Sun', 3.1] };
+function fourTeamRegional(nodes) {
+  for (const n of nodes) if (REGIONAL_DAYS[n.key]) [n.day, n.t] = REGIONAL_DAYS[n.key];
+  return nodes;
+}
+// Regionals built by older versions played G5 on Sunday and G7 on Monday.
+// Move any game not yet played to the current weekend.
+function fixRegionalDays(season, ev) {
+  if (ev.kind !== 'regional') return;
+  for (const n of ev.nodes) {
+    const want = REGIONAL_DAYS[n.key];
+    if (!want || (n.day === want[0] && n.t === want[1])) continue;
+    const g = n.gameId && season.games.find(x => x.id === n.gameId);
+    if (g && isFinal(g)) continue;
+    [n.day, n.t] = want;
+    if (g) { g.day = want[0]; g.order = want[1]; }
+  }
 }
 const regionalKind = size => (size === 2 ? 'series' : size === 4 ? 'regional' : 'de');
 
@@ -541,7 +561,7 @@ export function progress(season) {
   if (!p.regionals) return;
 
   const cfg = ncaaConfig(season);
-  for (const ev of p.regionals) advanceEvent(season, ev, { type: 'regional', week: W.regional, name: ev.name });
+  for (const ev of p.regionals) { fixRegionalDays(season, ev); advanceEvent(season, ev, { type: 'regional', week: W.regional, name: ev.name }); }
 
   if (hasSupers(cfg)) {
     const done = p.regionals.every(ev => ev.champion);
