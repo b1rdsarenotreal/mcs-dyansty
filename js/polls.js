@@ -1,17 +1,18 @@
 // Generated Top-N poll (15 by default; Settings changes the size). A fixed
 // panel of 23 voters fills out ballots. Every voter starts from the same
-// picture — team strength (OVR) early in the season, shifting to résumé
-// (RPI and record) as games are played, plus last week's poll and results
-// against ranked teams — and then
+// picture, built the way the CFB dynasty's poll is: team strength (power
+// ratings from game scores, starting from OFF/PIT/DEF) blended with a
+// season-long résumé (every win, worth more against strong teams; every
+// loss, costing less against strong teams), with the résumé counting more
+// as games are played. Each voter then
 // leans a little according to a built-in personality: some trust talent,
 // some trust numbers, some punish bad losses, some watch one conference
 // closely. The leans are small, so the poll stays close to a consensus.
 // Personalities live here in the code and aren't editable in the app.
 // The commissioner can still edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261006154501';
-import { ovr } from './sim.js?v=20261006154501';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006154501';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261006161053';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006161053';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -76,53 +77,75 @@ export function previousPoll(season, week) {
   return weeks.length ? season.polls[weeks[0]] : season.carryPoll || null;
 }
 
+// ---------- the consensus: strength + résumé (as in the CFB dynasty) ----------
+
+// Power ratings from game scores: runs_i vs j = avg + off_i - def_j (± home).
+// Each team is pulled toward a prior from its OFF/PIT/DEF ratings by
+// PRIOR_GAMES games' worth of evidence, so early ratings lean on the roster
+// and later ones on this season's results. Units are runs per game.
+const PRIOR_GAMES = 10, HOME_RUNS = 0.15, RUN_CAP = 10;
+const priorOf = t => { const b = t.base || t; return { off: 0.1 * (b.off - 70), def: 0.13 * (0.67 * b.pit + 0.33 * b.def - 70) }; };
+export function powerRatings(season, filter = null) {
+  const teams = Object.keys(season.teams);
+  const played = season.games.filter(g => isFinal(g) && season.teams[g.home] && season.teams[g.away] && (!filter || filter(g)));
+  let tot = 0, c = 0;
+  for (const g of played) { tot += Math.min(g.homeR, RUN_CAP) + Math.min(g.awayR, RUN_CAP); c += 2; }
+  const avg = c ? tot / c : 4;
+  const prior = Object.fromEntries(teams.map(t => [t, priorOf(season.teams[t])]));
+  const off = {}, def = {}, n = {};
+  for (const t of teams) { off[t] = prior[t].off; def[t] = prior[t].def; n[t] = 0; }
+  for (const g of played) { n[g.home]++; n[g.away]++; }
+  for (let it = 0; it < 40; it++) {
+    const so = {}, sd = {};
+    for (const t of teams) { so[t] = 0; sd[t] = 0; }
+    for (const g of played) {
+      const h = g.neutral ? 0 : HOME_RUNS / 2, hr = Math.min(g.homeR, RUN_CAP), ar = Math.min(g.awayR, RUN_CAP);
+      so[g.home] += hr - avg - h + def[g.away]; so[g.away] += ar - avg + h + def[g.home];
+      sd[g.away] += avg + off[g.home] + h - hr; sd[g.home] += avg + off[g.away] - h - ar;
+    }
+    for (const t of teams) { off[t] = (so[t] + PRIOR_GAMES * prior[t].off) / (n[t] + PRIOR_GAMES); def[t] = (sd[t] + PRIOR_GAMES * prior[t].def) / (n[t] + PRIOR_GAMES); }
+  }
+  return Object.fromEntries(teams.map(t => [t, { off: off[t], def: def[t], rating: off[t] + def[t], games: n[t] }]));
+}
+
+// Résumé: every win counts, more against a strong opponent; every loss costs,
+// less against a strong opponent. Covers the whole season to date.
+const INERTIA = 0.2;
+const quality = r => Math.max(0, Math.min(2.5, (r + 1.5) / 2.5));
+export function resumeScores(season, power, filter = null) {
+  const out = Object.fromEntries(Object.keys(season.teams).map(t => [t, 0]));
+  for (const g of season.games) {
+    if (!isFinal(g) || (filter && !filter(g))) continue;
+    const w = winnerOf(g), l = w === g.home ? g.away : g.home;
+    const rw = power[w]?.rating ?? -2, rl = power[l]?.rating ?? -2;
+    if (w in out) out[w] += 1 + quality(rl);
+    if (l in out) out[l] -= 1.6 - Math.min(1.2, Math.max(0, (rw + 1.5) / 4));
+  }
+  return out;
+}
+
 // The pieces every voter looks at, through `week`.
 function pollInputs(season, week) {
   const filter = g => g.week <= week;
   const recs = records(season, filter), r = rpi(season, filter);
   const teams = Object.keys(season.teams);
-  const zO = zmap(Object.fromEntries(teams.map(t => [t, ovr(season.teams[t])])));
+  const power = powerRatings(season, filter);
+  const res = resumeScores(season, power, filter);
+  const zP = zmap(Object.fromEntries(teams.map(t => [t, power[t].rating])));
+  const zQ = zmap(res);
   const zR = zmap(Object.fromEntries(teams.map(t => [t, r[t].rpi])));
-  const zW = zmap(Object.fromEntries(teams.map(t => { const x = recs[t]; return [t, (x.w + 1) / (x.w + x.l + 2)]; })));
   const zS = zmap(Object.fromEntries(teams.map(t => [t, r[t].sos || 0])));
-  const wr = Object.fromEntries(teams.map(t => [t, Math.min(0.85, (recs[t].w + recs[t].l) / 28)]));
-  return { teams, recs, r, zO, zR, zW, zS, wr };
+  const played = teams.reduce((n, t) => n + recs[t].w + recs[t].l, 0) / (teams.length || 1);
+  // Strength carries most of the weight early, résumé more as games are played.
+  const strengthW = Math.max(0.35, 0.8 - played * 0.015);
+  return { teams, recs, r, power, res, zP, zQ, zR, zS, played, strengthW };
 }
 
-// Credit for results against ranked teams, using the poll that was out when
-// each game was played. A win over the #1 team is worth the most; a loss to
-// an unranked team costs the most, and costs a highly ranked team more.
-// Older weeks fade (the polls in between already moved teams for them).
-const Q_WIN = 0.35, Q_BAD = 0.15, Q_UPSET = 0.12, Q_LOSS = 0.08, Q_FADE = 0.4;
-export function resultsCredit(season, week) {
-  const out = Object.fromEntries(Object.keys(season.teams).map(t => [t, 0]));
-  const rankCache = {};
-  const ranksBefore = w => (rankCache[w] ||= (() => {
-    const p = previousPoll(season, w), m = {};
-    p?.ranks.forEach((x, i) => { m[x.team] = i + 1; });
-    return { m, n: p?.ranks.length || pollSizeOf(season) };
-  })());
-  for (const g of season.games) {
-    if (!isFinal(g) || g.week > week) continue;
-    const fade = Q_FADE ** Math.max(0, week - g.week);
-    const { m, n } = ranksBefore(g.week);
-    const w = winnerOf(g), l = w === g.home ? g.away : g.home;
-    const rw = m[w], rl = m[l];
-    const val = r => (n + 1 - r) / n; // 1 for #1, small for the last ranked team
-    if (out[w] !== undefined && rl && (!rw || rw > rl)) out[w] += fade * Q_WIN * val(rl) * (rw ? 0.5 : 1);
-    if (out[l] === undefined || !rl) continue;
-    if (!rw) out[l] -= fade * Q_BAD * (0.5 + val(rl));                 // ranked team loses to an unranked one
-    else if (rw > rl) out[l] -= fade * Q_UPSET * (rw - rl) / n;          // loses to a lower-ranked team
-    else out[l] -= fade * Q_LOSS;                                         // loses to a higher-ranked team: small
-  }
-  return out;
-}
-
-// Consensus résumé-plus-strength score (also used by the selection committee).
+// Consensus strength-plus-résumé score.
 export function teamScores(season, week, { postBonus = null } = {}) {
-  const { teams, recs, r, zO, zR, zW, wr } = pollInputs(season, week);
+  const { teams, recs, r, zP, zQ, played, strengthW } = pollInputs(season, week);
   const out = {};
-  for (const t of teams) out[t] = (1 - wr[t]) * zO[t] + wr[t] * (0.5 * zR[t] + 0.5 * zW[t]) + (postBonus?.[t] || 0);
+  for (const t of teams) out[t] = strengthW * zP[t] + (1 - strengthW) * (played ? zQ[t] : 0) + (postBonus?.[t] || 0);
   return { scores: out, recs, rpi: r };
 }
 
@@ -130,14 +153,13 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
   const size = pollSizeOf(season);
   const wk = final ? 99 : week;
   const inp = pollInputs(season, wk);
-  const { teams, recs, zO, zR, zW, zS, wr } = inp;
+  const { teams, recs, zP, zQ, zR, zS, played, strengthW } = inp;
   const prev = final ? season.polls?.[Math.max(...Object.keys(season.polls).filter(k => k !== 'final').map(Number))] : previousPoll(season, week);
   const prevRank = {};
   prev?.ranks.forEach((x, i) => { prevRank[x.team] = i + 1; });
   const prevSize = prev?.ranks.length || size;
-  const inertia = week === 0 ? 0.35 : final ? 0.1 : 0.45;
 
-  // This week's results: net wins (as a z-score) and losses to teams outside last week's poll.
+  // This week's results, for the voters who react to them.
   const weekNet = {}, badLosses = {};
   for (const t of teams) { weekNet[t] = 0; badLosses[t] = 0; }
   if (!final && week > 0) {
@@ -149,22 +171,21 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     }
   }
   const zWeek = zmap(weekNet);
-  // Who beat whom: every voter credits wins over ranked teams and marks down
-  // losses to unranked or lower-ranked teams (more for a team ranked high).
-  const quality = resultsCredit(season, wk);
 
   const pts = {}, fp = {}, ballots = {};
   for (const v of VOTER_PANEL) {
     const vconf = voterConference(season, v);
     const noise = rng(hashStr(`${v.id}|${season.year}|${final ? 'final' : week}`));
+    // Personality: how much strength vs résumé, and how much of the résumé is RPI.
+    const sw = clamp(strengthW + v.talent * 0.3, 0.2, 0.92);
+    const rpiMix = clamp(v.rpi - 0.35, 0, 0.5);
     const ballot = teams.map(t => {
-      const wrV = clamp(wr[t] * (1 - v.talent), 0, 0.92);
-      let sc = (1 - wrV) * zO[t] + wrV * (v.rpi * zR[t] + (1 - v.rpi) * zW[t]);
-      sc += v.sos * zS[t] * Math.min(1, wr[t] * 2);
-      if (prevRank[t]) sc += inertia * v.loyalty * (prevSize + 1 - prevRank[t]) / prevSize;
+      const resume = played ? (1 - rpiMix) * zQ[t] + rpiMix * zR[t] : 0;
+      let sc = sw * zP[t] + (1 - sw) * resume;
+      sc += v.sos * zS[t] * Math.min(1, played / 20);
+      // Voters remember last week's poll a little (loyal ones more).
+      if (prevRank[t]) sc += INERTIA * v.loyalty * (prevSize + 1 - prevRank[t]) / prevSize;
       sc += v.recency * zWeek[t];
-      // Recent-results voters weigh head-to-head results more; loyal ones a bit less.
-      sc += quality[t] * (1 + 1.5 * v.recency) / Math.sqrt(v.loyalty) + (quality[t] < 0 ? quality[t] * v.losses * 3 : 0);
       sc -= v.losses * badLosses[t];
       if (vconf && season.teams[t].conference === vconf) sc += v.regionBoost;
       sc += postBonus?.[t] || 0;

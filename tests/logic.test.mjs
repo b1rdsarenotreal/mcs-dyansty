@@ -201,6 +201,12 @@ const p6 = s.polls[6], r6 = Object.fromEntries(p6.ranks.map((x, i) => [x.team, i
 const spread = Object.values(p6.ballots).map(b => b.reduce((acc, t, i) => acc + (r6[t] ? Math.abs(r6[t] - (i + 1)) : 6), 0) / b.length);
 console.log('week 6: ballots differ from the poll by', Math.min(...spread).toFixed(2), 'to', Math.max(...spread).toFixed(2), 'spots on average');
 assert.ok(Math.max(...spread) < 3.5 && Math.min(...spread) > 0, 'voters disagree a little, not wildly');
+// By the end of the regular season the poll tracks the résumé: the top 5 are all top-12 RPI teams.
+{
+  const lastW = Math.max(...Object.keys(s.polls).filter(k => k !== 'final').map(Number).filter(w => w <= 12));
+  const rr = rpi(s, g => g.week <= lastW);
+  assert.ok(s.polls[lastW].ranks.slice(0, 5).every(x => rr[x.team].rank <= 12), 'late-season poll follows results');
+}
 assert.ok(s.polls.final);
 assert.equal(s.polls.final.ranks[0].team, s.post.champion);
 assert.equal(s.post.field.length, 16);
