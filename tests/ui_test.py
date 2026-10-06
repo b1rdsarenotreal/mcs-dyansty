@@ -90,6 +90,20 @@ try:
         pg.goto(url + "#/postseason"); pg.click("[data-pt=conf]"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/07b-conf-brackets.png", full_page=True)
         pg.goto(url + "#/postseason"); pg.click("[data-pt=field]"); pg.wait_for_timeout(300)
+        pg.screenshot(path=f"{OUT}/08a-field-pick.png", full_page=True)
+        assert pg.locator("#f-lock").count() == 0, "can't announce before confirming"
+        # swap an at-large team: uncheck the last one in, check the first one out
+        boxes = pg.locator("input[data-al]")
+        checked = [i for i in range(boxes.count()) if boxes.nth(i).is_checked()]
+        unchecked = [i for i in range(boxes.count()) if not boxes.nth(i).is_checked()]
+        out_team = boxes.nth(checked[-1]).get_attribute("data-al"); in_team = boxes.nth(unchecked[0]).get_attribute("data-al")
+        boxes.nth(checked[-1]).uncheck(); pg.wait_for_timeout(200)
+        assert pg.locator("#f-confirm").is_disabled(), "confirm needs every spot filled"
+        pg.locator(f"input[data-al='{in_team}']").check(); pg.wait_for_timeout(200)
+        pg.click("#f-confirm"); pg.wait_for_timeout(300)
+        seeds = pg.locator(".seed-row").all_inner_texts()
+        assert len(seeds) == 16 and any(in_team in x for x in seeds) and not any(out_team in x for x in seeds), "field follows the picks"
+        pg.locator("[data-fdown='0']").click(); pg.wait_for_timeout(200)
         pg.screenshot(path=f"{OUT}/08-field.png", full_page=True)
         assert pg.locator(".reg-preview .reg-prev").count() == 4, "regional preview shows every regional"
         for w in (1024, 390):

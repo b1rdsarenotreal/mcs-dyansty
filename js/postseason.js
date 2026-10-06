@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006134650';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006134650';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006134650';
-import { hashStr } from './util.js?v=20261006134650';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006142335';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006142335';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006142335';
+import { hashStr } from './util.js?v=20261006142335';
 
 // ---------- tournament format ----------
 
@@ -474,8 +474,52 @@ export function proposeField(season, size = Math.min(fieldSize(ncaaConfig(season
   season.post.field = seeded.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
   season.post.firstOut = order.filter(t => !field.includes(t)).slice(0, 4);
+  season.post.fieldConfirmed = false;
   season.phase = 'selection';
 }
+
+// Selection, step 1: the commissioner settles which teams are in. Automatic
+// qualifiers are fixed; at-large spots go to any non-automatic team.
+export function selectionBoard(season, extra = 10) {
+  const size = Math.min(fieldSize(ncaaConfig(season)), Object.keys(season.teams).length);
+  const order = committeeOrder(season);
+  const autoSet = new Set(Object.values(autoBids(season)).filter(Boolean));
+  const autos = order.filter(t => autoSet.has(t));
+  const spots = Math.max(0, size - autos.length);
+  const pool = order.filter(t => !autoSet.has(t));
+  const inField = new Set((season.post?.field || []).map(f => f.team));
+  // Show the at-large spots plus the next `extra` teams, and never hide a team that's in.
+  let board = pool.slice(0, spots + extra);
+  for (const t of pool) if (inField.has(t) && !board.includes(t)) board.push(t);
+  return { size, autos, spots, board, order, chosen: pool.filter(t => inField.has(t)) };
+}
+function reseedByCommittee(season, teams) {
+  const order = committeeOrder(season);
+  const autoSet = new Set(Object.values(autoBids(season)).filter(Boolean));
+  const field = order.filter(t => teams.includes(t));
+  season.post.field = field.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
+  season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
+  season.post.firstOut = order.filter(t => !field.includes(t) && !autoSet.has(t)).slice(0, 4);
+}
+export function setAtLarge(season, team, on) {
+  const p = season.post;
+  if (p.fieldConfirmed) throw new Error('Unlock the field to change teams.');
+  const b = selectionBoard(season);
+  if (b.autos.includes(team)) throw new Error(`${team} is an automatic qualifier.`);
+  let teams = p.field.map(f => f.team);
+  if (on && !teams.includes(team)) {
+    if (b.chosen.length >= b.spots) throw new Error(`All ${b.spots} at-large spots are taken. Take a team out first.`);
+    teams.push(team);
+  } else if (!on) teams = teams.filter(t => t !== team);
+  reseedByCommittee(season, teams);
+}
+// Step 2: confirm the teams, then order the seeds.
+export function confirmField(season) {
+  const b = selectionBoard(season);
+  if (season.post.field.length !== b.size) throw new Error(`Pick ${b.spots} at-large teams (${b.chosen.length} picked).`);
+  season.post.fieldConfirmed = true;
+}
+export function unconfirmField(season) { season.post.fieldConfirmed = false; }
 
 // Serpentine pods: with 4 regionals, regional 1 gets seeds 1, 8, 9, 16,
 // regional 2 gets 2, 7, 10, 15, and so on. Regional k is hosted by seed k+1.

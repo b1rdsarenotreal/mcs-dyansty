@@ -3,8 +3,8 @@ import { confWeeksFor } from '../js/schedule.js';
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
-import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp } from '../js/standings.js';
+import { selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
+import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
 
 const t0 = Date.now();
 const league = newLeague();
@@ -134,6 +134,27 @@ assert.equal(s.post.confT['Big Ten'].kind, 'double');
 assert.equal(s.post.confT['Big Ten'].size, 8);
 assert.equal(s.post.confT['Big 12'].kind, 'single');
 assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
+// Selection: automatic qualifiers fixed, at-large picks, confirm, then seeds.
+{
+  assert.equal(s.phase, 'selection');
+  const B = selectionBoard(s);
+  assert.equal(B.autos.length + B.spots, 16); assert.equal(B.board.length, B.spots + 10);
+  assert.equal(s.post.fieldConfirmed, false);
+  const out = B.chosen[B.chosen.length - 1], inn = B.board.find(t => !B.chosen.includes(t));
+  assert.throws(() => setAtLarge(s, inn, true), /spots are taken/);
+  assert.throws(() => setAtLarge(s, B.autos[0], false), /automatic qualifier/);
+  setAtLarge(s, out, false);
+  assert.throws(() => confirmField(s), /Pick/);
+  setAtLarge(s, inn, true);
+  assert.ok(s.post.field.some(f => f.team === inn) && !s.post.field.some(f => f.team === out));
+  assert.deepEqual(s.post.field.map(f => f.seed), Array.from({ length: 16 }, (_, i) => i + 1));
+  confirmField(s); assert.ok(s.post.fieldConfirmed);
+  assert.throws(() => setAtLarge(s, out, true), /Unlock/);
+  const Q = quadrants(s);
+  const q1 = Object.values(Q).filter(x => x.q === 1).length;
+  assert.equal(q1, Math.ceil(Object.keys(s.teams).length / 4), 'Q1 is the top quarter');
+  for (const t of Object.keys(s.teams)) { const g = Q[t].rec.reduce((n, x) => n + x.w + x.l, 0); assert.equal(g, s.games.filter(x => isFinal(x) && (x.home === t || x.away === t)).length, 'quadrant records cover every game'); }
+}
 simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');

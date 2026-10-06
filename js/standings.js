@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct, hashStr } from './util.js?v=20261006134650';
+import { pct, hashStr } from './util.js?v=20261006142335';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -81,6 +81,28 @@ export function rpi(season, filter = null) {
   const ranked = teams.filter(t => out[t].games).sort((a, b) => out[b].rpi - out[a].rpi);
   ranked.forEach((t, i) => { out[t].rank = i + 1; });
   teams.filter(t => out[t].games).sort((a, b) => out[b].sos - out[a].sos).forEach((t, i) => { out[t].sosRank = i + 1; });
+  return out;
+}
+
+// Quadrants: every team is placed in Q1–Q4 by RPI rank (top quarter is Q1),
+// and each team's record is split by the quadrant of the opponent. "Q1 wins"
+// are wins over top-quarter teams. Teams without games yet go in Q4.
+export function quadrants(season, r = rpi(season), filter = null) {
+  const teams = Object.keys(season.teams);
+  const per = Math.ceil(teams.length / 4) || 1;
+  const quad = {};
+  for (const t of teams) quad[t] = r[t]?.rank ? Math.min(4, Math.ceil(r[t].rank / per)) : 4;
+  const out = {};
+  for (const t of teams) out[t] = { q: quad[t], rec: [0, 1, 2, 3].map(() => ({ w: 0, l: 0 })) };
+  for (const g of season.games) {
+    if (!isFinal(g) || (filter && !filter(g))) continue;
+    const w = winnerOf(g);
+    for (const [t, o] of [[g.home, g.away], [g.away, g.home]]) {
+      if (!out[t] || !quad[o]) continue;
+      const x = out[t].rec[quad[o] - 1];
+      w === t ? x.w++ : x.l++;
+    }
+  }
   return out;
 }
 
