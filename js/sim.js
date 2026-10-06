@@ -4,7 +4,7 @@
 // after 5, and from the 8th inning each half starts with a runner on second.
 // A simulation is only a suggestion — the commissioner reviews and saves it.
 
-import { rng as makeRng } from './util.js?v=20261005153206';
+import { rng as makeRng } from './util.js?v=20261005215054';
 
 export const OVR_WEIGHTS = { off: 0.4, pit: 0.4, def: 0.2 };
 const ovrExact = t => t.off * OVR_WEIGHTS.off + t.pit * OVR_WEIGHTS.pit + t.def * OVR_WEIGHTS.def;
@@ -12,7 +12,7 @@ export function ovr(t) { return Math.round(t.off * OVR_WEIGHTS.off + t.pit * OVR
 
 // League-average plate appearance for two 70-rated teams.
 const BASE = { k: 0.19, bb: 0.08, hbp: 0.017, hr: 0.024, tri: 0.006, dbl: 0.045, sgl: 0.152, err: 0.03 };
-const TALENT = 28; // rating points per unit of talent gap
+const TALENT = 24; // rating points per unit of talent gap (lower = fewer upsets)
 
 function paProbs(off, pit, def, home, vol) {
   const t = (off - pit) / TALENT / vol;
@@ -138,11 +138,11 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
 }
 
 // Home team's chance to win. A logistic fit to thousands of simulated games:
-// each point of rating edge is worth about 0.1 on the log-odds scale, so a
-// team 10 points better wins ~73% and one 20 points better ~88%.
+// each point of rating edge is worth about 0.115 on the log-odds scale, so a
+// team 10 points better wins ~76% and one 20 points better ~90%.
 export function winProbability(homeTeam, awayTeam, game = {}, { volatility = 1 } = {}) {
   const d = ovrExact(homeTeam) - ovrExact(awayTeam);
-  const x = (0.1 * d) / volatility + (game.neutral ? 0 : 0.04);
+  const x = (0.115 * d) / volatility + (game.neutral ? 0 : 0.04);
   return 1 / (1 + Math.exp(-x));
 }
 
