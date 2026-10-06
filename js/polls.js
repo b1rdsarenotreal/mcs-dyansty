@@ -11,8 +11,8 @@
 // Personalities live here in the code and aren't editable in the app.
 // The commissioner can still edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261006161053';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006161053';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261006164101';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006164101';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -109,7 +109,8 @@ export function powerRatings(season, filter = null) {
 }
 
 // Résumé: every win counts, more against a strong opponent; every loss costs,
-// less against a strong opponent. Covers the whole season to date.
+// less against a strong opponent, but losses weigh as much as wins. Covers
+// the whole season to date.
 const INERTIA = 0.2;
 const quality = r => Math.max(0, Math.min(2.5, (r + 1.5) / 2.5));
 export function resumeScores(season, power, filter = null) {
@@ -118,8 +119,11 @@ export function resumeScores(season, power, filter = null) {
     if (!isFinal(g) || (filter && !filter(g))) continue;
     const w = winnerOf(g), l = w === g.home ? g.away : g.home;
     const rw = power[w]?.rating ?? -2, rl = power[l]?.rating ?? -2;
-    if (w in out) out[w] += 1 + quality(rl);
-    if (l in out) out[l] -= 1.6 - Math.min(1.2, Math.max(0, (rw + 1.5) / 4));
+    // A loss always costs at least half of the best possible win, so losing
+    // a series never adds to a résumé (taking one of three from a top team
+    // breaks even; against anyone else it hurts).
+    if (w in out) out[w] += 1 + 1.6 * quality(rl);
+    if (l in out) out[l] -= 2.5 + 0.6 * (2.5 - quality(rw));
   }
   return out;
 }
@@ -137,7 +141,7 @@ function pollInputs(season, week) {
   const zS = zmap(Object.fromEntries(teams.map(t => [t, r[t].sos || 0])));
   const played = teams.reduce((n, t) => n + recs[t].w + recs[t].l, 0) / (teams.length || 1);
   // Strength carries most of the weight early, résumé more as games are played.
-  const strengthW = Math.max(0.35, 0.8 - played * 0.015);
+  const strengthW = Math.max(0.35, 0.7 - played * 0.015);
   return { teams, recs, r, power, res, zP, zQ, zR, zS, played, strengthW };
 }
 
@@ -171,6 +175,12 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     }
   }
   const zWeek = zmap(weekNet);
+  const weekW = {}, weekL = {};
+  if (!final && week > 0) for (const g of season.games) {
+    if (g.week !== week || !isFinal(g)) continue;
+    const w = winnerOf(g), l = w === g.home ? g.away : g.home;
+    weekW[w] = (weekW[w] || 0) + 1; weekL[l] = (weekL[l] || 0) + 1;
+  }
 
   const pts = {}, fp = {}, ballots = {};
   for (const v of VOTER_PANEL) {
@@ -179,7 +189,7 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     // Personality: how much strength vs résumé, and how much of the résumé is RPI.
     const sw = clamp(strengthW + v.talent * 0.3, 0.2, 0.92);
     const rpiMix = clamp(v.rpi - 0.35, 0, 0.5);
-    const ballot = teams.map(t => {
+    const full = teams.map(t => {
       const resume = played ? (1 - rpiMix) * zQ[t] + rpiMix * zR[t] : 0;
       let sc = sw * zP[t] + (1 - sw) * resume;
       sc += v.sos * zS[t] * Math.min(1, played / 20);
@@ -191,13 +201,16 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
       sc += postBonus?.[t] || 0;
       sc += normal(noise) * v.noise;
       return [t, sc];
-    }).sort((a, b) => b[1] - a[1]).slice(0, size).map(x => x[0]);
+    }).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    // No voter moves a ranked team up after a losing week.
+    const ballot = holdLosers(full, prevRank, weekW, weekL).slice(0, size);
     ballots[v.id] = ballot;
     ballot.forEach((t, i) => { pts[t] = (pts[t] || 0) + size - i; if (i === 0) fp[t] = (fp[t] || 0) + 1; });
   }
   // Ties in points go to the consensus score.
   const cons = teamScores(season, wk, { postBonus }).scores;
-  let order = Object.keys(pts).sort((a, b) => pts[b] - pts[a] || cons[b] - cons[a]);
+  let order = holdLosers(Object.keys(pts).sort((a, b) => pts[b] - pts[a] || cons[b] - cons[a]), prevRank, weekW, weekL);
+  for (let i = 1; i < order.length; i++) if (pts[order[i]] > pts[order[i - 1]]) pts[order[i]] = pts[order[i - 1]];
   // The champion is the unanimous #1 in the final poll.
   if (final && season.post?.champion) {
     const c = season.post.champion;
@@ -212,6 +225,24 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     ranks: order.slice(0, size).map(t => ({ team: t, pts: pts[t], fp: fp[t] || 0, record: rec(t) })),
     others: order.slice(size).filter(t => pts[t] > 0).map(t => ({ team: t, pts: pts[t], record: rec(t) })),
   };
+}
+
+// A team ranked last week that lost more games than it won this week can't
+// be placed above its old spot; it's moved back down to it.
+// A ranked team that won every game it played this week can't drop.
+function holdLosers(order, prevRank, weekW, weekL) {
+  const list = [...order];
+  const losers = Object.keys(prevRank).filter(t => (weekL[t] || 0) > (weekW[t] || 0)).sort((a, b) => prevRank[a] - prevRank[b]);
+  for (const t of losers) {
+    const i = list.indexOf(t), floor = prevRank[t] - 1;
+    if (i >= 0 && i < floor) { list.splice(i, 1); list.splice(floor, 0, t); }
+  }
+  const unbeaten = Object.keys(prevRank).filter(t => (weekW[t] || 0) > 0 && !weekL[t]).sort((a, b) => prevRank[a] - prevRank[b]);
+  for (const t of unbeaten) {
+    const i = list.indexOf(t), ceil = prevRank[t] - 1;
+    if (i > ceil) { list.splice(i, 1); list.splice(ceil, 0, t); }
+  }
+  return list;
 }
 
 // A week's poll comes out once all of that week's games are final.

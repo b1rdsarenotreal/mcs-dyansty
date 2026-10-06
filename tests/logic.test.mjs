@@ -201,6 +201,20 @@ const p6 = s.polls[6], r6 = Object.fromEntries(p6.ranks.map((x, i) => [x.team, i
 const spread = Object.values(p6.ballots).map(b => b.reduce((acc, t, i) => acc + (r6[t] ? Math.abs(r6[t] - (i + 1)) : 6), 0) / b.length);
 console.log('week 6: ballots differ from the poll by', Math.min(...spread).toFixed(2), 'to', Math.max(...spread).toFixed(2), 'spots on average');
 assert.ok(Math.max(...spread) < 3.5 && Math.min(...spread) > 0, 'voters disagree a little, not wildly');
+// Poll rules: a ranked team with a losing week never moves up; one that wins every game never drops.
+{
+  const ws = Object.keys(s.polls).filter(k => k !== 'final').map(Number).sort((a, b) => a - b);
+  for (let i = 1; i < ws.length; i++) {
+    const a = s.polls[ws[i - 1]].ranks.map(x => x.team), b = s.polls[ws[i]].ranks.map(x => x.team);
+    const W = {}, Lo = {};
+    for (const g of s.games.filter(g => g.week === ws[i] && isFinal(g))) { const w = g.homeR > g.awayR ? g.home : g.away; const l = w === g.home ? g.away : g.home; W[w] = (W[w] || 0) + 1; Lo[l] = (Lo[l] || 0) + 1; }
+    for (const t of a) {
+      const now = b.includes(t) ? b.indexOf(t) : 99;
+      if ((Lo[t] || 0) > (W[t] || 0)) assert.ok(now >= a.indexOf(t), `week ${ws[i]}: ${t} lost the week but moved up`);
+      if ((W[t] || 0) > 0 && !Lo[t]) assert.ok(now <= a.indexOf(t), `week ${ws[i]}: ${t} won every game but dropped`);
+    }
+  }
+}
 // By the end of the regular season the poll tracks the résumé: the top 5 are all top-12 RPI teams.
 {
   const lastW = Math.max(...Object.keys(s.polls).filter(k => k !== 'final').map(Number).filter(w => w <= 12));
