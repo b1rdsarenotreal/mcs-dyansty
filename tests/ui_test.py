@@ -68,6 +68,11 @@ try:
         pg.screenshot(path=f"{OUT}/07b-conf-brackets.png", full_page=True)
         pg.goto(url + "#/postseason"); pg.click("[data-pt=field]"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/08-field.png", full_page=True)
+        assert pg.locator(".reg-preview .reg-prev").count() == 4, "regional preview shows every regional"
+        for w in (1024, 390):
+            pg.set_viewport_size({"width": w, "height": 900}); pg.wait_for_timeout(150)
+            pg.screenshot(path=f"{OUT}/08-field-{w}.png", full_page=True)
+        pg.set_viewport_size({"width": 1400, "height": 1000})
         pg.click("#f-lock"); pg.wait_for_timeout(500)
         pg.screenshot(path=f"{OUT}/09-regionals.png", full_page=True)
         pg.click("#ps-all"); pg.wait_for_timeout(1500)

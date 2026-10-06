@@ -13,7 +13,23 @@ assert.equal(Object.keys(s.teams).length, 45);
 assert.equal(s.regWeeks, 12);
 const reg = s.games.filter(g => g.type === 'regular');
 assert.equal(Math.max(...reg.map(g => g.week)), 12);
-assert.ok(reg.every(g => ['Fri', 'Sat', 'Sun', 'Tue', 'Wed'].includes(g.day)), 'games only on weekends, Tuesdays and Wednesdays');
+assert.ok(reg.every(g => ['Fri', 'Sat', 'Sun', 'Tue', 'Wed', 'Thu'].includes(g.day)), 'games only on weekends, midweek and Thursdays');
+// Conference rivals only meet in conference play; Thursday games are single
+// games for teams without a weekend series, against another conference.
+assert.ok(reg.every(g => g.confGame || s.teams[g.home].conference !== s.teams[g.away].conference), 'no non-conference games between conference rivals');
+const thuGames = reg.filter(g => g.day === 'Thu');
+assert.ok(thuGames.length > 0 && thuGames.every(g => !g.series && !g.confGame), 'Thursday games are single non-conference games');
+// Once a conference starts conference play, its teams play a conference series
+// every weekend (or a Thursday game / weekend series in a bye week).
+const confStart = {};
+for (const g of reg.filter(g => g.confGame)) for (const t of [g.home, g.away]) confStart[t] = Math.min(confStart[t] ?? 99, g.week);
+for (const [t, w0] of Object.entries(confStart)) {
+  const byes = [];
+  for (let w = w0; w <= 12; w++) if (!reg.some(g => g.week === w && g.day === 'Fri' && g.confGame && (g.home === t || g.away === t))) byes.push(w);
+  assert.ok(byes.length <= 1, `${t} plays conference series every weekend once its conference play starts (${byes})`);
+}
+const lastConf = Object.values(s.teams).map(t => t.conference);
+assert.ok(new Set(reg.filter(g => g.confGame && g.week === 12).flatMap(g => [s.teams[g.home].conference])).size === new Set(lastConf).size, 'every conference plays on the final weekend');
 const mids = {};
 for (const g of reg.filter(g => g.day === 'Tue' || g.day === 'Wed')) (mids[g.series] ||= []).push(g);
 const midSets = Object.values(mids);

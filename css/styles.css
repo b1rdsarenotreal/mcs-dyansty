@@ -381,3 +381,32 @@ table.voters tr.sel td { background: var(--chip); }
 .ballot { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel-2); position: sticky; top: 70px; }
 .ballot h3 { margin: 0 0 2px; }
 @media (max-width: 900px) { .voter-layout { grid-template-columns: 1fr; } .ballot { position: static; } }
+
+/* Selection tab: field table with a regional preview beside it */
+.field-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; margin-top: 14px; }
+.field-layout > * { min-width: 0; }
+.field-layout > .card + .card { margin-top: 0; }
+.reg-preview { position: sticky; top: 12px; }
+.reg-prev-list { display: grid; gap: 10px; }
+.reg-prev { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 8px 10px; min-width: 0; }
+.reg-prev.clash { border-color: var(--bad); }
+.reg-prev-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; min-width: 0; }
+.reg-prev-title { font: 600 14px var(--display); text-transform: uppercase; letter-spacing: .03em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-prev-ovr { font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.reg-prev-ovr .up { color: var(--good); } .reg-prev-ovr .down { color: var(--bad); }
+.reg-prev-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto; gap: 6px; align-items: center; padding: 3px 0; border-top: 1px dashed var(--line); font-size: 13px; }
+.reg-prev-row.dup { background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.reg-prev-seed { font: 600 12px var(--mono); color: var(--muted); text-align: center; }
+.reg-prev-team { min-width: 0; overflow: hidden; }
+.reg-prev-team .team { display: flex; min-width: 0; max-width: 100%; }
+.reg-prev-team .team-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.reg-prev-conf { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.reg-prev-num { font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.reg-prev-warn { margin-top: 4px; font-size: 12px; color: var(--bad); }
+.warn-text { color: var(--bad); }
+@media (max-width: 1180px) {
+  .field-layout { grid-template-columns: minmax(0, 1fr); }
+  .reg-preview { position: static; }
+  .reg-prev-list { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+@media (max-width: 640px) { .reg-prev-list { grid-template-columns: minmax(0, 1fr); } }

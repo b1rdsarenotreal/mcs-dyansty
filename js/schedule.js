@@ -10,7 +10,7 @@
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261005215054';
+import { rng, shuffle, hashStr } from './util.js?v=20261005224418';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -69,7 +69,6 @@ function crossPairs(pool, teams, met, r, played = null, sat = null) {
       const a = left.shift();
       let j = left.findIndex(b => teams[b].conference !== teams[a].conference && !met.has(key(a, b)));
       if (j < 0 && attempt > 120) j = left.findIndex(b => teams[b].conference !== teams[a].conference);
-      if (j < 0 && attempt > 170) j = 0;
       if (j < 0) { ok = false; break; }
       pairs.push([a, left.splice(j, 1)[0]]);
     }
@@ -85,7 +84,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   const names = Object.keys(teams);
   const homeCount = Object.fromEntries(names.map(n => [n, 0]));
   const played = Object.fromEntries(names.map(n => [n, 0]));
-  const metSeries = new Set(), metMid = new Set();
+  const metSeries = new Set(), metMid = new Set(), metThu = new Set();
   const games = [];
   let seriesNo = 1;
 
@@ -121,24 +120,16 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   for (const n of names) (byConf[teams[n].conference] ||= []).push(n);
   // Conference rounds go in the last weeks of the season.
   const confWeeks = confWeeksFor(REG, Math.max(0, ...Object.values(byConf).map(l => rrRounds(l.length))));
-  const NONCONF = REG - confWeeks;
   const weekPairs = {}; // week -> conference pairs
-  // Conferences' open weeks are staggered so that every conference week has
-  // some teams free for non-conference series (otherwise a team with a bye
-  // can be left without an opponent).
-  const openCount = Array(confWeeks).fill(0);
-  const confOrder = Object.entries(byConf).sort((a, b) => rrRounds(a[1].length) - rrRounds(b[1].length) || a[0].localeCompare(b[0]));
-  for (const [conf, list] of confOrder) {
+  // A conference that needs fewer rounds than there are conference weeks
+  // starts its conference play later: its open weeks come first, so once a
+  // conference starts it plays every weekend until the end of the season.
+  for (const [conf, list] of Object.entries(byConf).sort((a, b) => a[0].localeCompare(b[0]))) {
     if (list.length < 2) continue;
     let rounds = roundRobin(list, r);
     if (rounds.length > confWeeks) rounds = rounds.slice(0, confWeeks);
-    const weeks = [];
-    const open = confWeeks - rounds.length;
-    const slots = shuffle([...Array(confWeeks).keys()], r).sort((a, b) => openCount[a] - openCount[b]);
-    const openWeeks = new Set(slots.slice(0, open));
-    for (const w of openWeeks) openCount[w]++;
-    for (let w = 0; w < confWeeks; w++) if (!openWeeks.has(w)) weeks.push(NONCONF + 1 + w);
-    rounds.forEach((pairs, i) => { (weekPairs[weeks[i]] ||= []).push(...pairs.filter(([a, b]) => a && b).map(p => [...p, conf])); });
+    const first = REG - rounds.length + 1;
+    rounds.forEach((pairs, i) => { (weekPairs[first + i] ||= []).push(...pairs.filter(([a, b]) => a && b).map(p => [...p, conf])); });
   }
 
   let midNo = 1;
@@ -150,8 +141,23 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
       addSeries(week, h, aw, true); busy.add(a); busy.add(b);
     }
     const free = names.filter(n => !busy.has(n));
-    const { pairs } = crossPairs(free, teams, metSeries, r, played, satWeekend);
+    const { pairs, idle } = crossPairs(free, teams, metSeries, r, played, satWeekend);
     for (const [a, b] of pairs) { const [h, aw] = orient(a, b); addSeries(week, h, aw, false); }
+    // A team without a weekend series (a conference bye with nobody else free,
+    // or the odd team out) plays one Thursday game against a team from
+    // another conference, preferably one it hasn't played and one with
+    // fewer games so far.
+    const thu = new Set();
+    for (const a of shuffle(idle, r)) {
+      const opts = names.filter(b => b !== a && !thu.has(b) && !idle.includes(b) && teams[b].conference !== teams[a].conference);
+      if (!opts.length) continue;
+      const score = b => (metThu.has(key(a, b)) ? 100 : 0) + (metSeries.has(key(a, b)) ? 10 : 0) + played[b] + r();
+      const b = opts.reduce((x, y) => (score(y) < score(x) ? y : x));
+      const [h, aw] = orient(a, b);
+      games.push(blankGame(season, { week, day: 'Thu', order: DAY_ORDER.Thu, home: h, away: aw }));
+      homeCount[h]++; played[a]++; played[b]++;
+      thu.add(a); thu.add(b); metThu.add(key(a, b));
+    }
 
     if (week >= midStart && week <= REG - (midSkipLast ? 1 : 0)) {
       const { pairs: mids } = crossPairs(names, teams, metMid, r, played, satMid);

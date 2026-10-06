@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261005215054';
-import { logoFor } from './logos.js?v=20261005215054';
-import { LOGO_ALIASES } from './data.js?v=20261005215054';
-import { ovr, winProbability } from './sim.js?v=20261005215054';
-import { records, isFinal, winnerOf } from './standings.js?v=20261005215054';
-import { latestPoll, pollRankMap } from './polls.js?v=20261005215054';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261005215054';
-import { regWeeksOf } from './postseason.js?v=20261005215054';
-import { DAY_ORDER } from './schedule.js?v=20261005215054';
-import { esc } from './util.js?v=20261005215054';
+import { saveLeague } from './store.js?v=20261005224418';
+import { logoFor } from './logos.js?v=20261005224418';
+import { LOGO_ALIASES } from './data.js?v=20261005224418';
+import { ovr, winProbability } from './sim.js?v=20261005224418';
+import { records, isFinal, winnerOf } from './standings.js?v=20261005224418';
+import { latestPoll, pollRankMap } from './polls.js?v=20261005224418';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261005224418';
+import { regWeeksOf } from './postseason.js?v=20261005224418';
+import { DAY_ORDER } from './schedule.js?v=20261005224418';
+import { esc } from './util.js?v=20261005224418';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -164,7 +164,7 @@ export function gameCard(g) {
   const cell = (arr, i) => (fin ? (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '') : '');
   const recs = cache.recs();
   const line = (t, arr, R, H, E) => `<div class="line sb" style="--q:${n}">
-      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}</span>` : ''}</div>
+      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}${confGame ? ` (${recs[t].cw}-${recs[t].cl})` : ''}</span>` : ''}</div>
       ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
   const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
