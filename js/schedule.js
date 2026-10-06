@@ -1,7 +1,8 @@
 // Regular-season schedule. Its length comes from the season's settings
 // (12 weeks by default). The last weeks are conference series (round robin,
-// three games each); there are as many as the largest conference needs, and
-// the weeks before them are non-conference weekend series. From week 4
+// three games each). A conference's size sets when its conference play
+// starts: one week per round of its round robin, up to 9 weeks, all ending on
+// the final weekend. The weeks before are non-conference weekend series. From week 4
 // (a setting) until the week before the last, every team also plays a
 // two-game midweek set: a Tuesday doubleheader or a
 // Tuesday and Wednesday game against the same opponent (or, in older
@@ -10,7 +11,7 @@
 // When `prev` (last season) is given, conference opponents who met last year
 // swap home and away.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261006124605';
+import { rng, shuffle, hashStr } from './util.js?v=20261006134650';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -18,7 +19,11 @@ export const MIDWEEK = { single: 'One game on Tuesday', doubleheader: 'Tuesday d
 
 // Conference weeks for a season of `regWeeks` weeks whose largest
 // conference round robin needs `rounds` weeks.
-export function confWeeksFor(regWeeks, rounds) { return Math.max(1, Math.min(regWeeks - 2, Math.max(rounds, regWeeks - 4))); }
+// No conference plays more than 9 weeks of conference series. A conference
+// with more than 10 teams plays 9 of its members each season (which ones
+// changes every year); smaller conferences start conference play later.
+export const MAX_CONF_WEEKS = 9;
+export function confWeeksFor(regWeeks, rounds) { return Math.max(1, Math.min(regWeeks - 2, MAX_CONF_WEEKS, Math.max(rounds, regWeeks - 4))); }
 const rrRounds = n => (n < 2 ? 0 : n % 2 ? n : n - 1);
 export const DAY_ORDER = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 

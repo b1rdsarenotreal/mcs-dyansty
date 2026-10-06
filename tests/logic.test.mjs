@@ -1,3 +1,4 @@
+import { confWeeksFor } from '../js/schedule.js';
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
@@ -58,6 +59,8 @@ const slot = new Set();
 for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.week}|${g.day}|${g.order}`; assert.ok(!slot.has(k), k); slot.add(k); }
 for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => x !== g && x.week === g.week && x.day === g.day && !x.series !== !g.series && (x.home === t || x.away === t) && x.series !== g.series), 'one opponent per day');
 
+// Conference play is never longer than 9 weeks; size sets the start.
+assert.equal(confWeeksFor(12, 11), 9); assert.equal(confWeeksFor(12, 9), 9); assert.equal(confWeeksFor(12, 5), 8); assert.equal(confWeeksFor(14, 13), 9);
 // Hand-entered scores: hits and errors estimated from the line and ratings
 {
   const g = reg.find(x => !isFinal(x));

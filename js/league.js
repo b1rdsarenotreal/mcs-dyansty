@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261006124605';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261006124605';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261006124605';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261006124605';
-import { replayRatings, ensureBase } from './ratings.js?v=20261006124605';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts } from './postseason.js?v=20261006124605';
-import { isFinal } from './standings.js?v=20261006124605';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261006124605';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261006134650';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261006134650';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261006134650';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261006134650';
+import { replayRatings, ensureBase } from './ratings.js?v=20261006134650';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts } from './postseason.js?v=20261006134650';
+import { isFinal } from './standings.js?v=20261006134650';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261006134650';
 
 export const SCHEMA_VERSION = 4;
 
@@ -293,7 +293,7 @@ export function draftWarnings(league) {
     if (n === 1) out.push(`${c} has only one team, so it has no conference games. It still gets an automatic bid.`);
     const R = currentSeason(league).settings.regWeeks ?? DEFAULT_REG_WEEKS;
     const rounds = n % 2 ? n : n - 1, fits = confWeeksFor(R, rounds);
-    if (rounds > fits) out.push(`${c} has ${n} teams. A ${R}-week season has room for ${fits} conference weeks, so some members won't play each other.`);
+    if (rounds > fits) out.push(`${c} has ${n} teams. Conference play is capped at ${fits} weeks, so each team plays about ${fits} of its ${n - 1} conference opponents (which ones changes every season).`);
   }
   if (Object.keys(league.draft.teams).length < 16) out.push('The NCAA field needs at least 16 teams.');
   const open = Object.values(league.draft.teams).filter(t => !t.coachId).map(t => t.school).sort();

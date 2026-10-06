@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261006124605';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261006124605';
-import { ovr } from './sim.js?v=20261006124605';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261006124605';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261006124605';
-import { setRating } from './ratings.js?v=20261006124605';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261006124605';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261006124605';
-import { exportLeague, clearLeague } from './store.js?v=20261006124605';
-import { clamp } from './util.js?v=20261006124605';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261006134650';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261006134650';
+import { ovr } from './sim.js?v=20261006134650';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261006134650';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261006134650';
+import { setRating } from './ratings.js?v=20261006134650';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261006134650';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261006134650';
+import { exportLeague, clearLeague } from './store.js?v=20261006134650';
+import { clamp } from './util.js?v=20261006134650';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -572,7 +572,7 @@ export function renderSettings() {
         <label class="field">Midweek games start in <select id="s-midstart">${Array.from({ length: 6 }, (_, i) => i + 1).map(w => `<option value="${w}" ${(cs.midweekStart ?? 4) === w ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" id="s-midskip" ${(cs.midweekSkipLast ?? true) ? 'checked' : ''}> No midweek games in the last regular-season week</label>
         <p class="small">About <b>${gamesEstimate(cs)}</b> games per team.</p>
-        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; midweek sets are two games against one opponent (a Tuesday doubleheader or Tuesday and Wednesday games). Conference play fills the last weeks: the largest conference starts first and smaller ones start later, so everyone finishes on the final weekend and nobody plays a non-conference weekend series once their conference season starts. A team with a conference bye plays a single Thursday game against another conference instead.</p>
+        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; midweek sets are two games against one opponent (a Tuesday doubleheader or Tuesday and Wednesday games). Conference play fills the last weeks. A conference's size sets when it starts (one week per round of its round robin, at most 9 weeks; bigger conferences play 9 of their members), and everyone finishes on the final weekend and nobody plays a non-conference weekend series once their conference season starts. A team with a conference bye plays a single Thursday game against another conference instead.</p>
       </div>
       <div class="card stack ncaa-card"><h2>NCAA tournament</h2>
         <label class="field">Men's College World Series <select id="n-ws">${[[4, '4 teams: double elimination to two, then a best-of-three final'], [8, '8 teams: Bracket A and Bracket B, then a best-of-three final']].map(([v, l]) => `<option value="${v}" ${nc.wsSize === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
