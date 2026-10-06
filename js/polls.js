@@ -1,16 +1,17 @@
 // Generated Top-N poll (15 by default; Settings changes the size). A fixed
 // panel of 23 voters fills out ballots. Every voter starts from the same
 // picture — team strength (OVR) early in the season, shifting to résumé
-// (RPI and record) as games are played, plus last week's poll — and then
+// (RPI and record) as games are played, plus last week's poll and results
+// against ranked teams — and then
 // leans a little according to a built-in personality: some trust talent,
 // some trust numbers, some punish bad losses, some watch one conference
 // closely. The leans are small, so the poll stays close to a consensus.
 // Personalities live here in the code and aren't editable in the app.
 // The commissioner can still edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261006142630';
-import { ovr } from './sim.js?v=20261006142630';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006142630';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261006152118';
+import { ovr } from './sim.js?v=20261006152118';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006152118';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -88,6 +89,35 @@ function pollInputs(season, week) {
   return { teams, recs, r, zO, zR, zW, zS, wr };
 }
 
+// Credit for results against ranked teams, using the poll that was out when
+// each game was played. A win over the #1 team is worth the most; a loss to
+// an unranked team costs the most, and costs a highly ranked team more.
+// Older weeks fade (the polls in between already moved teams for them).
+const Q_WIN = 0.45, Q_BAD = 0.24, Q_UPSET = 0.18, Q_LOSS = 0.08, Q_FADE = 0.6;
+export function resultsCredit(season, week) {
+  const out = Object.fromEntries(Object.keys(season.teams).map(t => [t, 0]));
+  const rankCache = {};
+  const ranksBefore = w => (rankCache[w] ||= (() => {
+    const p = previousPoll(season, w), m = {};
+    p?.ranks.forEach((x, i) => { m[x.team] = i + 1; });
+    return { m, n: p?.ranks.length || pollSizeOf(season) };
+  })());
+  for (const g of season.games) {
+    if (!isFinal(g) || g.week > week) continue;
+    const fade = Q_FADE ** Math.max(0, week - g.week);
+    const { m, n } = ranksBefore(g.week);
+    const w = winnerOf(g), l = w === g.home ? g.away : g.home;
+    const rw = m[w], rl = m[l];
+    const val = r => (n + 1 - r) / n; // 1 for #1, small for the last ranked team
+    if (out[w] !== undefined && rl && (!rw || rw > rl)) out[w] += fade * Q_WIN * val(rl) * (rw ? 0.5 : 1);
+    if (out[l] === undefined || !rl) continue;
+    if (!rw) out[l] -= fade * Q_BAD * (0.5 + val(rl));                 // ranked team loses to an unranked one
+    else if (rw > rl) out[l] -= fade * Q_UPSET * (rw - rl) / n;          // loses to a lower-ranked team
+    else out[l] -= fade * Q_LOSS;                                         // loses to a higher-ranked team: small
+  }
+  return out;
+}
+
 // Consensus résumé-plus-strength score (also used by the selection committee).
 export function teamScores(season, week, { postBonus = null } = {}) {
   const { teams, recs, r, zO, zR, zW, wr } = pollInputs(season, week);
@@ -119,6 +149,9 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
     }
   }
   const zWeek = zmap(weekNet);
+  // Who beat whom: every voter credits wins over ranked teams and marks down
+  // losses to unranked or lower-ranked teams (more for a team ranked high).
+  const quality = resultsCredit(season, wk);
 
   const pts = {}, fp = {}, ballots = {};
   for (const v of VOTER_PANEL) {
@@ -130,6 +163,8 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
       sc += v.sos * zS[t] * Math.min(1, wr[t] * 2);
       if (prevRank[t]) sc += inertia * v.loyalty * (prevSize + 1 - prevRank[t]) / prevSize;
       sc += v.recency * zWeek[t];
+      // Recent-results voters weigh head-to-head results more; loyal ones a bit less.
+      sc += quality[t] * (1 + 2.5 * v.recency) / Math.sqrt(v.loyalty) + (quality[t] < 0 ? quality[t] * v.losses * 3 : 0);
       sc -= v.losses * badLosses[t];
       if (vconf && season.teams[t].conference === vconf) sc += v.regionBoost;
       sc += postBonus?.[t] || 0;
