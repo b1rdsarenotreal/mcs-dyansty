@@ -1,5 +1,6 @@
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
+import { estimateHE, backfillHitsErrors, applyResult } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
 import { setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal } from '../js/standings.js';
@@ -57,6 +58,16 @@ const slot = new Set();
 for (const g of reg) for (const t of [g.home, g.away]) { const k = `${t}|${g.week}|${g.day}|${g.order}`; assert.ok(!slot.has(k), k); slot.add(k); }
 for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => x !== g && x.week === g.week && x.day === g.day && !x.series !== !g.series && (x.home === t || x.away === t) && x.series !== g.series), 'one opponent per day');
 
+// Hand-entered scores: hits and errors estimated from the line and ratings
+{
+  const g = reg.find(x => !isFinal(x));
+  const e = estimateHE(s, g, [0, 2, 0, 0, 1, 0, null], [1, 0, 0, 0, 0, 1, 0]);
+  assert.ok(e.home.H >= 2 && e.away.H >= 1 && e.home.H < 15, 'estimated hits fit the runs');
+  applyResult(g, { homeLine: [0, 0, 0, 0, 0, 0, 0, 1], awayLine: [0, 0, 0, 0, 0, 0, 0, 0], home: { R: 1, H: 0, E: 0 }, away: { R: 0, H: 0, E: 0 } }, 'manual');
+  assert.equal(backfillHitsErrors(s), 1, 'backfill finds the game with no hits or errors');
+  assert.ok(g.homeH + g.homeE + g.awayE >= 0 && g.heEstimated);
+  g.final = false; g.homeR = g.awayR = null; g.homeLine = []; g.awayLine = []; g.source = null; delete g.heEstimated;
+}
 assert.ok(s.polls[0].ranks.length === 15, 'preseason poll is a Top 15');
 assert.equal(Object.keys(s.polls[0].ballots).length, 23, '23 voters each turn in a ballot');
 assert.ok(Object.values(s.polls[0].ballots).every(b => b.length === 15 && new Set(b).size === 15));

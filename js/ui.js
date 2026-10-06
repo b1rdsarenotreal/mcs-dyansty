@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261005224418';
-import { logoFor } from './logos.js?v=20261005224418';
-import { LOGO_ALIASES } from './data.js?v=20261005224418';
-import { ovr, winProbability } from './sim.js?v=20261005224418';
-import { records, isFinal, winnerOf } from './standings.js?v=20261005224418';
-import { latestPoll, pollRankMap } from './polls.js?v=20261005224418';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName } from './league.js?v=20261005224418';
-import { regWeeksOf } from './postseason.js?v=20261005224418';
-import { DAY_ORDER } from './schedule.js?v=20261005224418';
-import { esc } from './util.js?v=20261005224418';
+import { saveLeague } from './store.js?v=20261005225714';
+import { logoFor } from './logos.js?v=20261005225714';
+import { LOGO_ALIASES } from './data.js?v=20261005225714';
+import { ovr, winProbability } from './sim.js?v=20261005225714';
+import { records, isFinal, winnerOf } from './standings.js?v=20261005225714';
+import { latestPoll, pollRankMap } from './polls.js?v=20261005225714';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261005225714';
+import { regWeeksOf } from './postseason.js?v=20261005225714';
+import { DAY_ORDER } from './schedule.js?v=20261005225714';
+import { esc } from './util.js?v=20261005225714';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -247,6 +247,9 @@ export function openGame(id, { isNew = false } = {}) {
   const s = S(), g = s.games.find(x => x.id === id);
   if (!g) return;
   let source = g.source;
+  // Hits and errors that came from a simulation or an estimate (not typed in)
+  // are cleared when the runs change, so they get estimated again.
+  let autoHE = g.source === 'sim' || !!g.heEstimated;
   let n = isFinal(g) ? Math.max(g.homeLine.length, g.awayLine.length) : 7;
   const regular = g.type === 'regular';
   const cellVal = (arr, i) => (isFinal(g) && i < arr.length ? (arr[i] === null ? '' : arr[i]) : '');
@@ -264,7 +267,8 @@ export function openGame(id, { isNew = false } = {}) {
         <label class="check"><input type="checkbox" id="m-conf" ${g.confGame ? 'checked' : ''}> Conference game</label></div>` : ''}
       <div class="table-wrap"><div class="lsgrid" id="m-grid"></div></div>
       <div class="row"><button class="btn sm" id="m-addinn">+ Extra inning</button><button class="btn sm" id="m-delinn">− Inning</button>
-        <span class="small muted">Leave the home team's last inning blank for an "X" (they didn't need to bat).</span></div>
+        <button class="btn sm" id="m-est" title="Fill hits and errors from the line score and the teams' ratings">⚾ Estimate H &amp; E</button>
+        <span class="small muted">Leave the home team's last inning blank for an "X" (they didn't need to bat). Hits and errors left blank are estimated from the line score and the teams' ratings when you save.</span></div>
       <div id="m-preview"></div>
     </div>
     <div class="modal-foot">
@@ -300,7 +304,14 @@ export function openGame(id, { isNew = false } = {}) {
         <input type="text" inputmode="numeric" maxlength="2" id="m-${side}E" value="${esc(values[side + 'E'])}" aria-label="${side} errors"></div>`;
     }
     $('#m-grid', modal).innerHTML = h;
-    $$('#m-grid input', modal).forEach(i => (i.oninput = () => { source = 'manual'; readGrid(); totals(); }));
+    $$('#m-grid input', modal).forEach(i => (i.oninput = () => {
+      source = 'manual';
+      if (i.dataset.inn != null) {
+        if (autoHE) { autoHE = false; for (const k of ['awayH', 'awayE', 'homeH', 'homeE']) { values[k] = ''; $(`#m-${k}`, modal).value = ''; } }
+      } else autoHE = false;
+      readGrid(); totals();
+    }));
+    for (const k of ['awayH', 'awayE', 'homeH', 'homeE']) $(`#m-${k}`, modal).placeholder = 'auto';
     // Tab follows the game: top 1st, bottom 1st, top 2nd, … then hits and
     // errors. Shift+Tab goes back. Each box's number is selected so typing replaces it.
     const order = [];
@@ -355,7 +366,7 @@ export function openGame(id, { isNew = false } = {}) {
     values.away = res.awayLine.map(v => (v === null ? '' : v));
     values.home = res.homeLine.map(v => (v === null ? '' : v));
     Object.assign(values, { awayH: res.away.H, awayE: res.away.E, homeH: res.home.H, homeE: res.home.E });
-    source = 'sim';
+    source = 'sim'; autoHE = true;
     drawGrid(); refresh();
   };
   if ($('#m-clear', modal)) $('#m-clear', modal).onclick = () => { clearResult(g); modal.close(); changed(); toast('Result cleared.'); };
@@ -364,12 +375,13 @@ export function openGame(id, { isNew = false } = {}) {
     deleteGame(s, g.id); isNew = false; modal.close(); changed();
   };
 
-  $('#m-save', modal).onclick = () => {
+  const num = v => /^\d+$/.test(String(v).trim());
+  // Check the grid; returns the line scores, or shows what's wrong.
+  const readLines = () => {
     readGrid();
     const t = cur();
     if (!t.home || !t.away) return toast('Pick both teams.', true);
     if (t.home === t.away) return toast("A team can't play itself.", true);
-    const num = v => /^\d+$/.test(String(v).trim());
     const away = values.away.slice(0, n), home = values.home.slice(0, n);
     while (away.length < n) away.push(''); while (home.length < n) home.push('');
     if (away.some(v => !num(v))) return toast('Fill in every inning for the away team (0 is fine).', true);
@@ -380,6 +392,26 @@ export function openGame(id, { isNew = false } = {}) {
     const hr = sum(homeLine), ar = sum(awayLine);
     if (hr === ar) return toast("Games can't end tied. Add an extra inning.", true);
     if (homeLine[n - 1] === null && hr <= ar) return toast('The home team only skips its last at-bat when it is already ahead.', true);
+    return { t, homeLine, awayLine, hr, ar };
+  };
+  // Fill hits and errors from the ratings: all four, or only the blank ones.
+  const fillHE = (L, onlyBlank) => {
+    const e = estimateHE(s, { ...g, ...L.t }, L.homeLine, L.awayLine);
+    const est = { awayH: e.away.H, awayE: e.away.E, homeH: e.home.H, homeE: e.home.E };
+    let filled = 0;
+    for (const k of Object.keys(est)) if (!onlyBlank || values[k] === '') { values[k] = est[k]; filled++; }
+    return filled;
+  };
+  $('#m-est', modal).onclick = () => {
+    const L = readLines(); if (!L) return;
+    fillHE(L, false); autoHE = true; drawGrid();
+    toast('Hits and errors estimated. Change any of them before saving.');
+  };
+
+  $('#m-save', modal).onclick = () => {
+    const L = readLines(); if (!L) return;
+    const { t, homeLine, awayLine, hr, ar } = L;
+    const nEst = source !== 'sim' ? fillHE(L, true) : 0, estimated = nEst > 0;
     if (regular) {
       g.home = t.home; g.away = t.away; g.neutral = t.neutral; g.confGame = $('#m-conf', modal).checked;
       g.week = Math.max(1, Math.min(regWeeksOf(s), Number($('#m-week', modal).value) || g.week));
@@ -391,7 +423,8 @@ export function openGame(id, { isNew = false } = {}) {
       away: { R: ar, H: Number(values.awayH || 0), E: Number(values.awayE || 0) },
       runRule: n < 7,
     }, source === 'sim' ? 'sim' : 'manual');
-    isNew = false; modal.close(); changed(); toast('Result saved.');
+    if (nEst === 4 || (autoHE && source !== 'sim')) g.heEstimated = true; else delete g.heEstimated;
+    isNew = false; modal.close(); changed(); toast(estimated ? 'Result saved. Blank hits and errors were estimated from the ratings.' : 'Result saved.');
   };
   modal.showModal();
 }

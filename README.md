@@ -31,6 +31,7 @@ Simulated games play out every plate appearance. Hitting (OFF) faces pitching (P
 - **Series tally:** each weekend game shows where its series stands in the box's top corner, for example "Wisconsin leads series 1-0", "Series tied 1-1" or "Ohio State wins series 3-0". Games not yet played show the standing going in. The MCWS Championship Series works the same way. Long school names switch to their abbreviation so the score always fits.
 - **Fast score entry:** in the game editor, Tab moves through the line score in game order: top of the 1st, bottom of the 1st, top of the 2nd, and so on. After the last inning it goes to hits and errors, and Shift+Tab goes back. Each box's number is selected when you land on it, so typing replaces it.
 - **Simulations are suggestions:** in the game editor you can simulate, change anything, and then save. You can also type in a line score by hand.
+- **Hits and errors for hand-entered scores:** leave the H and E boxes blank and they're filled in when you save, based on the line score and both teams' ratings. Each half inning is replayed from the ratings until it produces exactly the runs you entered, so a 6-run inning comes with a believable number of hits, and a team that's bad in the field makes more errors. **Estimate H & E** fills them in early so you can adjust them, and anything you type yourself is kept. If you change the runs after an estimate, the estimate is cleared and redone. Settings → Simulation can also fill in hand-entered games saved earlier with 0 hits and 0 errors.
 
 ## The season
 

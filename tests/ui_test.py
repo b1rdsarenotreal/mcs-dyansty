@@ -45,6 +45,23 @@ try:
         pg.fill("#m-awayH", "7"); pg.fill("#m-homeH", "6"); pg.fill("#m-awayE", "1"); pg.fill("#m-homeE", "0")
         pg.click("#m-save"); pg.wait_for_timeout(200)
         assert not pg.locator("dialog[open]").count(), "manual save closed the editor"
+        # manual entry with hits and errors left blank: estimated on save
+        pg.locator(".game:not(.placeholder)").nth(4).click(); pg.wait_for_selector("dialog[open]")
+        vals = {"away": [1,0,0,3,0,0,0], "home": [0,2,0,0,0,0,1]}
+        for side, arr in vals.items():
+            for i, v in enumerate(arr):
+                pg.fill(f"input[data-side={side}][data-inn='{i}']", str(v))
+        pg.click("#m-est"); pg.wait_for_timeout(100)
+        est = [pg.input_value(f"#m-{k}") for k in ("awayH", "homeH")]
+        assert all(v.isdigit() and int(v) > 0 for v in est), f"estimate button fills hits {est}"
+        pg.fill("input[data-side=home][data-inn='6']", "3")  # changing runs clears the estimate
+        assert pg.input_value("#m-awayH") == "", "changing runs clears estimated hits"
+        pg.click("#m-save"); pg.wait_for_timeout(200)
+        pg.locator(".game:not(.placeholder)").nth(4).click(); pg.wait_for_selector("dialog[open]")
+        saved = [pg.input_value(f"#m-{k}") for k in ("awayH", "homeH", "awayE", "homeE")]
+        print("estimated H/E on save:", saved)
+        assert int(saved[0]) > 0 and int(saved[1]) > 0, "blank hits estimated on save"
+        pg.click("dialog[open] [data-x]"); pg.wait_for_timeout(100)
         pg.click("#w-rest") if pg.locator("#w-rest").count() else None
         pg.on("dialog", lambda d: d.accept())
         pg.goto(url + "#/schedule"); pg.wait_for_selector(".chip")

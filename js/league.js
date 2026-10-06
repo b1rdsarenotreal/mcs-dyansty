@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261005224418';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261005224418';
-import { simulateGame } from './sim.js?v=20261005224418';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261005224418';
-import { replayRatings, ensureBase } from './ratings.js?v=20261005224418';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA } from './postseason.js?v=20261005224418';
-import { isFinal } from './standings.js?v=20261005224418';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261005224418';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261005225714';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261005225714';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261005225714';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261005225714';
+import { replayRatings, ensureBase } from './ratings.js?v=20261005225714';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA } from './postseason.js?v=20261005225714';
+import { isFinal } from './standings.js?v=20261005225714';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261005225714';
 
 export const SCHEMA_VERSION = 4;
 
@@ -92,6 +92,29 @@ export function applyResult(g, res, source = 'sim') {
 
 export function clearResult(g) {
   Object.assign(g, { final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null, source: null, runRule: false });
+  delete g.heEstimated;
+}
+
+// Hits and errors for a hand-entered line score, from the teams' ratings.
+export function estimateHE(season, g, homeLine, awayLine) {
+  const s = season.settings;
+  return estimateHitsErrors(season.teams[g.home], season.teams[g.away], g, homeLine, awayLine, {
+    seed: hashStr(`${season.year}|${g.id}|${homeLine.join(',')}|${awayLine.join(',')}`), volatility: s.volatility, tiebreaker: s.tiebreaker,
+  });
+}
+
+// Hand-entered games saved before hits and errors were estimated have 0 hits
+// and 0 errors for both teams. Fill those in. Returns how many were updated.
+export function backfillHitsErrors(season) {
+  let n = 0;
+  for (const g of season.games) {
+    if (!g.final || g.source !== 'manual' || !season.teams[g.home] || !season.teams[g.away]) continue;
+    if (g.homeH || g.awayH || g.homeE || g.awayE || (g.homeR + g.awayR) === 0) continue;
+    const e = estimateHE(season, g, g.homeLine, g.awayLine);
+    g.homeH = e.home.H; g.homeE = e.home.E; g.awayH = e.away.H; g.awayE = e.away.E; g.heEstimated = true;
+    n++;
+  }
+  return n;
 }
 
 export function simResult(season, g, seed) {

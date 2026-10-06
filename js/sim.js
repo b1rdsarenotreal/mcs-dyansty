@@ -4,7 +4,7 @@
 // after 5, and from the 8th inning each half starts with a runner on second.
 // A simulation is only a suggestion — the commissioner reviews and saves it.
 
-import { rng as makeRng } from './util.js?v=20261005224418';
+import { rng as makeRng } from './util.js?v=20261005225714';
 
 export const OVR_WEIGHTS = { off: 0.4, pit: 0.4, def: 0.2 };
 const ovrExact = t => t.off * OVR_WEIGHTS.off + t.pit * OVR_WEIGHTS.pit + t.def * OVR_WEIGHTS.def;
@@ -40,6 +40,95 @@ function outcome(p, r) {
   return 'out';
 }
 
+// One half inning. onRun() is called for every run and returns true when
+// that run ends the game (walk-off or run rule). Returns runs, hits and the
+// fielding side's errors.
+function playHalf(batTeam, fldTeam, isHome, vol, r, runnerOnSecond, onRun = () => false) {
+  let outs = 0, runs = 0, H = 0, E = 0, over = false;
+  const b = [false, false, false];
+  if (runnerOnSecond) b[1] = true;
+  const p = paProbs(batTeam.off, fldTeam.pit, fldTeam.def, isHome, vol);
+  while (outs < 3 && !over) {
+    const o = outcome(p, r);
+    let n = 0;
+    switch (o) {
+      case 'k': outs++; break;
+      case 'bb': case 'hbp':
+        if (b[0] && b[1] && b[2]) n++;
+        b[2] = b[2] || (b[0] && b[1]); b[1] = b[1] || b[0]; b[0] = true;
+        break;
+      case 'hr': n = 1 + b.filter(Boolean).length; b[0] = b[1] = b[2] = false; H++; break;
+      case 'tri': n = b.filter(Boolean).length; b[0] = b[1] = false; b[2] = true; H++; break;
+      case 'dbl': {
+        if (b[2]) n++; if (b[1]) n++;
+        const third = b[0] && !(r() < 0.45 && ++n);
+        b[0] = false; b[1] = true; b[2] = !!third;
+        H++; break;
+      }
+      case 'sgl': {
+        const nb = [true, false, false];
+        if (b[2]) n++;
+        if (b[1]) { if (r() < 0.6) n++; else nb[2] = true; }
+        if (b[0]) { if (!nb[2] && r() < 0.28) nb[2] = true; else nb[1] = true; }
+        b[0] = nb[0]; b[1] = nb[1]; b[2] = nb[2];
+        H++; break;
+      }
+      case 'err': {
+        const nb = [true, false, false];
+        if (b[2]) n++;
+        if (b[1]) { if (r() < 0.4) n++; else nb[2] = true; }
+        if (b[0]) nb[1] = true;
+        b[0] = nb[0]; b[1] = nb[1]; b[2] = nb[2];
+        E++; break;
+      }
+      default: { // ball in play, out
+        outs++;
+        if (outs < 3 && b[0] && r() < 0.13) { outs++; b[0] = false; } // double play
+        if (outs < 3) {
+          if (b[2] && r() < 0.42) { n++; b[2] = false; }
+          if (b[1] && !b[2] && r() < 0.35) { b[2] = true; b[1] = false; }
+        }
+      }
+    }
+    for (let i = 0; i < n && !over; i++) { runs++; over = onRun(); }
+  }
+  return { runs, H, E };
+}
+
+// Hits and errors for a line score that was entered by hand. Every half
+// inning is replayed from the teams' ratings until it produces exactly the
+// runs that were scored, and the hits and errors from that replay are used.
+// A game-ending half inning (walk-off or run rule) stops at its last run.
+// Very big innings that rarely come up in a replay fall back to an estimate.
+export function estimateHitsErrors(homeTeam, awayTeam, game, homeLine, awayLine, { seed, volatility = 1, tiebreaker = true } = {}) {
+  const r = makeRng(seed ?? (Date.now() & 0x7fffffff));
+  const neutral = !!game?.neutral;
+  const out = { home: { H: 0, E: 0 }, away: { H: 0, E: 0 } };
+  const last = homeLine.length - 1;
+  let homeR = 0, awayR = 0;
+  for (let i = 0; i < Math.max(homeLine.length, awayLine.length); i++) {
+    for (const side of ['away', 'home']) {
+      const want = (side === 'home' ? homeLine : awayLine)[i];
+      if (want == null) continue; // the home team didn't bat
+      if (side === 'away') awayR += want; else homeR += want;
+      // The home team's last half inning ends when the game is decided.
+      const endsGame = side === 'home' && i === last && want > 0 && homeR > awayR;
+      const bat = side === 'home' ? homeTeam : awayTeam, fld = side === 'home' ? awayTeam : homeTeam;
+      const isHome = side === 'home' && !neutral;
+      let got = null;
+      for (let tries = 0; tries < 4000 && !got; tries++) {
+        let runs = 0;
+        const res = playHalf(bat, fld, isHome, volatility, r, tiebreaker && i >= 7, () => endsGame && ++runs >= want);
+        if (res.runs === want) got = res;
+      }
+      if (!got) got = { H: Math.max(1, Math.round(want * 0.85 + r() * 2)), E: r() < 0.25 ? 1 : 0 };
+      const fldSide = side === 'home' ? 'away' : 'home';
+      out[side].H += got.H; out[fldSide].E += got.E;
+    }
+  }
+  return out;
+}
+
 export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility = 1, runRule = true, tiebreaker = true } = {}) {
   const r = makeRng(seed);
   const vol = volatility;
@@ -55,65 +144,16 @@ export function simulateGame(homeTeam, awayTeam, game = {}, { seed, volatility =
   function halfInning(inning, batSide) {
     const defSide = batSide === 'home' ? 'away' : 'home';
     const bat = sides[batSide], fld = sides[defSide];
-    let outs = 0, runs = 0;
-    const b = [false, false, false];
-    if (tiebreaker && inning >= 8) b[1] = true;
     const isHome = batSide === 'home' && !neutral;
-
-    const scoreRuns = n => {
-      for (let i = 0; i < n; i++) {
-        bat.R++; runs++;
-        if (batSide === 'home' && inning >= 7 && bat.R > fld.R) gameOver = true; // walk-off
-        if (runRule && batSide === 'home' && inning >= 5 && bat.R - fld.R >= 8) { gameOver = true; runRuleEnd = true; }
-      }
-    };
-
-    while (outs < 3 && !gameOver) {
-      const p = paProbs(bat.team.off, fld.team.pit, fld.team.def, isHome, vol);
-      const o = outcome(p, r);
-      let n = 0;
-      switch (o) {
-        case 'k': outs++; break;
-        case 'bb': case 'hbp':
-          if (b[0] && b[1] && b[2]) n++;
-          b[2] = b[2] || (b[0] && b[1]); b[1] = b[1] || b[0]; b[0] = true;
-          break;
-        case 'hr': n = 1 + b.filter(Boolean).length; b[0] = b[1] = b[2] = false; bat.H++; break;
-        case 'tri': n = b.filter(Boolean).length; b[0] = b[1] = false; b[2] = true; bat.H++; break;
-        case 'dbl': {
-          if (b[2]) n++; if (b[1]) n++;
-          const third = b[0] && !(r() < 0.45 && ++n);
-          b[0] = false; b[1] = true; b[2] = !!third;
-          bat.H++; break;
-        }
-        case 'sgl': {
-          const nb = [true, false, false];
-          if (b[2]) n++;
-          if (b[1]) { if (r() < 0.6) n++; else nb[2] = true; }
-          if (b[0]) { if (!nb[2] && r() < 0.28) nb[2] = true; else nb[1] = true; }
-          b[0] = nb[0]; b[1] = nb[1]; b[2] = nb[2];
-          bat.H++; break;
-        }
-        case 'err': {
-          const nb = [true, false, false];
-          if (b[2]) n++;
-          if (b[1]) { if (r() < 0.4) n++; else nb[2] = true; }
-          if (b[0]) nb[1] = true;
-          b[0] = nb[0]; b[1] = nb[1]; b[2] = nb[2];
-          fld.E++; break;
-        }
-        default: { // ball in play, out
-          outs++;
-          if (outs < 3 && b[0] && r() < 0.13) { outs++; b[0] = false; } // double play
-          if (outs < 3) {
-            if (b[2] && r() < 0.42) { n++; b[2] = false; }
-            if (b[1] && !b[2] && r() < 0.35) { b[2] = true; b[1] = false; }
-          }
-        }
-      }
-      if (n) scoreRuns(n);
-    }
-    bat.innings.push(runs);
+    // Each run checks for a walk-off or the run rule ending the game.
+    const res = playHalf(bat.team, fld.team, isHome, vol, r, tiebreaker && inning >= 8, () => {
+      bat.R++;
+      if (batSide === 'home' && inning >= 7 && bat.R > fld.R) gameOver = true; // walk-off
+      if (runRule && batSide === 'home' && inning >= 5 && bat.R - fld.R >= 8) { gameOver = true; runRuleEnd = true; }
+      return gameOver;
+    });
+    bat.H += res.H; fld.E += res.E;
+    bat.innings.push(res.runs);
   }
 
   for (let inning = 1; inning <= 30 && !gameOver; inning++) {

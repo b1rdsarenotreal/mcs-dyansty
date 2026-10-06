@@ -1,12 +1,12 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005224418';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261005224418';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005224418';
-import { ovr } from './sim.js?v=20261005224418';
-import { simGames, addGame, weekName } from './league.js?v=20261005224418';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005224418';
-import { fmtPct, hashStr } from './util.js?v=20261005224418';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo } from './ui.js?v=20261005225714';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp } from './standings.js?v=20261005225714';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261005225714';
+import { ovr } from './sim.js?v=20261005225714';
+import { simGames, addGame, weekName } from './league.js?v=20261005225714';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout } from './postseason.js?v=20261005225714';
+import { fmtPct, hashStr } from './util.js?v=20261005225714';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }

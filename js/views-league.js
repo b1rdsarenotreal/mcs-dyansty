@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005224418';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005224418';
-import { ovr } from './sim.js?v=20261005224418';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005224418';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches } from './league.js?v=20261005224418';
-import { setRating } from './ratings.js?v=20261005224418';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005224418';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005224418';
-import { exportLeague, clearLeague } from './store.js?v=20261005224418';
-import { clamp } from './util.js?v=20261005224418';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261005225714';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp } from './standings.js?v=20261005225714';
+import { ovr } from './sim.js?v=20261005225714';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261005225714';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261005225714';
+import { setRating } from './ratings.js?v=20261005225714';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261005225714';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261005225714';
+import { exportLeague, clearLeague } from './store.js?v=20261005225714';
+import { clamp } from './util.js?v=20261005225714';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -541,6 +541,7 @@ export function renderSettings() {
   const ncDirty = ['regionals', 'perRegional', 'wsSize'].some(k => nc[k] !== saved[k]);
   const probs = ncaaProblems(nc, Object.keys(cur.teams).length);
   const canRebuild = !s.games.some(g => g.type === 'regular' && isFinal(g));
+  const missingHE = s.games.filter(g => g.final && g.source === 'manual' && s.teams[g.home] && s.teams[g.away] && !g.homeH && !g.awayH && !g.homeE && !g.awayE && (g.homeR + g.awayR) > 0).length;
   app.innerHTML = `<div class="section-head"><h1>Settings</h1></div>
     <div class="grid">
       <div class="card stack"><h2>League</h2>
@@ -556,6 +557,8 @@ export function renderSettings() {
         <label class="field">Ratings move with results during the season <select id="s-form">${[['none', 'No — ratings stay put'], ['small', 'A little'], ['normal', 'Normal'], ['big', 'A lot']].map(([v, l]) => `<option value="${v}" ${(st.form || 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" id="s-rr" ${st.runRule ? 'checked' : ''}> 8-run rule after 5 innings</label>
         <label class="check"><input type="checkbox" id="s-tb" ${st.tiebreaker ? 'checked' : ''}> Extra innings start with a runner on second (8th inning on)</label>
+        <button class="btn" id="s-backfill" ${missingHE ? '' : 'disabled'}>Estimate missing hits &amp; errors${missingHE ? ` (${missingHE} game${missingHE > 1 ? 's' : ''})` : ''}</button>
+        <p class="small muted" style="margin-top:-6px">Scores you enter by hand get hits and errors from the line score and the teams' ratings when those boxes are left blank. This fills in ${s.year} games entered earlier with 0 hits and 0 errors for both teams.</p>
       </div>
       <div class="card stack"><h2>Season</h2>
         ${isCurrent ? `<a class="btn ${s.phase === 'complete' ? 'primary' : 'disabled'}" href="#/offseason">Go to the ${s.year + 1} offseason</a>
@@ -608,6 +611,10 @@ export function renderSettings() {
   $('#s-mcws').onchange = e => { st.mcwsName = e.target.value.trim() || "Men's College World Series"; changed({ progress: false }); };
   $('#s-dev').onchange = e => { st.development = e.target.value; persist(); };
   $('#s-vol').onchange = e => { st.volatility = Number(e.target.value); persist(); };
+  $('#s-backfill').onclick = () => {
+    if (!confirm(`Estimate hits and errors for ${missingHE} hand-entered ${s.year} game${missingHE > 1 ? 's' : ''} that show 0 hits and 0 errors?`)) return;
+    const k = backfillHitsErrors(s); changed({ progress: false }); toast(`Hits and errors estimated for ${k} game${k === 1 ? '' : 's'}.`);
+  };
   $('#s-form').onchange = e => { st.form = e.target.value; changed(); };
   $('#s-rr').onchange = e => { st.runRule = e.target.checked; persist(); };
   $('#s-tb').onchange = e => { st.tiebreaker = e.target.checked; persist(); };
