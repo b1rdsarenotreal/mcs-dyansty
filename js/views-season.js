@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006115645';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006115645';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006115645';
-import { ovr } from './sim.js?v=20261006115645';
-import { simGames, addGame, weekName } from './league.js?v=20261006115645';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006115645';
-import { fmtPct, hashStr } from './util.js?v=20261006115645';
-import { DAY_ORDER } from './schedule.js?v=20261006115645';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006122329';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS } from './standings.js?v=20261006122329';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006122329';
+import { ovr } from './sim.js?v=20261006122329';
+import { simGames, addGame, weekName } from './league.js?v=20261006122329';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost } from './postseason.js?v=20261006122329';
+import { fmtPct, hashStr } from './util.js?v=20261006122329';
+import { DAY_ORDER } from './schedule.js?v=20261006122329';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -335,6 +335,7 @@ const BK = { CW: 236, COLW: 264, H: 138, SLOT: 150, HEAD: 30, SEC_GAP: 34 };
 
 function eventBracket(ev, seedFn) {
   const s = S();
+  const rankOn = !!s.post?.confT && Object.values(s.post.confT).includes(ev); // poll rankings on conference tournament brackets only
   ensureLayout(ev);
   const byKey = Object.fromEntries(ev.nodes.map(n => [n.key, n]));
   const secOf = n => n.sec || 'W';
@@ -404,13 +405,13 @@ function eventBracket(ev, seedFn) {
     const [a, b] = nodeTeams(ev, node);
     if (a === 'BYE' || b === 'BYE') {
       const t = a === 'BYE' ? b : a;
-      return placeholderCard(label, [t, 'BYE'], seedFn, { faded: true, note: 'First-round bye' });
+      return placeholderCard(label, [t, 'BYE'], seedFn, { faded: true, note: 'First-round bye', ranks: rankOn });
     }
     const needed = nodeNeeded(ev, node);
     const decidedBy = { g7: 'G6', f3: 'F2', s3: 'S2', ifnec: 'CH' }[node.cond];
     const decided = !!(decidedBy && byKey[decidedBy]?.winner);
     const slotText = (t, ref) => t || (refLabel(ev, ref) ? { text: refLabel(ev, ref) } : null);
-    return placeholderCard(label, [slotText(a, node.a), slotText(b, node.b)], seedFn, { faded: !!node.cond && !needed && !!decided, note: node.cond ? (decided && !needed ? 'Not needed' : 'If necessary') : '' });
+    return placeholderCard(label, [slotText(a, node.a), slotText(b, node.b)], seedFn, { ranks: rankOn, faded: !!node.cond && !needed && !!decided, note: node.cond ? (decided && !needed ? 'Not needed' : 'If necessary') : '' });
   };
   return `<div class="bk-scroll"><div class="bk" style="width:${width}px;height:${height}px">
     <svg class="bk-lines" width="${width}" height="${height}" aria-hidden="true">${lines.join('')}</svg>

@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261006115645';
-import { logoFor } from './logos.js?v=20261006115645';
-import { LOGO_ALIASES } from './data.js?v=20261006115645';
-import { ovr, winProbability } from './sim.js?v=20261006115645';
-import { records, isFinal, winnerOf } from './standings.js?v=20261006115645';
-import { latestPoll, pollRankMap } from './polls.js?v=20261006115645';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261006115645';
-import { regWeeksOf, shownSeed } from './postseason.js?v=20261006115645';
-import { DAY_ORDER } from './schedule.js?v=20261006115645';
-import { esc } from './util.js?v=20261006115645';
+import { saveLeague } from './store.js?v=20261006122329';
+import { logoFor } from './logos.js?v=20261006122329';
+import { LOGO_ALIASES } from './data.js?v=20261006122329';
+import { ovr, winProbability } from './sim.js?v=20261006122329';
+import { records, isFinal, winnerOf } from './standings.js?v=20261006122329';
+import { latestPoll, pollRankMap } from './polls.js?v=20261006122329';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261006122329';
+import { regWeeksOf, shownSeed } from './postseason.js?v=20261006122329';
+import { DAY_ORDER } from './schedule.js?v=20261006122329';
+import { esc } from './util.js?v=20261006122329';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -169,7 +169,7 @@ export function gameCard(g) {
   const cell = (arr, i) => (fin ? (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '') : '');
   const recs = cache.recs();
   const line = (t, arr, R, H, E) => `<div class="line sb" style="--q:${n}">
-      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}${confGame ? ` (${recs[t].cw}-${recs[t].cl})` : ''}</span>` : ''}</div>
+      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, rank: showsRank(g.type), ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}${confGame ? ` (${recs[t].cw}-${recs[t].cl})` : ''}</span>` : ''}</div>
       ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
       <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
   const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
@@ -440,13 +440,16 @@ export function openGame(id, { isNew = false } = {}) {
 
 // ---------- compact bracket cards (team, R, H, E) ----------
 
+// Poll rankings show on regular-season and conference tournament games; NCAA
+// games show only the regional hosts' national seeds.
+const showsRank = type => type !== 'regional' && type !== 'super' && type !== 'mcws';
 export function compactCard(g, seedFn = () => null) {
   const s = S();
   const fin = isFinal(g);
   const w = fin ? winnerOf(g) : null;
   const inn = Math.max(g.homeLine.length, g.awayLine.length);
   const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner' : 'loser') : ''}">
-      <span class="bg-team">${team(t, { seed: seedFn(t), size: 16, ranks: fin ? cache.ranksAt(g.week) : null })}</span>
+      <span class="bg-team">${team(t, { seed: seedFn(t), size: 16, rank: showsRank(g.type), ranks: fin ? cache.ranksAt(g.week) : null })}</span>
       <span class="bg-n bg-r">${fin ? R : ''}</span><span class="bg-n">${fin ? H : ''}</span><span class="bg-n">${fin ? E : ''}</span></div>`;
   let foot = '';
   if (fin) foot = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
@@ -464,12 +467,12 @@ export function compactCard(g, seedFn = () => null) {
 
 // A bracket slot whose game doesn't exist yet. `teams` entries are a team
 // name, 'BYE', or { text } for "Winner of SF-1" style placeholders.
-export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '' } = {}) {
+export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '', ranks = true } = {}) {
   const row = t => {
     let inner;
     if (t === 'BYE') inner = '<span class="muted">Bye</span>';
     else if (t && typeof t === 'object') inner = `<span class="muted slot-ref">${esc(t.text)}</span>`;
-    else if (t) inner = team(t, { seed: seedFn(t), size: 16 });
+    else if (t) inner = team(t, { seed: seedFn(t), size: 16, rank: ranks });
     else inner = '<span class="muted">TBD</span>';
     return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
   };
