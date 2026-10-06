@@ -9,9 +9,9 @@
 // Personalities live here in the code and aren't editable in the app.
 // The commissioner can still edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261006152118';
-import { ovr } from './sim.js?v=20261006152118';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006152118';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261006154501';
+import { ovr } from './sim.js?v=20261006154501';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006154501';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -93,7 +93,7 @@ function pollInputs(season, week) {
 // each game was played. A win over the #1 team is worth the most; a loss to
 // an unranked team costs the most, and costs a highly ranked team more.
 // Older weeks fade (the polls in between already moved teams for them).
-const Q_WIN = 0.45, Q_BAD = 0.24, Q_UPSET = 0.18, Q_LOSS = 0.08, Q_FADE = 0.6;
+const Q_WIN = 0.35, Q_BAD = 0.15, Q_UPSET = 0.12, Q_LOSS = 0.08, Q_FADE = 0.4;
 export function resultsCredit(season, week) {
   const out = Object.fromEntries(Object.keys(season.teams).map(t => [t, 0]));
   const rankCache = {};
@@ -164,7 +164,7 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
       if (prevRank[t]) sc += inertia * v.loyalty * (prevSize + 1 - prevRank[t]) / prevSize;
       sc += v.recency * zWeek[t];
       // Recent-results voters weigh head-to-head results more; loyal ones a bit less.
-      sc += quality[t] * (1 + 2.5 * v.recency) / Math.sqrt(v.loyalty) + (quality[t] < 0 ? quality[t] * v.losses * 3 : 0);
+      sc += quality[t] * (1 + 1.5 * v.recency) / Math.sqrt(v.loyalty) + (quality[t] < 0 ? quality[t] * v.losses * 3 : 0);
       sc -= v.losses * badLosses[t];
       if (vconf && season.teams[t].conference === vconf) sc += v.regionBoost;
       sc += postBonus?.[t] || 0;
