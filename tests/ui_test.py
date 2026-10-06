@@ -186,6 +186,10 @@ try:
         pg.screenshot(path=f"{OUT}/16i-participants.png", full_page=True)
         pg.goto(url + "#/history"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/16b-history.png")
+        pg.goto(url + "#/records"); pg.wait_for_timeout(400)
+        assert "Programs" in pg.content() and "Most runs in a game" in pg.content() and "Career wins" in pg.content(), "records page"
+        pg.click("[data-psort=titles]"); pg.wait_for_timeout(200)
+        pg.screenshot(path=f"{OUT}/17-records.png", full_page=True)
         # reload keeps data
         pg.goto(url + "#/home"); pg.reload(); pg.wait_for_selector(".kpis")
         assert "2017" in pg.locator("#season-picker").inner_text()
@@ -223,7 +227,7 @@ try:
           const cut = [...document.querySelectorAll('.bg-team .team-link, .line.sb .team-link, .kpi .team-link')].filter(e => vis(e) && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent);
           return { problems: [...new Set(out)].slice(0, 12), truncated: cut.slice(0, 8), truncatedCount: cut.length };
         }"""
-        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/coaches", "#/coach/c3", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/settings"]
+        pages = ["#/home", "#/schedule", "#/standings", "#/rankings", "#/postseason", "#/teams", "#/coaches", "#/coach/c3", "#/team/Oklahoma", "#/conferences", "#/conference/Big%20Ten", "#/history", "#/records", "#/settings"]
         layout_issues = []
         for w in [1400, 1024, 768, 390]:
             lp = b.new_page(viewport={"width": w, "height": 900})

@@ -441,3 +441,18 @@ table.participants td { vertical-align: middle; }
 }
 @media (max-width: 760px) { .sel-layout { grid-template-columns: minmax(0, 1fr); } }
 .seed-row .badge { font-size: 9.5px; padding: 1px 5px; }
+
+/* Records page */
+.rec-section { margin: 24px 0 10px; }
+.rec-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+.rec-grid > * { min-width: 0; }
+.rec-grid .card + .card { margin-top: 0; }
+.rec-card h3 { margin: 0 0 8px; }
+.rec-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; counter-reset: rec; }
+.rec-list li { counter-increment: rec; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; align-items: start; font-size: 13.5px; }
+.rec-list li::before { content: counter(rec) '.'; color: var(--muted); font: 500 12px var(--mono); padding-top: 2px; }
+.rec-list li .rec-who { display: flex; flex-direction: column; min-width: 0; }
+.rec-list li .rec-val { font: 600 14px var(--mono); white-space: nowrap; }
+.rec-table th.sortable { cursor: pointer; user-select: none; }
+.rec-table th.sorted { color: var(--accent); }
+.rec-table th.sorted::after { content: ' ▾'; }

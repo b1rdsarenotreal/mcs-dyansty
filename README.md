@@ -95,6 +95,17 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 
 Coaches are people in the dynasty, not just names on a team. Each coach has a **profile page** with his career record, titles, a season-by-season table across every program he has led, and a way to hire him if he's available. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
 
+## Records
+
+The **Records** page is the dynasty's record book, covering every season in the league (a season still in progress is marked *):
+
+- **Programs, all-time:** seasons, wins, winning percentage, regular-season titles (shared titles count), conference tournament titles, NCAA appearances, MCWS appearances and national titles. Click any column to sort.
+- **Single season:** most wins, best winning percentage, most runs scored, fewest runs allowed, best run differential, longest winning streak, best conference record, and most losses by a national champion.
+- **Single game:** most runs, most hits, largest margin of victory, most combined runs, longest games (extra innings) and every no-hitter.
+- **Coaches:** career wins, career winning percentage, national titles and MCWS appearances.
+
+Everything is worked out from the games, so it updates as you play and includes the postseason.
+
 ## Commissioner controls
 
 | Want to… | Where |
@@ -145,6 +156,8 @@ js/app.js               loading, top bar, routing
 js/ui.js                shared pieces: team labels, logos, game cards, game editor
 js/views-season.js      home, schedule, standings, rankings, postseason pages
 js/views-league.js      teams, team profiles, conferences, history, settings
+js/views-records.js     records page
+js/records.js           record book (programs, seasons, games, coaches)
 js/data.js              the 2016 teams and conferences, colors, starting ratings
 js/sim.js               plate-appearance game simulator and win probability
 js/schedule.js          schedule generator
@@ -157,6 +170,7 @@ js/store.js             saving and backups
 js/logos.js             logo list loading and lookup
 tests/                  logic test (Node) and UI test (Playwright)
 tools/stamp.py          version-stamps file links before each release
+tools/check.sh          checks every module parses before a release
 ```
 
 Before committing changes, run `python3 tools/stamp.py`. It adds a version to every script and stylesheet link so browsers load a matching set of files after an update instead of mixing cached old files with new ones.

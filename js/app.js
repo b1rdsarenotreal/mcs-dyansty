@@ -1,17 +1,18 @@
 // App shell: loading the dynasty, the top bar, and page routing.
 
-import { loadLeague, saveLeague } from './store.js?v=20261006142335';
-import { loadLogoTable } from './logos.js?v=20261006142335';
-import { newLeague, afterChange, migrateLeague } from './league.js?v=20261006142335';
-import { ctx, app, cache, persist, esc } from './ui.js?v=20261006142335';
-import { renderHome, renderSchedule, renderStandings, renderRankings, renderPostseason, resetSeasonUi } from './views-season.js?v=20261006142335';
-import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings, renderOffseason, renderCoaches, renderCoachPage } from './views-league.js?v=20261006142335';
+import { loadLeague, saveLeague } from './store.js?v=20261006142630';
+import { loadLogoTable } from './logos.js?v=20261006142630';
+import { newLeague, afterChange, migrateLeague } from './league.js?v=20261006142630';
+import { ctx, app, cache, persist, esc } from './ui.js?v=20261006142630';
+import { renderHome, renderSchedule, renderStandings, renderRankings, renderPostseason, resetSeasonUi } from './views-season.js?v=20261006142630';
+import { renderRecords } from './views-records.js?v=20261006142630';
+import { renderTeams, renderTeamPage, renderConferences, renderConferencePage, renderHistory, renderSettings, renderOffseason, renderCoaches, renderCoachPage } from './views-league.js?v=20261006142630';
 
-const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', offseason: 'Offseason', teams: 'Teams', coaches: 'Coaches', conferences: 'Conferences', history: 'History', settings: 'Settings' };
+const VIEWS = { home: 'Home', schedule: 'Schedule', standings: 'Standings', rankings: 'Rankings', postseason: 'Postseason', offseason: 'Offseason', teams: 'Teams', coaches: 'Coaches', conferences: 'Conferences', history: 'History', records: 'Records', settings: 'Settings' };
 const SUBVIEWS = { team: 'teams', conference: 'conferences', coach: 'coaches' };
 const RENDER = {
   home: renderHome, schedule: renderSchedule, standings: renderStandings, rankings: renderRankings, postseason: renderPostseason,
-  offseason: renderOffseason, teams: renderTeams, coaches: renderCoaches, conferences: renderConferences, history: renderHistory, settings: renderSettings,
+  offseason: renderOffseason, teams: renderTeams, coaches: renderCoaches, conferences: renderConferences, history: renderHistory, records: renderRecords, settings: renderSettings,
   team: () => renderTeamPage(routeArg()), coach: () => renderCoachPage(routeArg()), conference: () => renderConferencePage(routeArg()),
 };
 
