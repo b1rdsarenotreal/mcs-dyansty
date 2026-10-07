@@ -158,6 +158,16 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
+// "If necessary" games flip home and away from the final they follow (any season so far).
+{
+  let checked = 0;
+  for (const se of Object.values(league.seasons)) for (const ev of [...(se.post?.regionals || []), ...(se.post?.mcwsBrackets || []), ...(se.post?.mcws ? [se.post.mcws] : [])]) {
+    const gm = k => se.games.find(g => g.event === ev.id && g.node === k);
+    const f = gm('G6') || gm('CH'), x = gm('G7') || gm('IF');
+    if (f && x) { checked++; assert.ok(x.home === f.away && x.away === f.home, `${ev.name || ev.id}: if-necessary game flips home and away`); if (ev.host && (x.home === ev.host || x.away === ev.host)) assert.equal(x.site || x.home, ev.host, 'still at the host'); }
+  }
+  console.log('if-necessary games checked:', checked);
+}
 // Regional weekend: Fri G1-G2, Sat G3-G5, Sun final and if-necessary game (after the final).
 for (const ev of s.post.regionals) {
   const day = Object.fromEntries(ev.nodes.map(n => [n.key, n.day]));

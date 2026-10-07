@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006211225';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006211225';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006211225';
-import { hashStr } from './util.js?v=20261006211225';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006213001';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006213001';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006213001';
+import { hashStr } from './util.js?v=20261006213001';
 
 // ---------- tournament format ----------
 
@@ -299,6 +299,9 @@ function condMet(ev, node) {
   return true;
 }
 
+// Games that switch home and away from the game they follow.
+const FLIP_OF = { S2: 'S1', F2: 'F1', G7: 'G6', IF: 'CH' };
+
 // Create games whose teams are known; record winners of finished games.
 function advanceEvent(season, ev, { type, week, name }) {
   // Re-derive winners from the games, so edited results flow through. Games
@@ -315,8 +318,14 @@ function advanceEvent(season, ev, { type, week, name }) {
       if (!a || !b) continue;
       const fits = condMet(ev, node) && new Set([a, b, g.home, g.away]).size === 2;
       if (!fits && !isFinal(g)) { season.games = season.games.filter(x => x !== g); node.gameId = null; continue; }
-      // Older saves: a hosted series' Game 2 not yet played gets the flipped home team.
-      if (!isFinal(g) && node.key === 'S2' && ev.host && g.home === ev.host) { [g.home, g.away] = [g.away, g.home]; g.neutral = true; g.site = ev.host; }
+      // Older saves: a flipped game not yet played that has the same home team
+      // as the game it follows gets switched.
+      const ref = FLIP_OF[node.key] && ev.nodes.find(x => x.key === FLIP_OF[node.key]);
+      const refGame = ref?.gameId && season.games.find(x => x.id === ref.gameId);
+      if (!isFinal(g) && refGame && g.home === refGame.home && g.away === refGame.away) {
+        [g.home, g.away] = [g.away, g.home];
+        if (ev.host && (g.home === ev.host || g.away === ev.host)) { g.neutral = true; g.site = ev.host; }
+      }
       if (isFinal(g)) { node.winner = winnerOf(g); node.loser = loserOf(g); changed = true; }
     }
   }
@@ -339,9 +348,10 @@ function advanceEvent(season, ev, { type, week, name }) {
       let home = ia <= ib ? a : b, away = home === a ? b : a;
       const hosted = ev.host && (home === ev.host || away === ev.host);
       if (hosted && away === ev.host) [home, away] = [away, home];
-      // Game 2 of a series flips home and away. In a hosted series it's still
-      // played at the host's field; the visitor is the home team (bats last).
-      const flip = node.key === 'F2' || node.key === 'S2';
+      // Game 2 of a series, and the "if necessary" game after a double-
+      // elimination final, flip home and away. At a host's field the game is
+      // still played there; the visitor is the home team (bats last).
+      const flip = FLIP_OF[node.key] != null;
       if (flip) [home, away] = [away, home];
       const atHostAsVisitor = hosted && flip;
       const g = blankGame(season, {
