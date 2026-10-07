@@ -101,8 +101,8 @@ try:
         assert pg.locator("#f-confirm").is_disabled(), "confirm needs every spot filled"
         pg.locator(f"input[data-al='{in_team}']").check(); pg.wait_for_timeout(200)
         pg.click("#f-confirm"); pg.wait_for_timeout(300)
-        seeds = pg.locator(".seed-row").all_inner_texts()
-        assert len(seeds) == 16 and any(in_team in x for x in seeds) and not any(out_team in x for x in seeds), "field follows the picks"
+        seeds = pg.evaluate("[...document.querySelectorAll('.seed-row .team-link')].map(a => a.title)")
+        assert len(seeds) == 16 and in_team in seeds and out_team not in seeds, f"field follows the picks {in_team} {out_team} {seeds}"
         pg.locator("[data-fdown='0']").click(); pg.wait_for_timeout(200)
         pg.screenshot(path=f"{OUT}/08-field.png", full_page=True)
         assert pg.locator(".reg-preview .reg-prev").count() == 4, "regional preview shows every regional"
