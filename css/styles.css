@@ -456,3 +456,5 @@ table.participants td { vertical-align: middle; }
 .rec-table th.sortable { cursor: pointer; user-select: none; }
 .rec-table th.sorted { color: var(--accent); }
 .rec-table th.sorted::after { content: ' ▾'; }
+.stack-cards { display: grid; gap: 16px; }
+.stack-cards > .card + .card { margin-top: 0; }
