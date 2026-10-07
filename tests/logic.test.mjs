@@ -337,7 +337,7 @@ runFormat({ regionals: 8, perRegional: 3, wsSize: 4 }, (se, W) => {
   assert.equal(se.post.supers.length, 4);
   for (const ev of se.post.supers) {
     const gs = se.games.filter(g => g.event === ev.id);
-    assert.ok(gs.length >= 2 && gs.length <= 3 && gs.every(g => g.home === ev.host && g.week === W.super), 'supers: best of three at the higher seed');
+    assert.ok(gs.length >= 2 && gs.length <= 3 && gs.every(g => (g.site || g.home) === ev.host && g.week === W.super), 'supers: best of three at the higher seed');
     assert.ok(ev.seeds.includes(ev.champion));
   }
   assert.deepEqual([...wsTeams(se)].sort(), se.post.supers.map(ev => ev.champion).sort());
@@ -356,6 +356,12 @@ runFormat({ regionals: 4, perRegional: 2, wsSize: 4 }, se => {
 // 32 teams, 16 two-team regionals, 8 supers, 8-team MCWS
 runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.equal(se.post.supers.length, 8);
+  // Super regional Game 2: still at the host's field, but the visitor is the home team.
+  for (const ev of se.post.supers) {
+    const g2 = se.games.find(g => g.event === ev.id && g.node === 'S2'), g1 = se.games.find(g => g.event === ev.id && g.node === 'S1');
+    assert.equal(g1.home, ev.host); assert.ok(!g1.neutral);
+    assert.notEqual(g2.home, ev.host, 'Game 2 flips home and away'); assert.equal(g2.site, ev.host, 'Game 2 is still at the host');
+  }
   assert.equal(se.post.mcwsBrackets.length, 2);
 });
 // MCWS places and history (Participants tab)

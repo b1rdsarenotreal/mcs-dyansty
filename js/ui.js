@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261006202002';
-import { logoFor } from './logos.js?v=20261006202002';
-import { LOGO_ALIASES } from './data.js?v=20261006202002';
-import { ovr, winProbability } from './sim.js?v=20261006202002';
-import { records, isFinal, winnerOf } from './standings.js?v=20261006202002';
-import { latestPoll, pollRankMap } from './polls.js?v=20261006202002';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261006202002';
-import { regWeeksOf, shownSeed } from './postseason.js?v=20261006202002';
-import { DAY_ORDER } from './schedule.js?v=20261006202002';
-import { esc } from './util.js?v=20261006202002';
+import { saveLeague } from './store.js?v=20261006202739';
+import { logoFor } from './logos.js?v=20261006202739';
+import { LOGO_ALIASES } from './data.js?v=20261006202739';
+import { ovr, winProbability } from './sim.js?v=20261006202739';
+import { records, isFinal, winnerOf } from './standings.js?v=20261006202739';
+import { latestPoll, pollRankMap } from './polls.js?v=20261006202739';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261006202739';
+import { regWeeksOf, shownSeed } from './postseason.js?v=20261006202739';
+import { DAY_ORDER } from './schedule.js?v=20261006202739';
+import { esc } from './util.js?v=20261006202739';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -182,7 +182,8 @@ export function gameCard(g) {
     const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
     const fav = wp >= 0.5 ? g.home : g.away;
     meta += `<span>${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%</span>`;
-    if (g.type === 'conf' && g.event) {
+    if (g.site && g.site !== g.home) meta += `<span>at ${esc(teamInfo(g.site)?.abbr || g.site)}</span>`;
+    else if (g.type === 'conf' && g.event) {
       const host = Object.values(s.post?.confT || {}).find(e => e.id === g.event)?.host;
       if (host && g.neutral) meta += `<span>at ${esc(teamInfo(host)?.abbr || host)}</span>`;
       else if (g.neutral) meta += '<span>Neutral</span>';
