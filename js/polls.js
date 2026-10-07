@@ -11,8 +11,8 @@
 // Personalities live here in the code and aren't editable in the app.
 // The commissioner can still edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261006164101';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006164101';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261006172658';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261006172658';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -233,14 +233,19 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
 function holdLosers(order, prevRank, weekW, weekL) {
   const list = [...order];
   const losers = Object.keys(prevRank).filter(t => (weekL[t] || 0) > (weekW[t] || 0)).sort((a, b) => prevRank[a] - prevRank[b]);
-  for (const t of losers) {
-    const i = list.indexOf(t), floor = prevRank[t] - 1;
-    if (i >= 0 && i < floor) { list.splice(i, 1); list.splice(floor, 0, t); }
-  }
   const unbeaten = Object.keys(prevRank).filter(t => (weekW[t] || 0) > 0 && !weekL[t]).sort((a, b) => prevRank[a] - prevRank[b]);
-  for (const t of unbeaten) {
-    const i = list.indexOf(t), ceil = prevRank[t] - 1;
-    if (i > ceil) { list.splice(i, 1); list.splice(ceil, 0, t); }
+  // Moving one team shifts the others, so repeat until every rule holds.
+  for (let pass = 0; pass < 50; pass++) {
+    let moved = false;
+    for (const t of losers) {
+      const i = list.indexOf(t), floor = prevRank[t] - 1;
+      if (i >= 0 && i < floor) { list.splice(i, 1); list.splice(floor, 0, t); moved = true; }
+    }
+    for (const t of unbeaten) {
+      const i = list.indexOf(t), ceil = prevRank[t] - 1;
+      if (i > ceil) { list.splice(i, 1); list.splice(ceil, 0, t); moved = true; }
+    }
+    if (!moved) break;
   }
   return list;
 }

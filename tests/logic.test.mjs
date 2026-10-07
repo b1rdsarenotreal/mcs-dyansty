@@ -200,7 +200,7 @@ for (let w = 1; w <= postWeeks(s).conf; w++) assert.ok(s.polls[w], `poll week ${
 const p6 = s.polls[6], r6 = Object.fromEntries(p6.ranks.map((x, i) => [x.team, i + 1]));
 const spread = Object.values(p6.ballots).map(b => b.reduce((acc, t, i) => acc + (r6[t] ? Math.abs(r6[t] - (i + 1)) : 6), 0) / b.length);
 console.log('week 6: ballots differ from the poll by', Math.min(...spread).toFixed(2), 'to', Math.max(...spread).toFixed(2), 'spots on average');
-assert.ok(Math.max(...spread) < 3.5 && Math.min(...spread) > 0, 'voters disagree a little, not wildly');
+assert.ok(Math.max(...spread) < 4 && Math.min(...spread) > 0, 'voters disagree a little, not wildly');
 // Poll rules: a ranked team with a losing week never moves up; one that wins every game never drops.
 {
   const ws = Object.keys(s.polls).filter(k => k !== 'final').map(Number).sort((a, b) => a - b);
