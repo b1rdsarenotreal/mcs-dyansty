@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006202739';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261006202739';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006202739';
-import { ovr } from './sim.js?v=20261006202739';
-import { simGames, addGame, weekName } from './league.js?v=20261006202739';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261006202739';
-import { fmtPct, hashStr } from './util.js?v=20261006202739';
-import { DAY_ORDER } from './schedule.js?v=20261006202739';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261006211225';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261006211225';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261006211225';
+import { ovr } from './sim.js?v=20261006211225';
+import { simGames, addGame, weekName } from './league.js?v=20261006211225';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261006211225';
+import { fmtPct, hashStr } from './util.js?v=20261006211225';
+import { DAY_ORDER } from './schedule.js?v=20261006211225';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -88,7 +88,7 @@ export function renderSchedule() {
   // then the next ones, and so on.
   const week = s.games.filter(g => g.week === ui.week);
   const post = week.filter(g => g.type !== 'regular');
-  const dayKey = g => DAY_ORDER[g.day] + (g.type !== 'conf' && ['Mon', 'Tue'].includes(g.day) ? 7 : 0);
+  const dayKey = g => DAY_ORDER[g.day] + (g.type !== 'conf' && ['Mon', 'Tue', 'Wed'].includes(g.day) ? 7 : 0);
   const slot = {};
   const byEventDay = {};
   for (const g of post) (byEventDay[`${g.event || g.type}|${g.day}`] ||= []).push(g);

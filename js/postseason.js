@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261006202739';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006202739';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006202739';
-import { hashStr } from './util.js?v=20261006202739';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261006211225';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261006211225';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261006211225';
+import { hashStr } from './util.js?v=20261006211225';
 
 // ---------- tournament format ----------
 
@@ -226,17 +226,32 @@ function doubleElim(final = 'g7') {
 
 // One MCWS bracket (Bracket A or B): the 4-team NCAA double elimination,
 // shifted a day for Bracket B so the two brackets alternate.
-const SHIFT = { Fri: 'Sat', Sat: 'Sun', Sun: 'Mon', Mon: 'Tue', Tue: 'Wed' };
-const SLOT = { Thu: 0, Fri: 1, Sat: 2, Sun: 3, Mon: 4, Tue: 5, Wed: 6 };
-function wsBracketNodes(shift) {
-  const n = doubleElim('g7');
+// MCWS days (both brackets play the same days): opening games Friday, Game 4
+// Saturday, Games 3 and 5 Sunday, bracket finals Monday. In a 4-team MCWS
+// the Championship Series follows on Monday, Tuesday and Wednesday.
+const WS_DAYS = { G1: ['Fri', 1], G2: ['Fri', 1.1], G4: ['Sat', 2], G3: ['Sun', 3], G5: ['Sun', 3.1], G6: ['Mon', 4], G7: ['Mon', 4.1], F1: ['Mon', 4], F2: ['Tue', 5], F3: ['Wed', 6] };
+function wsDays(nodes) {
+  for (const n of nodes) if (WS_DAYS[n.key]) [n.day, n.t] = WS_DAYS[n.key];
+  return nodes;
+}
+function wsBracketNodes() {
+  const n = wsDays(doubleElim('g7'));
   for (const x of n) {
-    if (shift) x.day = SHIFT[x.day];
-    x.t = SLOT[x.day] + (x.key === 'G6' ? 0.5 : 0);
     if (x.key === 'G6') x.label = 'Bracket final';
     if (x.key === 'G7') x.label = 'Bracket final (if necessary)';
   }
   return n;
+}
+// MCWS events built by older versions: move games not yet played to these days.
+function fixWsDays(season, ev) {
+  for (const n of ev.nodes) {
+    const want = WS_DAYS[n.key];
+    if (!want || (n.day === want[0] && n.t === want[1])) continue;
+    const g = n.gameId && season.games.find(x => x.id === n.gameId);
+    if (g && isFinal(g)) continue;
+    [n.day, n.t] = want;
+    if (g) { g.day = want[0]; g.order = want[1]; }
+  }
 }
 
 // Brackets saved by older versions lack the layout fields (sec, col, code,
@@ -331,7 +346,7 @@ function advanceEvent(season, ev, { type, week, name }) {
       const atHostAsVisitor = hosted && flip;
       const g = blankGame(season, {
         type, week, day: node.day,
-        order: node.t != null ? node.t : DAY_ORDER[node.day] + (type !== 'conf' && ['Mon', 'Tue'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0) + (node.depth || 0) * 0.01,
+        order: node.t != null ? node.t : DAY_ORDER[node.day] + (type !== 'conf' && ['Mon', 'Tue', 'Wed'].includes(node.day) ? 7 : 0) + (node.key === 'G6' ? 0.5 : 0) + (node.depth || 0) * 0.01,
         home, away, neutral: !hosted || atHostAsVisitor, ...(atHostAsVisitor ? { site: ev.host } : {}), event: ev.id, node: node.key,
         label: `${name} · ${node.label}`,
         ...(ev.kind === 'series' ? { series: ev.id, bestOf: 3 } : node.key[0] === 'F' && ev.kind === 'mcws' ? { series: `${ev.id}-finals`, bestOf: 3 } : {}),
@@ -570,8 +585,8 @@ function wsQualifiers(season) {
 // 4 vs 5); Bracket B holds paths 2, 3, 6, 7 (2 vs 7 and 3 vs 6).
 function buildWsBrackets(q) {
   return [
-    { id: 'ws-A', kind: 'regional', bracket: 'A', seeds: [q[0], q[3], q[4], q[7]], host: null, nodes: wsBracketNodes(false), champion: null, name: 'Bracket A' },
-    { id: 'ws-B', kind: 'regional', bracket: 'B', seeds: [q[1], q[2], q[5], q[6]], host: null, nodes: wsBracketNodes(true), champion: null, name: 'Bracket B' },
+    { id: 'ws-A', kind: 'regional', bracket: 'A', seeds: [q[0], q[3], q[4], q[7]], host: null, nodes: wsBracketNodes(), champion: null, name: 'Bracket A' },
+    { id: 'ws-B', kind: 'regional', bracket: 'B', seeds: [q[1], q[2], q[5], q[6]], host: null, nodes: wsBracketNodes(), champion: null, name: 'Bracket B' },
   ];
 }
 
@@ -623,13 +638,15 @@ export function progress(season) {
   const wsName = season.settings.mcwsName || "Men's College World Series";
   if (cfg.wsSize === 8) {
     syncStage(season, 'mcwsBrackets', q ? q.join('|') : null, () => buildWsBrackets(q));
+    for (const ev of p.mcwsBrackets || []) fixWsDays(season, ev);
     for (const ev of p.mcwsBrackets || []) advanceEvent(season, ev, { type: 'mcws', week: W.mcws, name: `${wsName} · ${ev.name}` });
     const bw = p.mcwsBrackets?.every(ev => ev.champion) ? p.mcwsBrackets.map(ev => ev.champion).sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b)) : null;
     syncStage(season, 'mcwsFinals', bw ? bw.join('|') : null, () => ({ id: 'ws-F', kind: 'series', seeds: bw, host: null, nodes: seriesNodes(), champion: null, name: 'Championship Series' }));
     if (p.mcwsFinals) advanceEvent(season, p.mcwsFinals, { type: 'mcws', week: W.finals, name: `${wsName} Finals` });
   } else {
     const seeded = q ? [...q].sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b)) : null;
-    syncStage(season, 'mcws', seeded ? seeded.join('|') : null, () => ({ id: 'mcws', kind: 'mcws', seeds: seeded, host: null, nodes: doubleElim('series'), champion: null }));
+    syncStage(season, 'mcws', seeded ? seeded.join('|') : null, () => ({ id: 'mcws', kind: 'mcws', seeds: seeded, host: null, nodes: wsDays(doubleElim('series')), champion: null }));
+    if (p.mcws) fixWsDays(season, p.mcws);
     if (p.mcws) advanceEvent(season, p.mcws, { type: 'mcws', week: W.mcws, name: wsName });
   }
 

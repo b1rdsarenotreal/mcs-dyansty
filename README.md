@@ -72,7 +72,7 @@ The default is a 16-team field in four 4-team regionals and a 4-team MCWS. Each 
 - **Participants tab** (between the regionals/super regionals and the MCWS): the MCWS field as it fills in, with each team's record entering the MCWS (conference record in parentheses), head coach, the regional or super regional it won, previous MCWS appearances (and the last one), best MCWS finish (with the years) and all-time MCWS win–loss record. History counts seasons in this dynasty. Places: champion 1st, runner-up 2nd, then by the round a team went out (ties like T-3rd in an 8-team MCWS).
 - **Postseason scoreboard:** on the Schedule page each postseason day mixes the tournaments together like a real scoreboard. Each event's games stay in order.
 3. **Regionals**, then **Super Regionals** if the format has them.
-4. **Men's College World Series**, plus **MCWS Finals** week for the 8-team format.
+4. **Men's College World Series**: opening games Friday, Game 4 Saturday, Games 3 and 5 Sunday, and the bracket finals Monday (both brackets in the 8-team format, which adds an **MCWS Finals** week for the Championship Series). In the 4-team format the Championship Series is Monday through Wednesday.
 
 The final poll comes out after the championship, with the national champion at #1.
 

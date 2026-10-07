@@ -351,11 +351,16 @@ runFormat({ regionals: 8, perRegional: 3, wsSize: 4 }, (se, W) => {
 });
 // Two-team regionals (best of three) into a 4-team MCWS
 runFormat({ regionals: 4, perRegional: 2, wsSize: 4 }, se => {
+  for (const g of se.games.filter(g => g.event === 'mcws')) assert.equal(g.day, { G1: 'Fri', G2: 'Fri', G4: 'Sat', G3: 'Sun', G5: 'Sun', F1: 'Mon', F2: 'Tue', F3: 'Wed' }[g.node], `4-team MCWS ${g.node} day`);
   for (const ev of se.post.regionals) assert.ok(se.games.filter(g => g.event === ev.id).length <= 3);
 });
 // 32 teams, 16 two-team regionals, 8 supers, 8-team MCWS
 runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.equal(se.post.supers.length, 8);
+  // MCWS days: openers Friday, G4 Saturday, G3 and G5 Sunday, bracket finals Monday (both brackets).
+  for (const ev of se.post.mcwsBrackets) for (const g of se.games.filter(g => g.event === ev.id)) {
+    assert.equal(g.day, { G1: 'Fri', G2: 'Fri', G4: 'Sat', G3: 'Sun', G5: 'Sun', G6: 'Mon', G7: 'Mon' }[g.node], `${ev.name} ${g.node} day`);
+  }
   // Super regional Game 2: still at the host's field, but the visitor is the home team.
   for (const ev of se.post.supers) {
     const g2 = se.games.find(g => g.event === ev.id && g.node === 'S2'), g1 = se.games.find(g => g.event === ev.id && g.node === 'S1');
