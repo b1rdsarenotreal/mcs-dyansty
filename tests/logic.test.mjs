@@ -3,7 +3,7 @@ import { confWeeksFor } from '../js/schedule.js';
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
-import { selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
+import { bracketology, selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
 
 const t0 = Date.now();
@@ -61,6 +61,14 @@ for (const g of reg) for (const t of [g.home, g.away]) assert.ok(!reg.some(x => 
 
 // Conference play is never longer than 9 weeks; size sets the start.
 assert.equal(confWeeksFor(12, 11), 9); assert.equal(confWeeksFor(12, 9), 9); assert.equal(confWeeksFor(12, 5), 8); assert.equal(confWeeksFor(14, 13), 9);
+// Bracketology: a full projected field with one bid per conference, even before league play.
+{
+  const B = bracketology(s);
+  assert.equal(B.field.length, 16); assert.equal(B.regionals.length, 4);
+  assert.ok(Object.values(B.autos).every(Boolean), 'every conference has a projected bid');
+  assert.ok(Object.values(B.autos).every(t => B.field.some(f => f.team === t)), 'projected bids are in the field');
+  assert.equal(s.post?.field, undefined, 'bracketology saves nothing');
+}
 // Hand-entered scores: hits and errors estimated from the line and ratings
 {
   const g = reg.find(x => !isFinal(x));

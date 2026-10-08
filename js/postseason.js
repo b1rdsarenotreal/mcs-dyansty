@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261007214006';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261007214006';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261007214006';
-import { hashStr } from './util.js?v=20261007214006';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261007220018';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261007220018';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261007220018';
+import { hashStr } from './util.js?v=20261007220018';
 
 // ---------- tournament format ----------
 
@@ -507,6 +507,28 @@ export function proposeField(season, size = Math.min(fieldSize(ncaaConfig(season
   season.post.firstOut = order.filter(t => !field.includes(t)).slice(0, 4);
   season.post.fieldConfirmed = false;
   season.phase = 'selection';
+}
+
+// Bracketology: the field and regionals as they would look if the season
+// ended today. Projected automatic bids go to each conference's current
+// leader (or its tournament champion once there is one); the rest follow the
+// committee order. Nothing is saved.
+export const BRACKETOLOGY_FROM_WEEK = 4;
+export function bracketology(season) {
+  const cfg = ncaaConfig(season);
+  const size = Math.min(fieldSize(cfg), Object.keys(season.teams).length);
+  const order = committeeOrder(season);
+  const autos = autoBids(season);
+  // Before a conference has played league games, its projected bid goes to
+  // its best team in the committee order.
+  for (const c of Object.keys(autos)) if (!autos[c]) autos[c] = order.find(t => season.teams[t].conference === c) || null;
+  const autoSet = new Set(Object.values(autos).filter(Boolean));
+  const chosen = [...autoSet];
+  for (const t of order) { if (chosen.length >= size) break; if (!chosen.includes(t)) chosen.push(t); }
+  const field = order.filter(t => chosen.includes(t)).map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
+  const atLarge = order.filter(t => chosen.includes(t) && !autoSet.has(t));
+  const out = order.filter(t => !chosen.includes(t) && !autoSet.has(t));
+  return { cfg, field, autos, regionals: pods(field, cfg.regionals), lastIn: atLarge.slice(-4), firstOut: out.slice(0, 4), nextOut: out.slice(4, 8) };
 }
 
 // Selection, step 1: the commissioner settles which teams are in. Automatic

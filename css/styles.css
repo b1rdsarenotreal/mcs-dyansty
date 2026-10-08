@@ -494,3 +494,22 @@ table.participants td { vertical-align: middle; }
 .ws-finals .bk { width: 100% !important; }
 .ws-finals .bk-node, .ws-finals .bk-head { width: 100% !important; }
 @media (max-width: 1240px) { .ws-layout { grid-template-columns: minmax(0, 1fr); } .ws-finals { max-width: 420px; } }
+/* Bracketology */
+.bo-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; margin-top: 14px; }
+.bo-layout > * { min-width: 0; }
+.bo-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); }
+.bo-grid > .card + .card, .bo-side { margin-top: 0; }
+.bo-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.bo-head h3 { margin: 0; }
+.bo-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 30px 18px 56px 54px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.bo-seed { font: 800 15px var(--display); color: var(--muted); text-align: center; }
+.bo-team { min-width: 0; overflow: hidden; }
+.bo-team .team { display: flex; min-width: 0; }
+.bo-team .team-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bo-num { text-align: right; font-size: 12.5px; white-space: nowrap; }
+.bo-side { position: sticky; top: 12px; display: grid; gap: 14px; }
+.bo-list h3 { margin: 0 0 6px; }
+.bo-list ol, .bo-list ul { margin: 0; padding-left: 20px; display: grid; gap: 5px; font-size: 13.5px; }
+.bo-aq { list-style: none; padding-left: 0 !important; }
+.bo-aq li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 900px) { .bo-layout { grid-template-columns: minmax(0, 1fr); } .bo-side { position: static; } }

@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007214006';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007214006';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007214006';
-import { ovr } from './sim.js?v=20261007214006';
-import { simGames, addGame, weekName } from './league.js?v=20261007214006';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261007214006';
-import { fmtPct, hashStr } from './util.js?v=20261007214006';
-import { DAY_ORDER } from './schedule.js?v=20261007214006';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007220018';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007220018';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007220018';
+import { ovr } from './sim.js?v=20261007220018';
+import { simGames, addGame, weekName } from './league.js?v=20261007220018';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261007220018';
+import { fmtPct, hashStr } from './util.js?v=20261007220018';
+import { DAY_ORDER } from './schedule.js?v=20261007220018';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -186,13 +186,13 @@ function pollWeeks(s) {
 
 export function renderRankings() {
   const s = S();
-  const tabs = { poll: 'Top 15 poll', rpi: 'RPI', sos: 'Strength of schedule', power: 'Power (OVR)' };
+  const tabs = { poll: `Top ${pollSizeOf(s)} poll`, rpi: 'RPI', sos: 'Strength of schedule', power: 'Power (OVR)', bracket: 'Bracketology' };
   app.innerHTML = `
     <div class="section-head"><h1>${s.year} Rankings</h1></div>
     <div class="steps">${Object.entries(tabs).map(([k, l]) => `<a href="#/rankings" data-tab="${k}" class="${ui.rankTab === k ? 'active' : ''}">${l}</a>`).join('')}</div>
     <div id="rk"></div>`;
   $$('[data-tab]').forEach(a => (a.onclick = e => { e.preventDefault(); ui.rankTab = a.dataset.tab; ui.editPoll = null; renderRankings(); }));
-  ({ poll: renderPollTab, rpi: renderRpiTab, sos: renderSosTab, power: renderPowerTab })[ui.rankTab]($('#rk'));
+  ({ poll: renderPollTab, rpi: renderRpiTab, sos: renderSosTab, power: renderPowerTab, bracket: renderBracketology })[ui.rankTab]($('#rk'));
 }
 
 function renderPollTab(root) {
@@ -294,6 +294,39 @@ function voterPanel(s, poll) {
         <table><tbody>${ballot.map((t, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(t, { rank: false, size: 16 })}</td><td class="num small">${diff(t, i)}</td></tr>`).join('')}</tbody></table>
         <p class="small muted">${poll.edited ? 'The published poll was edited by the commissioner after the votes came in.' : 'Green: this voter ranks the team higher than the poll. Red: lower.'}</p></div>` : ''}
     </div></div>`;
+}
+
+// Bracketology: the projected NCAA field and regionals as of today. It
+// starts once Week 4 is in the books and stops once the real field is out.
+function renderBracketology(root) {
+  const s = S(), p = s.post || {};
+  const W = BRACKETOLOGY_FROM_WEEK;
+  const reg = s.games.filter(g => g.type === 'regular');
+  const doneThrough = (() => { let w = 0; for (let k = 1; k <= regWeeksOf(s); k++) { const gs = reg.filter(g => g.week === k); if (gs.length && gs.every(isFinal)) w = k; else break; } return w; })();
+  if (p.field && s.phase !== 'selection') { root.innerHTML = `<div class="empty">The ${s.year} NCAA field has been announced. <a href="#/postseason">See the real bracket</a>.</div>`; return; }
+  if (doneThrough < W) {
+    root.innerHTML = `<div class="empty">Bracketology comes out once Week ${W} is finished${doneThrough ? ` (games are final through Week ${doneThrough})` : ''}. It projects the NCAA field and regionals as if the season ended that day, and updates as games are played.</div>`;
+    return;
+  }
+  const B = bracketology(s), r = rpi(s), recs = cache.recs(), pr = cache.ranks();
+  const seedOf = Object.fromEntries(B.field.map(f => [f.team, f.seed]));
+  const autoSet = new Set(Object.values(B.autos).filter(Boolean));
+  const asOf = s.phase === 'regular' ? `after Week ${doneThrough}` : 'today';
+  const row = (t, k) => `<div class="bo-row"><span class="bo-seed">${k + 1}</span><span class="bo-team">${team(t, { rank: false, size: 16 })}</span><span>${autoSet.has(t) ? '<span class="badge real" title="Projected automatic bid">AQ</span>' : ''}</span>
+    <span class="bo-conf" title="${esc(s.teams[t].conference)}">${confLogo(s.teams[t].conference, 16)}</span><span class="bo-num">${recs[t].w}-${recs[t].l}</span><span class="bo-num muted" title="RPI rank">${r[t]?.rank ? `RPI ${r[t].rank}` : ''}</span></div>`;
+  const regionals = B.regionals.map(teams => `<div class="card bo-reg"><div class="bo-head"><h3>${esc(teams[0])} Regional</h3><span class="muted small">Host: national seed ${seedOf[teams[0]]}</span></div>${teams.map(row).join('')}</div>`).join('');
+  const list = (title, teams, note) => `<div class="bo-list"><h3>${title}</h3>${teams.length ? `<ol>${teams.map(t => `<li>${team(t, { rank: false, size: 16 })} <span class="muted small">${recs[t].w}-${recs[t].l} · RPI ${r[t]?.rank ?? '–'}</span></li>`).join('')}</ol>` : '<p class="muted small">—</p>'}${note ? `<p class="small muted">${note}</p>` : ''}</div>`;
+  const autoList = Object.entries(B.autos).filter(([, t]) => t).sort((a, b) => a[0].localeCompare(b[0]));
+  root.innerHTML = `<div class="hint">Projected ${asOf}: ${B.field.length} teams in ${B.cfg.regionals} regionals. Automatic bids go to each conference's current leader${s.phase === 'conf' ? ' (or tournament champion)' : ''}; at-large spots and seeds follow the committee order (RPI 50%, poll 30%, strength of schedule 20%). It changes as games are played.</div>
+    <div class="bo-layout">
+      <div class="bo-grid">${regionals}</div>
+      <aside class="card bo-side">
+        <div class="bo-list"><h3>Projected automatic bids</h3><ul class="bo-aq">${autoList.map(([c, t]) => `<li>${confLogo(c, 16)} <span class="muted small">${esc(c)}</span> ${team(t, { rank: false, size: 16 })}</li>`).join('')}</ul></div>
+        ${list('Last four in', B.lastIn)}
+        ${list('First four out', B.firstOut)}
+        ${list('Next four out', B.nextOut)}
+      </aside>
+    </div>`;
 }
 
 function renderRpiTab(root) {

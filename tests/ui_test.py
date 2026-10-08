@@ -78,6 +78,10 @@ try:
         pg.click("[data-tab=sos]"); pg.wait_for_timeout(200)
         assert "Strength of schedule =" in pg.content()
         pg.screenshot(path=f"{OUT}/06b-sos.png")
+        pg.click("[data-tab=bracket]"); pg.wait_for_timeout(300)
+        assert pg.locator(".bo-reg").count() == 4 and "Last four in" in pg.content(), "bracketology shows four projected regionals"
+        pg.screenshot(path=f"{OUT}/06c-bracketology.png", full_page=True)
+        pg.click("[data-tab=poll]"); pg.wait_for_timeout(200)
         pg.goto(url + "#/postseason"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/07-conf-tourneys.png", full_page=True)
         # change a tournament host
