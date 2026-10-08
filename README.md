@@ -99,7 +99,7 @@ Coaches are people in the dynasty, not just names on a team. Each coach has a **
 
 - **Conference pages** show the conference's all-time record against other conferences (and against each one), NCAA bids and national titles, then a full-width **Champions by season** table: regular-season champions with their conference records (shared titles listed together), the tournament champion, format and host, the conference's record against other conferences that year, NCAA bids, NCAA win–loss and its best finish. **Members, all-time** lists every team that has played in the conference with its conference and overall record there, titles, NCAA trips and MCWS trips (former members are marked).
 - **Team pages:** the dynasty record shows which conference the team was in each season.
-- **Brackets** are drawn with long, thin game cards. The game's status (final, or the favorite and a sim button) sits in the card's top row, and each winner's row is shaded in a gradient of its team color with black or white text, whichever reads better.
+- **Brackets** are drawn with long, thin game cards showing just the final score (click a game for the full line score with hits and errors). The game's status (final, or the favorite and a sim button) sits in the card's top row, and each winner's row is shaded, starting just after the logo, in a gradient of its team color with black or white text, whichever reads better.
 
 ## Records
 

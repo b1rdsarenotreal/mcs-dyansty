@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261007211448';
-import { logoFor } from './logos.js?v=20261007211448';
-import { LOGO_ALIASES } from './data.js?v=20261007211448';
-import { ovr, winProbability } from './sim.js?v=20261007211448';
-import { records, isFinal, winnerOf } from './standings.js?v=20261007211448';
-import { latestPoll, pollRankMap } from './polls.js?v=20261007211448';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261007211448';
-import { regWeeksOf, shownSeed } from './postseason.js?v=20261007211448';
-import { DAY_ORDER } from './schedule.js?v=20261007211448';
-import { esc } from './util.js?v=20261007211448';
+import { saveLeague } from './store.js?v=20261007212714';
+import { logoFor } from './logos.js?v=20261007212714';
+import { LOGO_ALIASES } from './data.js?v=20261007212714';
+import { ovr, winProbability } from './sim.js?v=20261007212714';
+import { records, isFinal, winnerOf } from './standings.js?v=20261007212714';
+import { latestPoll, pollRankMap } from './polls.js?v=20261007212714';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261007212714';
+import { regWeeksOf, shownSeed } from './postseason.js?v=20261007212714';
+import { DAY_ORDER } from './schedule.js?v=20261007212714';
+import { esc } from './util.js?v=20261007212714';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -460,7 +460,7 @@ export function compactCard(g, seedFn = () => null) {
   const inn = Math.max(g.homeLine.length, g.awayLine.length);
   const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner win-tint' : 'loser') : ''}"${fin && w === t ? winTint(t) : ''}>
       <span class="bg-team">${team(t, { seed: seedFn(t), size: 16, rank: showsRank(g.type), ranks: fin ? cache.ranksAt(g.week) : null })}</span>
-      <span class="bg-n bg-r">${fin ? R : ''}</span><span class="bg-n">${fin ? H : ''}</span><span class="bg-n">${fin ? E : ''}</span></div>`;
+      <span class="bg-n bg-r">${fin ? R : ''}</span></div>`;
   let status = '';
   if (fin) status = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
   else if (s.teams[g.home] && s.teams[g.away]) {
@@ -470,7 +470,7 @@ export function compactCard(g, seedFn = () => null) {
   }
   const label = g.label ? g.label.split(' · ').slice(-1)[0] : '';
   return `<div class="bgame" data-game="${g.id}" tabindex="0" title="Click for the full line score">
-    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status">${status}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status">${status}</span></div>
     ${row(g.away, g.awayR, g.awayH, g.awayE)}${row(g.home, g.homeR, g.homeH, g.homeE)}</div>`;
 }
 export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '', ranks = true } = {}) {
@@ -480,9 +480,9 @@ export function placeholderCard(label, teams, seedFn = () => null, { faded = fal
     else if (t && typeof t === 'object') inner = `<span class="muted slot-ref">${esc(t.text)}</span>`;
     else if (t) inner = team(t, { seed: seedFn(t), size: 16, rank: ranks });
     else inner = '<span class="muted">TBD</span>';
-    return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
+    return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span></div>`;
   };
   return `<div class="bgame placeholder ${faded ? 'faded' : ''}">
-    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status muted">${esc(note)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status muted">${esc(note)}</span></div>
     ${row(teams[0])}${row(teams[1])}</div>`;
 }

@@ -368,8 +368,9 @@ select.coach-sel.vacant { border-color: var(--accent); color: var(--accent); fon
 .sm-select { padding: 3px 6px; font-size: 12px; }
 /* Bracket cards: long and thin. Status sits in the header row, names stay on one line. */
 .bk .bgame { padding: 5px 10px 6px; gap: 0; }
-.bk .bg-row { grid-template-columns: minmax(0, 1fr) 24px 22px 18px; gap: 6px; min-height: 30px; }
-.bk .bg-head { grid-template-columns: minmax(0, 1fr) auto 24px 22px 18px; min-height: 22px; padding-bottom: 2px; align-items: center; }
+.bk .bg-row { grid-template-columns: minmax(0, 1fr) 30px; gap: 8px; min-height: 30px; }
+.bk .bg-head { grid-template-columns: minmax(0, 1fr) auto; min-height: 22px; padding-bottom: 2px; align-items: center; }
+.bk .bg-n.bg-r { text-align: right; padding-right: 2px; }
 .bg-head .bg-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bg-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; white-space: nowrap; }
 .bg-status .badge { font-size: 10px; }
@@ -378,7 +379,11 @@ select.coach-sel.vacant { border-color: var(--accent); color: var(--accent); fon
 .bk .bg-team, .bk .bg-team .team, .bk .bg-team .team-link, .bk .bg-team .team > :last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .bk .bg-n.bg-r { font: 800 17px/1 var(--display); }
 /* Winner: a gradient in the team's color, text in whichever of black or white reads best. */
-.bg-row.win-tint { background: linear-gradient(90deg, var(--tint) 0%, var(--tint) 45%, var(--tint-end) 100%); color: var(--tint-fg); border-radius: 6px; margin: 1px -6px; padding: 0 6px; border-top-color: transparent; }
+.bg-row.win-tint { position: relative; color: var(--tint-fg); margin: 1px -6px; padding: 0 6px; border-top-color: transparent; }
+/* The color starts just after the logo, so the logo keeps its own background. */
+.bg-row.win-tint::before { content: ''; position: absolute; top: 0; bottom: 0; left: 26px; right: 0; border-radius: 6px; background: linear-gradient(90deg, var(--tint) 0%, var(--tint) 45%, var(--tint-end) 100%); }
+.bg-row.win-tint > * { position: relative; z-index: 1; }
+.bg-row.win-tint .team > :first-child { margin-right: 6px; }
 .bg-row.win-tint + .bg-row, .bg-row + .bg-row.win-tint { border-top-color: transparent; }
 .bg-row.win-tint .bg-team, .bg-row.win-tint .team-link, .bg-row.win-tint .rank, .bg-row.win-tint .bg-n { color: var(--tint-fg); }
 .dropped { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel-2); display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 13px; }
