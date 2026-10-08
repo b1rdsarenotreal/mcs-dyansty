@@ -14,7 +14,7 @@ errors = []
 try:
     with sync_playwright() as p:
         b = p.chromium.launch()
-        pg = b.new_page(viewport={"width": 1400, "height": 1000})
+        pg = b.new_page(viewport={"width": int(os.environ.get("VW", "1400")), "height": 1000})
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("console", lambda m: m.type == "error" and "Failed to load resource" not in m.text and errors.append(m.text))
         pg.route("**/gist.githubusercontent.com/**", lambda r: r.fulfill(status=404, body=""))

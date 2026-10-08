@@ -484,9 +484,13 @@ table.participants td { vertical-align: middle; }
 .conf-cell { display: inline-flex; align-items: center; gap: 6px; color: inherit; text-decoration: none; white-space: nowrap; }
 .conf-cell:hover span { text-decoration: underline; }
 /* 8-team MCWS: the two brackets docked on the left, the Championship Series centered on the right. */
-.ws-layout { display: grid; grid-template-columns: minmax(0, max-content) minmax(300px, 340px); gap: 16px; align-items: center; }
+.ws-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 27%); gap: 16px; align-items: center; }
 .ws-layout > * { min-width: 0; }
 .ws-brackets { display: grid; gap: 16px; min-width: 0; }
 .ws-brackets > .card + .card, .ws-finals > .card { margin-top: 0; }
 .ws-brackets > .card { min-width: 0; }
+/* The brackets sit centered in their cards; the series games stretch to fill the right-hand card. */
+.ws-brackets .bk { margin: 0 auto; }
+.ws-finals .bk { width: 100% !important; }
+.ws-finals .bk-node, .ws-finals .bk-head { width: 100% !important; }
 @media (max-width: 1240px) { .ws-layout { grid-template-columns: minmax(0, 1fr); } .ws-finals { max-width: 420px; } }
