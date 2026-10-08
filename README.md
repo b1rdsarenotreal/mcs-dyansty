@@ -95,6 +95,12 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 
 Coaches are people in the dynasty, not just names on a team. Each coach has a **profile page** with his career record, titles, a season-by-season table across every program he has led, and a way to hire him if he's available. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
 
+## Conference and team history
+
+- **Conference pages** show the conference's all-time record against other conferences (and against each one), NCAA bids and national titles, then a full-width **Champions by season** table: regular-season champions with their conference records (shared titles listed together), the tournament champion, format and host, the conference's record against other conferences that year, NCAA bids, NCAA win–loss and its best finish. **Members, all-time** lists every team that has played in the conference with its conference and overall record there, titles, NCAA trips and MCWS trips (former members are marked).
+- **Team pages:** the dynasty record shows which conference the team was in each season.
+- **Brackets** are drawn with long, thin game cards. The game's status (final, or the favorite and a sim button) sits in the card's top row, and each winner's row is shaded in a gradient of its team color with black or white text, whichever reads better.
+
 ## Records
 
 The **Records** page is the dynasty's record book, covering every season in the league (a season still in progress is marked *):

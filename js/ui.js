@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261007201428';
-import { logoFor } from './logos.js?v=20261007201428';
-import { LOGO_ALIASES } from './data.js?v=20261007201428';
-import { ovr, winProbability } from './sim.js?v=20261007201428';
-import { records, isFinal, winnerOf } from './standings.js?v=20261007201428';
-import { latestPoll, pollRankMap } from './polls.js?v=20261007201428';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261007201428';
-import { regWeeksOf, shownSeed } from './postseason.js?v=20261007201428';
-import { DAY_ORDER } from './schedule.js?v=20261007201428';
-import { esc } from './util.js?v=20261007201428';
+import { saveLeague } from './store.js?v=20261007211448';
+import { logoFor } from './logos.js?v=20261007211448';
+import { LOGO_ALIASES } from './data.js?v=20261007211448';
+import { ovr, winProbability } from './sim.js?v=20261007211448';
+import { records, isFinal, winnerOf } from './standings.js?v=20261007211448';
+import { latestPoll, pollRankMap } from './polls.js?v=20261007211448';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261007211448';
+import { regWeeksOf, shownSeed } from './postseason.js?v=20261007211448';
+import { DAY_ORDER } from './schedule.js?v=20261007211448';
+import { esc } from './util.js?v=20261007211448';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -444,30 +444,35 @@ export function openGame(id, { isNew = false } = {}) {
 // Poll rankings show on regular-season and conference tournament games; NCAA
 // games show only the regional hosts' national seeds.
 const showsRank = type => type !== 'regional' && type !== 'super' && type !== 'mcws';
+// A winner's row in a bracket card: a gradient in the team's color, with
+// black or white text, whichever reads better on that color.
+function winTint(t) {
+  const c = teamInfo(t)?.color;
+  if (!/^#[0-9a-f]{6}$/i.test(c || '')) return '';
+  const fg = readableOn(c);
+  const end = fg === '#ffffff' ? `color-mix(in srgb, ${c} 62%, #000)` : `color-mix(in srgb, ${c} 70%, #fff)`;
+  return ` style="--tint:${esc(c)};--tint-end:${end};--tint-fg:${fg}"`;
+}
 export function compactCard(g, seedFn = () => null) {
   const s = S();
   const fin = isFinal(g);
   const w = fin ? winnerOf(g) : null;
   const inn = Math.max(g.homeLine.length, g.awayLine.length);
-  const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner' : 'loser') : ''}">
+  const row = (t, R, H, E) => `<div class="bg-row ${fin ? (w === t ? 'winner win-tint' : 'loser') : ''}"${fin && w === t ? winTint(t) : ''}>
       <span class="bg-team">${team(t, { seed: seedFn(t), size: 16, rank: showsRank(g.type), ranks: fin ? cache.ranksAt(g.week) : null })}</span>
       <span class="bg-n bg-r">${fin ? R : ''}</span><span class="bg-n">${fin ? H : ''}</span><span class="bg-n">${fin ? E : ''}</span></div>`;
-  let foot = '';
-  if (fin) foot = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
+  let status = '';
+  if (fin) status = `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>`;
   else if (s.teams[g.home] && s.teams[g.away]) {
     const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
     const fav = wp >= 0.5 ? g.home : g.away;
-    foot = `<span class="muted">${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%</span><button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>`;
+    status = `<span class="muted">${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%</span><button class="btn sm bg-sim" data-simgame="${g.id}" title="Simulate this game and save the result" aria-label="Simulate this game">🎲</button>`;
   }
   const label = g.label ? g.label.split(' · ').slice(-1)[0] : '';
   return `<div class="bgame" data-game="${g.id}" tabindex="0" title="Click for the full line score">
-    <div class="bg-row bg-head"><span>${esc(label)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
-    ${row(g.away, g.awayR, g.awayH, g.awayE)}${row(g.home, g.homeR, g.homeH, g.homeE)}
-    <div class="bg-foot">${foot}</div></div>`;
+    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status">${status}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    ${row(g.away, g.awayR, g.awayH, g.awayE)}${row(g.home, g.homeR, g.homeH, g.homeE)}</div>`;
 }
-
-// A bracket slot whose game doesn't exist yet. `teams` entries are a team
-// name, 'BYE', or { text } for "Winner of SF-1" style placeholders.
 export function placeholderCard(label, teams, seedFn = () => null, { faded = false, note = '', ranks = true } = {}) {
   const row = t => {
     let inner;
@@ -478,6 +483,6 @@ export function placeholderCard(label, teams, seedFn = () => null, { faded = fal
     return `<div class="bg-row"><span class="bg-team">${inner}</span><span class="bg-n"></span><span class="bg-n"></span><span class="bg-n"></span></div>`;
   };
   return `<div class="bgame placeholder ${faded ? 'faded' : ''}">
-    <div class="bg-row bg-head"><span>${esc(label)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
-    ${row(teams[0])}${row(teams[1])}<div class="bg-foot"><span class="muted">${esc(note)}</span></div></div>`;
+    <div class="bg-row bg-head"><span class="bg-label">${esc(label)}</span><span class="bg-status muted">${esc(note)}</span><span class="bg-n">R</span><span class="bg-n">H</span><span class="bg-n">E</span></div>
+    ${row(teams[0])}${row(teams[1])}</div>`;
 }

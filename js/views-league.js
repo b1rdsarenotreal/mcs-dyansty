@@ -1,15 +1,15 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261007201428';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261007201428';
-import { ovr } from './sim.js?v=20261007201428';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261007201428';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261007201428';
-import { setRating } from './ratings.js?v=20261007201428';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261007201428';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261007201428';
-import { exportLeague, clearLeague } from './store.js?v=20261007201428';
-import { clamp } from './util.js?v=20261007201428';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261007211448';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261007211448';
+import { ovr } from './sim.js?v=20261007211448';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261007211448';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261007211448';
+import { setRating } from './ratings.js?v=20261007211448';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261007211448';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261007211448';
+import { exportLeague, clearLeague } from './store.js?v=20261007211448';
+import { clamp, fmtPct } from './util.js?v=20261007211448';
 
 const ui = { confFilter: '', ncaaDraft: null };
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
@@ -285,8 +285,8 @@ export function renderTeamPage(name) {
             <td class="num muted small">${fin && cache.ranksAt(g.week)[name] ? '#' + cache.ranksAt(g.week)[name] : ''}</td>
             <td>${g.site ? (g.site === name ? '' : '@') : g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
-    <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Conference</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference finish</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
+      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${(() => { const c = ctx.league.seasons[y].teams[name].conference; return `<a class="conf-cell" href="${confHref(c)}">${confLogo(c, 18)}<span>${esc(c)}</span></a>`; })()}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
@@ -466,22 +466,76 @@ export function renderConferencePage(c) {
   const recs = cache.recs(), reg = records(s, g => g.type === 'regular');
   const st = confStandings(s, c, reg);
   const years = Object.keys(ctx.league.seasons).map(Number).sort((a, b) => b - a);
+  const NCAA_TYPES = new Set(['regional', 'super', 'mcws']);
+  const members = {}, vsConf = {};
+  let ncW = 0, ncL = 0, totBids = 0, titles = 0;
   const hist = years.map(y => {
     const se = ctx.league.seasons[y];
-    if (!Object.values(se.teams).some(t => t.conference === c)) return null;
+    const inC = new Set(Object.values(se.teams).filter(t => t.conference === c).map(t => t.school));
+    if (!inC.size) return null;
     const rg = records(se, g => g.type === 'regular');
+    const all = records(se);
     const bids = (se.post?.field || []).filter(f => f.conf === c);
-    const best = bids.map(f => postseasonFinish(se, f.team)).filter(Boolean);
-    return { y, reg: regSeasonChamps(se, c, rg, rpi(se, g => g.type === 'regular')), t: se.post?.confT?.[c]?.champion, bids: bids.length, best: best.includes('National champion') ? 'National champion' : best.includes('MCWS runner-up') ? 'MCWS runner-up' : best.find(b => /World Series/.test(b)) || best[0] || '' };
+    const finishes = bids.map(f => ({ team: f.team, finish: postseasonFinish(se, f.team) })).filter(x => x.finish);
+    const order = ['National champion', 'MCWS runner-up', "Men's College World Series", 'Super Regional', 'Regional champion', 'NCAA Regional'];
+    finishes.sort((x, z) => order.indexOf(x.finish) - order.indexOf(z.finish));
+    // Results against other conferences, and in the NCAA tournament.
+    let w = 0, l = 0, nw = 0, nl = 0;
+    for (const g of se.games) {
+      if (!isFinal(g)) continue;
+      const hIn = inC.has(g.home), aIn = inC.has(g.away);
+      if (hIn === aIn) continue;
+      const mine = hIn ? g.home : g.away, opp = hIn ? g.away : g.home;
+      const won = winnerOf(g) === mine;
+      won ? w++ : l++;
+      if (NCAA_TYPES.has(g.type)) won ? nw++ : nl++;
+      const oc = se.teams[opp]?.conference || 'Other';
+      const v = (vsConf[oc] ||= { w: 0, l: 0 }); won ? v.w++ : v.l++;
+    }
+    ncW += w; ncL += l; totBids += bids.length;
+    if (se.post?.champion && inC.has(se.post.champion)) titles++;
+    const regChamps = regSeasonChamps(se, c, rg, rpi(se, g => g.type === 'regular'));
+    const regDone = se.games.some(g => g.type === 'regular') && se.games.filter(g => g.type === 'regular').every(isFinal);
+    const tChamp = se.post?.confT?.[c]?.champion;
+    for (const t of inC) {
+      const m = (members[t] ||= { team: t, seasons: 0, cw: 0, cl: 0, w: 0, l: 0, reg: 0, tour: 0, ncaa: 0, mcws: 0 });
+      m.seasons++; m.cw += rg[t]?.cw || 0; m.cl += rg[t]?.cl || 0; m.w += all[t]?.w || 0; m.l += all[t]?.l || 0;
+      if (regDone && regChamps.includes(t)) m.reg++;
+      if (tChamp === t) m.tour++;
+      if (bids.some(f => f.team === t) && se.post?.regionals) m.ncaa++;
+      if (wsTeams(se).includes(t)) m.mcws++;
+    }
+    return { y, reg: regDone ? regChamps : [], regRec: t => `${rg[t].cw}-${rg[t].cl}`, t: tChamp, host: se.post?.confT?.[c]?.host || se.confHosts?.[c], tKind: se.post?.confT?.[c]?.kind,
+      w, l, nw, nl, bids: bids.length, best: finishes[0], size: inC.size, inProgress: se.phase !== 'complete' };
   }).filter(Boolean);
+  const wl = (w, l) => `${w}-${l}${w + l ? ` <span class="muted small">${fmtPct(w / (w + l))}</span>` : ''}`;
+  const memberRows = Object.values(members).sort((x, z) => (z.reg + z.tour) - (x.reg + x.tour) || (z.cw / ((z.cw + z.cl) || 1)) - (x.cw / ((x.cw + x.cl) || 1)) || x.team.localeCompare(z.team));
+  const vsRows = Object.entries(vsConf).sort((x, z) => (z[1].w + z[1].l) - (x[1].w + x[1].l));
   app.innerHTML = `
     <div class="conf-hero" style="border-bottom-color:${esc(info.color)}"><div class="conf-hero-logo">${confLogo(c, 76)}</div><div style="flex:1"><div class="team-hero-name">${esc(c)}</div><div class="team-hero-sub">${st.length} teams</div></div><a class="btn" href="#/conferences">All conferences</a></div>
+    <div class="kpis">
+      <div class="kpi"><div class="v">${hist.length}</div><div class="l">Season${hist.length === 1 ? '' : 's'} in the dynasty</div></div>
+      <div class="kpi"><div class="v">${ncW}-${ncL}</div><div class="l">Against other conferences${ncW + ncL ? ` (${fmtPct(ncW / (ncW + ncL))})` : ''}</div></div>
+      <div class="kpi"><div class="v">${totBids}</div><div class="l">NCAA bids</div></div>
+      <div class="kpi"><div class="v">${titles}</div><div class="l">National title${titles === 1 ? '' : 's'}</div></div>
+    </div>
     <div class="grid">
       <div class="card"><h2>${s.year} standings</h2><div class="table-wrap"><table><thead><tr><th></th><th>Team</th><th class="num">Conf</th><th class="num">Overall</th><th class="num">OVR</th></tr></thead><tbody>
         ${st.map((x, i) => `<tr><td class="num muted">${i + 1}</td><td>${team(x.team)}</td><td class="num"><b>${x.cw}-${x.cl}</b></td><td class="num">${recs[x.team].w}-${recs[x.team].l}</td><td class="num">${ovr(s.teams[x.team])}</td></tr>`).join('')}</tbody></table></div></div>
-      <div class="card"><h2>Champions</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Regular season</th><th>Tournament</th><th class="num">NCAA bids</th><th>Best finish</th></tr></thead><tbody>
-        ${hist.map(h => `<tr><td>${h.y}</td><td>${h.reg.length ? `<div class="stack-tight">${h.reg.map(t => team(t, { rank: false })).join('')}</div>${h.reg.length > 1 ? '<div class="small muted">Shared</div>' : ''}` : '—'}</td><td>${h.t ? team(h.t, { rank: false }) : '—'}</td><td class="num">${h.bids || ''}</td><td class="small">${esc(h.best)}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="card"><h2>Against other conferences</h2>${vsRows.length ? `<div class="table-wrap"><table><thead><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Pct</th></tr></thead><tbody>
+        ${vsRows.map(([oc, v]) => `<tr><td>${ctx.league.conferences[oc] ? `<a class="conf-cell" href="${confHref(oc)}">${confLogo(oc, 18)}<span>${esc(oc)}</span></a>` : esc(oc)}</td><td class="num">${v.w}-${v.l}</td><td class="num">${fmtPct(v.w / ((v.w + v.l) || 1))}</td></tr>`).join('')}</tbody></table></div>
+        <p class="small muted">Every game against a team from another conference, postseason included, all seasons.</p>` : '<p class="muted">No games against other conferences yet.</p>'}</div>
     </div>
+    <div class="card" style="margin-top:16px"><h2>Champions by season</h2><div class="table-wrap"><table class="champ-table"><thead><tr><th>Season</th><th>Regular season</th><th>Tournament</th><th>Host</th><th class="num">vs. other conf.</th><th class="num">NCAA bids</th><th class="num">NCAA W-L</th><th>Best finish</th></tr></thead><tbody>
+      ${hist.map(h => `<tr><td><b>${h.y}</b>${h.inProgress ? '<div class="small muted">In progress</div>' : ''}</td>
+        <td>${h.reg.length ? `<div class="stack-tight">${h.reg.map(t => `<span>${team(t, { rank: false })} <span class="muted small">${h.regRec(t)}</span></span>`).join('')}</div>${h.reg.length > 1 ? '<div class="small muted">Shared</div>' : ''}` : '<span class="muted">—</span>'}</td>
+        <td>${h.t ? team(h.t, { rank: false }) : '<span class="muted">—</span>'}${h.tKind ? `<div class="small muted">${h.tKind === 'double' ? 'Double' : 'Single'} elimination</div>` : ''}</td>
+        <td class="small">${h.host ? esc(h.host) : '<span class="muted">—</span>'}</td>
+        <td class="num">${wl(h.w, h.l)}</td><td class="num">${h.bids || '<span class="muted">0</span>'}</td><td class="num">${h.nw + h.nl ? `${h.nw}-${h.nl}` : '<span class="muted">—</span>'}</td>
+        <td>${h.best ? `${team(h.best.team, { rank: false, size: 16 })}<div class="small muted">${esc(h.best.finish)}</div>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card" style="margin-top:16px"><h2>Members, all-time</h2><div class="table-wrap"><table><thead><tr><th>Team</th><th class="num">Seasons</th><th class="num">Conf W-L</th><th class="num">Overall</th><th class="num">Reg. titles</th><th class="num">Tourn. titles</th><th class="num">NCAA</th><th class="num">MCWS</th></tr></thead><tbody>
+      ${memberRows.map(m => `<tr><td>${team(m.team, { rank: false })}${s.teams[m.team]?.conference !== c ? ' <span class="muted small">(former)</span>' : ''}</td><td class="num">${m.seasons}</td><td class="num"><b>${m.cw}-${m.cl}</b> <span class="muted small">${m.cw + m.cl ? fmtPct(m.cw / (m.cw + m.cl)) : ''}</span></td><td class="num">${m.w}-${m.l}</td><td class="num">${m.reg || ''}</td><td class="num">${m.tour || ''}</td><td class="num">${m.ncaa || ''}</td><td class="num">${m.mcws || ''}</td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted">Counts only the seasons each team spent in the ${esc(c)}. Shared regular-season titles count for each co-champion.</p></div>
     <div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:1;min-width:160px">Name <input type="text" id="ce-name" value="${esc(c)}"></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="ce-abbr" maxlength="5" value="${esc(info.abbr || '')}"></label>

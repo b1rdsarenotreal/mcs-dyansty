@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007201428';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007201428';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007201428';
-import { ovr } from './sim.js?v=20261007201428';
-import { simGames, addGame, weekName } from './league.js?v=20261007201428';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261007201428';
-import { fmtPct, hashStr } from './util.js?v=20261007201428';
-import { DAY_ORDER } from './schedule.js?v=20261007201428';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007211448';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007211448';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007211448';
+import { ovr } from './sim.js?v=20261007211448';
+import { simGames, addGame, weekName } from './league.js?v=20261007211448';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261007211448';
+import { fmtPct, hashStr } from './util.js?v=20261007211448';
+import { DAY_ORDER } from './schedule.js?v=20261007211448';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -332,7 +332,7 @@ function renderPowerTab(root) {
 // two games that feed it, joined by lines. Double elimination draws the
 // winners bracket on top, the elimination bracket underneath, and the
 // championship to the right. Cards show R/H/E; click for the line score.
-const BK = { CW: 236, COLW: 264, H: 138, SLOT: 150, HEAD: 30, SEC_GAP: 34 };
+const BK = { CW: 300, COLW: 340, H: 90, SLOT: 104, HEAD: 30, SEC_GAP: 34 };
 
 function eventBracket(ev, seedFn) {
   const s = S();
