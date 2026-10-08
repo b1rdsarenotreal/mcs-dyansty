@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007212714';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007212714';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007212714';
-import { ovr } from './sim.js?v=20261007212714';
-import { simGames, addGame, weekName } from './league.js?v=20261007212714';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261007212714';
-import { fmtPct, hashStr } from './util.js?v=20261007212714';
-import { DAY_ORDER } from './schedule.js?v=20261007212714';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261007213338';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261007213338';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261007213338';
+import { ovr } from './sim.js?v=20261007213338';
+import { simGames, addGame, weekName } from './league.js?v=20261007213338';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField } from './postseason.js?v=20261007213338';
+import { fmtPct, hashStr } from './util.js?v=20261007213338';
+import { DAY_ORDER } from './schedule.js?v=20261007213338';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -334,7 +334,8 @@ function renderPowerTab(root) {
 // championship to the right. Cards show R/H/E; click for the line score.
 const BK = { CW: 300, COLW: 340, H: 90, SLOT: 104, HEAD: 30, SEC_GAP: 34 };
 
-function eventBracket(ev, seedFn) {
+function eventBracket(ev, seedFn, { stack = false, colw = BK.COLW } = {}) {
+  const COLW = colw;
   const s = S();
   const rankOn = !!s.post?.confT && Object.values(s.post.confT).includes(ev); // poll rankings on conference tournament brackets only
   ensureLayout(ev);
@@ -358,7 +359,7 @@ function eventBracket(ev, seedFn) {
       if (pos[n.key]) return pos[n.key].y;
       const ks = kids(n);
       const y = ks.length ? ks.map(place).reduce((a, b) => a + b, 0) / ks.length : secTop + (slot++) * BK.SLOT;
-      pos[n.key] = { x: n.col * BK.COLW, y };
+      pos[n.key] = { x: n.col * COLW, y };
       maxCol = Math.max(maxCol, n.col);
       return y;
     };
@@ -368,22 +369,29 @@ function eventBracket(ev, seedFn) {
       const first = nodes.find(n => n.col === c && !hidden.has(n.key));
       if (!first) continue;
       const byDay = ev.kind === 'regional' || ev.kind === 'mcws' || ev.kind === 'de';
-      heads.push({ x: c * BK.COLW, y: secTop - BK.HEAD, text: byDay ? DAY_NAMES[first.day] || first.day : first.label.replace(/ \(.*\)$/, ''), day: byDay ? null : first.day });
+      heads.push({ x: c * COLW, y: secTop - BK.HEAD, text: byDay ? DAY_NAMES[first.day] || first.day : first.label.replace(/ \(.*\)$/, ''), day: byDay ? null : first.day });
     }
     if (double) heads.push({ x: 0, y: top, text: sec === 'W' ? 'Winners bracket' : 'Elimination bracket', section: true });
     top = secTop + slot * BK.SLOT;
   }
   // Championship column.
   const finals = ev.nodes.filter(n => secOf(n) === 'F');
-  if (finals.length && !sections.length) {
+  if (finals.length && !sections.length && stack) {
+    // A best-of-three series stacked top to bottom (the MCWS Championship Series).
+    finals.forEach((n, i) => {
+      const step = BK.H + BK.HEAD + 12;
+      pos[n.key] = { x: 0, y: BK.HEAD + i * step };
+      heads.push({ x: 0, y: i * step, text: `Game ${i + 1}`, day: n.day });
+    });
+  } else if (finals.length && !sections.length) {
     // A lone best-of-three series: the games side by side, left to right.
     finals.forEach((n, i) => {
-      pos[n.key] = { x: i * BK.COLW, y: BK.HEAD };
-      heads.push({ x: i * BK.COLW, y: 0, text: `Game ${i + 1}`, day: n.day });
+      pos[n.key] = { x: i * COLW, y: BK.HEAD };
+      heads.push({ x: i * COLW, y: 0, text: `Game ${i + 1}`, day: n.day });
     });
     top = BK.HEAD + BK.SLOT;
   } else if (finals.length) {
-    const x = sections.length ? (maxCol + 1) * BK.COLW : 0;
+    const x = sections.length ? (maxCol + 1) * COLW : 0;
     const feeders = [finals[0].a, finals[0].b].map(r => r && pos[r.w || r.l]).filter(Boolean);
     const mid = feeders.length ? feeders.reduce((a, p) => a + p.y, 0) / feeders.length : BK.HEAD;
     const start = Math.max(BK.HEAD, mid - ((finals.length - 1) * BK.SLOT) / 2);
@@ -700,12 +708,17 @@ function renderMcws(root) {
   const open = s.games.some(g => g.type === 'mcws' && !isFinal(g));
   const seed = t => shownSeed(s, t);
   const named = t => `${esc(t)}${seed(t) ? ` (${seed(t)})` : ''}`;
-  const card = (ev, title, sub) => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${title}</h2>${ev.champion ? `<span class="badge gold">${ev.id === 'ws-F' || ev.id === 'mcws' ? 'Champion' : 'Bracket winner'}: ${esc(ev.champion)}</span>` : ''}</div>
-    <div class="small muted" style="margin-bottom:8px">${sub}</div>${eventBracket(ev, seed)}</div>`;
+  const card = (ev, title, sub, opts) => `<div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">${title}</h2>${ev.champion ? `<span class="badge gold">${ev.id === 'ws-F' || ev.id === 'mcws' ? 'Champion' : 'Bracket winner'}: ${esc(ev.champion)}</span>` : ''}</div>
+    <div class="small muted" style="margin-bottom:8px">${sub}</div>${eventBracket(ev, seed, opts)}</div>`;
   const list = ev => ev.seeds.map(named).join(' · ');
+  // 8-team format: Bracket A and B on the left, the Championship Series
+  // centered beside them on the right, its games stacked.
+  const finals = p.mcwsFinals
+    ? card(p.mcwsFinals, 'Championship Series', `${list(p.mcwsFinals)} · best of three`, { stack: true })
+    : '<div class="card"><h2>Championship Series</h2><p class="muted">The Bracket A and Bracket B winners meet in a best-of-three series.</p></div>';
   root.innerHTML = `${open ? '<div class="row" style="margin-bottom:12px"><span class="spacer"></span><button class="btn primary" id="mc-sim">🎲 Sim the MCWS</button></div>' : ''}
     ${p.mcws ? card(p.mcws, name, list(p.mcws)) : ''}
-    ${(p.mcwsBrackets || []).map(ev => card(ev, `${name} · ${esc(ev.name)}`, `${list(ev)} · double elimination`)).join('')}
-    ${p.mcwsBrackets ? (p.mcwsFinals ? card(p.mcwsFinals, `${name} · Championship Series`, `${list(p.mcwsFinals)} · best of three`) : '<div class="card"><h2>Championship Series</h2><p class="muted">The Bracket A and Bracket B winners meet in a best-of-three series.</p></div>') : ''}`;
+    ${p.mcwsBrackets ? `<div class="ws-layout"><div class="ws-brackets">${p.mcwsBrackets.map(ev => card(ev, `${name} · ${esc(ev.name)}`, `${list(ev)} · double elimination`, { colw: 316 })).join('')}</div>
+      <div class="ws-finals">${finals}</div></div>` : ''}`;
   if ($('#mc-sim', root)) $('#mc-sim', root).onclick = () => simAndReport(g => g.type === 'mcws', 'in the MCWS');
 }
