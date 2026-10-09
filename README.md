@@ -87,14 +87,16 @@ Once the national champion is crowned, an **Offseason** page opens. Next season'
 - **Add teams:** each new team gets a full schedule in the new season.
 - **Add conferences** or delete empty ones.
 - **Remove teams** from the dynasty. Their history stays, and you can bring them back before the season starts.
-- **Coaching changes:** pick each program's coach from a list of available coaches, coaches at other programs, or a new hire. Hiring another program's coach leaves that job open, and the page flags open jobs until they're filled.
-- **Update ratings.** Ratings have already moved for the new year, shown as +/−. Settings controls how big those changes are, or turns them off.
+- **Coaching carousel:** a panel at the top lists open jobs, available coaches, and every move made this offseason (hires, coaches hired away from another program, firings). "Find a coach" or "Change" opens a candidate list with each coach's career record, NCAA and MCWS trips and titles; hiring a coach from another program opens that job. ✕ fires a coach, who stays in the dynasty as available.
+- **Rating points:** each returning team earns an allotment of rating points for the new season. A winning record earns points, beating what the team's ratings predicted earns more, and a deep postseason run earns more again. Teams already near the top lose some to graduation (everyone is pulled a little toward 70), and there's some luck. The points start spread across OFF, PIT and DEF automatically; use − and + on each rating to place them where they make sense (the Points column shows how many are left to place or how far over you are), ↺ to re-spread one team, or "Re-spread all points". You can still type any rating directly. Settings → "Ratings between seasons" sets how much luck is involved, or turns development off.
 
 **Start the season** builds the new schedule from the new alignment. The final poll seeds the next preseason poll.
 
 ## Coaches
 
-Coaches are people in the dynasty, not just names on a team. Each coach has a **profile page** with his career record, titles, a season-by-season table across every program he has led, and a way to hire him if he's available. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there.
+Coaches are people in the dynasty, not just names on a team. Each coach has a **profile page** with his career record, titles, a season-by-season table across every program he has led, and a way to hire him if he's available. The **Coaches** page lists every coach with his current program, seasons, record, conference tournament titles, NCAA trips, MCWS trips, national titles and career path. Coaches without a job stay on the list as available, so another program can hire them later. You can add or rename coaches there. Click any column header to sort by it (click again to flip the order).
+
+The **Teams** page lists every team ranked by OVR, with a # column. Click any header (team, coach, conference, OFF, PIT, DEF, OVR, record, poll) to re-sort.
 
 ## Conference and team history
 

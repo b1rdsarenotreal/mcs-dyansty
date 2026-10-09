@@ -1,7 +1,7 @@
 import { confWeeksFor } from '../js/schedule.js';
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
-import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason } from '../js/league.js';
+import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason, pointsLeft } from '../js/league.js';
 import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
 import { bracketology, selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
@@ -277,6 +277,19 @@ for (const t of ['Saint Louis', 'UMKC', 'North Dakota State']) d.teams[t].confer
 d.teams['Houston'].conference = 'Big 12';
 draftRemoveTeam(league, 'Bemidji State');
 assert.deepEqual(draftWarnings(league), []);
+// Offseason rating points: earned from results plus luck, spread automatically, adjustable.
+{
+  const withDev = Object.values(d.teams).filter(t => t.dev);
+  assert.ok(withDev.length >= 40, 'returning teams get rating points');
+  assert.ok(withDev.every(t => pointsLeft(t) === 0 || [t.off, t.pit, t.def].some(v => v === 40 || v === 99)), 'points start fully placed');
+  const champ = d.teams[s.post.champion];
+  const recs = records(s), byWp = withDev.filter(t => recs[t.school]).sort((a, b) => recs[b.school].w / (recs[b.school].w + recs[b.school].l) - recs[a.school].w / (recs[a.school].w + recs[a.school].l));
+  const avg = l => l.reduce((n, t) => n + t.dev.pts, 0) / l.length;
+  console.log('dev points: best third avg', avg(byWp.slice(0, 15)).toFixed(1), 'worst third avg', avg(byWp.slice(-15)).toFixed(1), 'champion', champ.dev.pts);
+  const t = withDev.find(x => x.off < 95), before = pointsLeft(t);
+  t.off += 1; assert.equal(pointsLeft(t), before - 1, 'raising a rating spends a point');
+  t.off -= 1;
+}
 assert.ok(s.teams['Bemidji State'], 'history keeps the team');
 const s2 = startNextSeason(league);
 assert.equal(s2.year, 2017);

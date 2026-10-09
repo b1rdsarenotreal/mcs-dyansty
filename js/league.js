@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261007220018';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261007220018';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261007220018';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261007220018';
-import { replayRatings, ensureBase } from './ratings.js?v=20261007220018';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts } from './postseason.js?v=20261007220018';
-import { isFinal } from './standings.js?v=20261007220018';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261007220018';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008184207';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008184207';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008184207';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261008184207';
+import { replayRatings, ensureBase } from './ratings.js?v=20261008184207';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008184207';
+import { isFinal, records } from './standings.js?v=20261008184207';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261008184207';
 
 export const SCHEMA_VERSION = 4;
 
@@ -241,15 +241,48 @@ export function rebuildSchedule(season, prev = null) {
 
 // ---------- next season ----------
 
-const DEV = { none: 0, small: 2, normal: 3.5, big: 5.5 };
-
-export function developTeams(teams, year, level = 'normal') {
+// Offseason development. Each team gets an allotment of rating points for
+// next season: more after a winning season, more again for beating what its
+// ratings predicted and for a deep postseason run, fewer for a team already
+// near the top (graduation pulls everyone toward 70), plus some luck. The points are spread across OFF, PIT and DEF automatically, and
+// the commissioner can move them around (or overrule them) in the Offseason.
+const DEV_LUCK = { none: 0, small: 3, normal: 5, big: 8 };
+const FINISH_BONUS = { 'National champion': 4.5, 'MCWS runner-up': 3.5, "Men's College World Series": 3, 'Super Regional': 2, 'Regional champion': 2, 'NCAA Regional': 1.5 };
+export const RATING_KEYS = ['off', 'pit', 'def'];
+export function devPoints(team, season, r, level = 'normal', avgO = 70) {
+  if (level === 'none') return 0;
+  const rec = season ? records(season)[team.school] : null;
+  const o = 0.4 * team.off + 0.4 * team.pit + 0.2 * team.def;
+  const played = rec ? rec.w + rec.l : 0;
+  const wp = played ? rec.w / played : 0.5;
+  // What the ratings said this team should have won, against an average schedule.
+  const expected = 1 / (1 + Math.exp(-0.126 * (o - avgO)));
+  const finish = season ? FINISH_BONUS[postseasonFinish(season, team.school)] || 0 : 0;
+  const pts = (played ? (wp - 0.5) * 8 + (wp - expected) * 18 : 0) + finish * 1.5 - 0.3 * (o - 70) + normal(r) * (DEV_LUCK[level] ?? DEV_LUCK.normal);
+  return clamp(Math.round(pts), -15, 15);
+}
+// Spread `pts` one point at a time across the three ratings.
+export function spreadPoints(t, r) {
+  const d = t.dev;
+  for (const k of RATING_KEYS) t[k] = d.start[k];
+  for (let i = 0; i < Math.abs(d.pts); i++) {
+    const k = RATING_KEYS[Math.floor(r() * 3)];
+    t[k] = clamp(t[k] + Math.sign(d.pts), 40, 99);
+  }
+  t.base = { off: t.off, pit: t.pit, def: t.def };
+}
+// Points the commissioner still has to place (negative = over budget).
+export function pointsLeft(t) {
+  if (!t.dev) return 0;
+  return t.dev.pts - RATING_KEYS.reduce((n, k) => n + (t[k] - t.dev.start[k]), 0);
+}
+export function developTeams(teams, year, level = 'normal', season = null) {
   const r = rng(hashStr(`dev-${year}`));
-  const sd = DEV[level] ?? DEV.normal;
   const out = JSON.parse(JSON.stringify(teams));
-  for (const t of Object.values(out)) {
-    for (const k of ['off', 'pit', 'def']) t[k] = clamp(Math.round(70 + (t[k] - 70) * (sd ? 0.9 : 1) + normal(r) * sd), 40, 99);
-    t.base = { off: t.off, pit: t.pit, def: t.def };
+  const list = Object.values(out), avgO = list.reduce((n, t) => n + 0.4 * t.off + 0.4 * t.pit + 0.2 * t.def, 0) / (list.length || 1);
+  for (const t of list) {
+    t.dev = { pts: devPoints(t, season, r, level, avgO), start: { off: t.off, pit: t.pit, def: t.def } };
+    spreadPoints(t, r);
   }
   return out;
 }
@@ -263,7 +296,7 @@ export function beginOffseason(league) {
   const prev = currentSeason(league);
   if (prev.phase !== 'complete') throw new Error('Finish the season first.');
   if (!league.draft || league.draft.year !== prev.year + 1) {
-    league.draft = { year: prev.year + 1, teams: developTeams(prev.teams, prev.year + 1, prev.settings.development), removed: {} };
+    league.draft = { year: prev.year + 1, teams: developTeams(prev.teams, prev.year + 1, prev.settings.development, prev), removed: {}, moves: [] };
   }
   return league.draft;
 }
@@ -304,10 +337,13 @@ export function draftWarnings(league) {
 export function startNextSeason(league) {
   const prev = currentSeason(league);
   const year = prev.year + 1;
-  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development);
+  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development, prev);
   if (Object.keys(teams).length < 16) throw new Error('The NCAA field needs at least 16 teams.');
+  const moves = league.draft?.moves || [];
   delete league.draft;
+  for (const t of Object.values(teams)) delete t.dev;
   const season = newSeason(year, teams, prev.settings, prev);
+  season.coachMoves = moves;
   season.carryPoll = prev.polls.final || null;
   season.polls[0] = generatePoll(season, 0);
   league.seasons[year] = season;

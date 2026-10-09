@@ -1,17 +1,38 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261007220018';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261007220018';
-import { ovr } from './sim.js?v=20261007220018';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261007220018';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors } from './league.js?v=20261007220018';
-import { setRating } from './ratings.js?v=20261007220018';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261007220018';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261007220018';
-import { exportLeague, clearLeague } from './store.js?v=20261007220018';
-import { clamp, fmtPct } from './util.js?v=20261007220018';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008184207';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008184207';
+import { ovr } from './sim.js?v=20261008184207';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008184207';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, spreadPoints, pointsLeft } from './league.js?v=20261008184207';
+import { setRating } from './ratings.js?v=20261008184207';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008184207';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008184207';
+import { exportLeague, clearLeague } from './store.js?v=20261008184207';
+import { clamp, fmtPct } from './util.js?v=20261008184207';
 
-const ui = { confFilter: '', ncaaDraft: null };
+const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 } };
+
+// Click-to-sort table headers. `state` is { k, dir }; clicking the sorted
+// column flips the direction, clicking another starts high-to-low (A-Z for text).
+function sortTh(state, k, label, { num = true, text = false, title = '' } = {}) {
+  const on = state.k === k;
+  return `<th class="${num ? 'num ' : ''}sortable${on ? ' sorted' : ''}" data-sort="${k}" data-text="${text ? 1 : ''}" ${title ? `title="${esc(title)}"` : ''} aria-sort="${on ? (state.dir < 0 ? 'descending' : 'ascending') : 'none'}">${label}${on ? (state.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`;
+}
+function bindSort(state, rerender) {
+  $$('[data-sort]').forEach(th => (th.onclick = () => {
+    const k = th.dataset.sort;
+    if (state.k === k) state.dir *= -1; else { state.k = k; state.dir = th.dataset.text ? 1 : -1; }
+    rerender();
+  }));
+}
+function sortBy(list, state, val) {
+  return [...list].sort((a, b) => {
+    const x = val(a, state.k), y = val(b, state.k);
+    const c = typeof x === 'string' || typeof y === 'string' ? String(x).localeCompare(String(y)) : (x ?? -Infinity) - (y ?? -Infinity);
+    return c * state.dir;
+  });
+}
 const rate = v => clamp(Math.round(Number(v) || 0), 40, 99);
 
 function ratingBar(label, v, color, pre = null) {
@@ -73,20 +94,23 @@ function bindCoachSelects(teams, attr) {
 export function renderTeams() {
   const s = S(), recs = cache.recs(), pr = cache.ranks();
   const confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
-  const list = Object.values(s.teams).filter(t => !ui.confFilter || t.conference === ui.confFilter)
-    .sort((a, b) => a.conference.localeCompare(b.conference) || ovr(b) - ovr(a));
+  const st = ui.teamSort;
+  const pct = t => { const r = recs[t.school]; return r.w + r.l ? r.w / (r.w + r.l) : 0; };
+  const val = (t, k) => ({ team: t.school, coach: coachName(ctx.league, t.coachId) || '~', conf: t.conference, off: t.off, pit: t.pit, def: t.def, ovr: t.off * 0.4 + t.pit * 0.4 + t.def * 0.2, rec: pct(t), poll: pr[t.school] ? -pr[t.school] : null })[k];
+  const list = sortBy(Object.values(s.teams).filter(t => !ui.confFilter || t.conference === ui.confFilter), st, val);
   app.innerHTML = `
     <div class="section-head"><h1>${s.year} Teams</h1><span class="muted">${Object.keys(s.teams).length} teams</span><span class="spacer"></span><button class="btn primary" id="t-add">+ Add team</button></div>
     <div class="chips"><button class="chip ${!ui.confFilter ? 'active' : ''}" data-cf="">All</button>${confs.map(c => `<button class="chip ${ui.confFilter === c ? 'active' : ''}" data-cf="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="card"><div class="table-wrap"><table class="teams-table">
-      <thead><tr><th>Team</th><th>Head coach</th><th>Conference</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th class="num">Record</th><th class="num">Poll</th></tr></thead>
-      <tbody>${list.map(t => `<tr><td>${team(t.school, { rank: false })}</td>
+      <thead><tr><th class="num">#</th>${sortTh(st, 'team', 'Team', { num: false, text: true })}${sortTh(st, 'coach', 'Head coach', { num: false, text: true })}${sortTh(st, 'conf', 'Conference', { num: false, text: true })}${sortTh(st, 'off', 'OFF')}${sortTh(st, 'pit', 'PIT')}${sortTh(st, 'def', 'DEF')}${sortTh(st, 'ovr', 'OVR')}${sortTh(st, 'rec', 'Record', { title: 'Sort by winning percentage' })}${sortTh(st, 'poll', 'Poll')}</tr></thead>
+      <tbody>${list.map((t, i) => `<tr><td class="num muted">${i + 1}</td><td>${team(t.school, { rank: false })}</td>
         <td>${coachSelect(s.teams, t.school, 'data-coach')}</td>
         <td><select data-conf="${esc(t.school)}">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
         ${['off', 'pit', 'def'].map(k => `<td class="num"><input type="number" min="40" max="99" class="rin" data-rate="${k}" data-team="${esc(t.school)}" value="${t[k]}"></td>`).join('')}
         <td class="num"><b data-ovr="${esc(t.school)}">${ovr(t)}</b>${t.base && ovr(t) !== ovrOf(t.base) ? ` <span class="rd ${ovr(t) > ovrOf(t.base) ? 'good' : 'bad'}" title="Since preseason">${ovr(t) > ovrOf(t.base) ? '▲' : '▼'}${Math.abs(ovr(t) - ovrOf(t.base))}</span>` : ''}</td><td class="num">${recs[t.school].w}-${recs[t.school].l}</td><td class="num muted">${pr[t.school] ?? ''}</td></tr>`).join('')}</tbody></table></div>
-    <p class="small muted">Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching) + 20% DEF (fielding). Ratings also move during the season with results (▲▼ shows the change since preseason); Settings controls how much. Changes you make apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
+    <p class="small muted">Click a column header to sort (click again to flip it). Ratings run 40–99. OVR = 40% OFF (hitting) + 40% PIT (pitching) + 20% DEF (fielding). Ratings also move during the season with results (▲▼ shows the change since preseason); Settings controls how much. Changes you make apply to games simulated from now on. Moving a team to another conference doesn't change games already scheduled; rebuild the schedule in Settings before the season starts, or edit games on the Schedule page.</p></div>`;
   $$('[data-cf]').forEach(b => (b.onclick = () => { ui.confFilter = b.dataset.cf; renderTeams(); }));
+  bindSort(st, renderTeams);
   $$('[data-rate]').forEach(inp => (inp.onchange = () => {
     const t = s.teams[inp.dataset.team];
     setRating(t, inp.dataset.rate, rate(inp.value)); inp.value = t[inp.dataset.rate];
@@ -160,37 +184,87 @@ export function renderOffseason() {
     return;
   }
   const d = beginOffseason(L);
+  d.moves ||= [];
   persist();
-  const prev = cur.teams;
+  const prev = cur.teams, prevRecs = records(cur);
   const confs = Object.keys(L.conferences).filter(c => !L.conferences[c].retired);
   const teams = Object.values(d.teams);
   const warnings = draftWarnings(L);
-  const delta = (t, k) => { const p = prev[t.school]; const x = p ? t[k] - p[k] : 0; return `<span class="delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}">${x ? (x > 0 ? '+' : '') + x : ''}</span>`; };
   const moved = t => prev[t.school] && prev[t.school].conference !== t.conference;
+  const careers = coachCareers();
+  const rec = t => prevRecs[t] ? `${prevRecs[t].w}-${prevRecs[t].l}` : '';
+  // A rating with − and + buttons and its change since last season.
+  const ratingCell = (t, k) => {
+    const from = t.dev?.start?.[k] ?? prev[t.school]?.[k];
+    const x = from != null ? t[k] - from : 0;
+    return `<td class="num"><span class="rstep"><button class="btn sm" data-step="-1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Lower ${k.toUpperCase()}">−</button><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}" aria-label="${esc(t.school)} ${k.toUpperCase()}"><button class="btn sm" data-step="1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Raise ${k.toUpperCase()}">+</button></span><span class="delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}">${x ? (x > 0 ? '+' : '') + x : ''}</span></td>`;
+  };
+  const pointsCell = t => {
+    if (!t.dev) return '<td class="num muted small">New</td>';
+    const left = pointsLeft(t), p = t.dev.pts;
+    return `<td class="num pts-cell"><b class="${p > 0 ? 'good' : p < 0 ? 'bad' : ''}" title="Points earned this offseason">${p > 0 ? '+' : ''}${p}</b>
+      <div class="small ${left ? 'warn-text' : 'muted'}">${left === 0 ? 'all placed' : left > 0 ? `${left} to place` : `${-left} over`}</div></td>`;
+  };
+  const coachCell = t => {
+    const id = t.coachId;
+    return `<td><div class="coach-cell">${id ? `<a class="team-link" href="${coachHref(id)}">${esc(coachName(L, id))}</a>` : '<span class="badge manual">Vacant</span>'}
+      <button class="btn sm" data-hire="${esc(t.school)}">${id ? 'Change' : 'Hire'}</button>${id ? `<button class="btn sm ghost" data-fire="${esc(t.school)}" title="Fire ${esc(coachName(L, id))}" aria-label="Fire coach">✕</button>` : ''}</div></td>`;
+  };
   const card = c => {
     const list = teams.filter(t => t.conference === c).sort((a, b) => a.school.localeCompare(b.school));
     return `<div class="card off-conf"><div class="row" style="margin-bottom:8px">${confLogo(c, 28)}<h2 style="margin:0">${esc(c)}</h2><span class="muted small">${list.length} team${list.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" data-addto="${esc(c)}">+ Team</button></div>
-      ${list.length ? `<div class="table-wrap"><table class="off-table"><thead><tr><th>Team</th><th>Head coach</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th>Conference</th><th></th></tr></thead><tbody>
-        ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}</td>
-          <td>${coachSelect(d.teams, t.school, 'data-dcoach')}</td>
-          ${['off', 'pit', 'def'].map(k => `<td class="num"><span class="rin-wrap"><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}">${delta(t, k)}</span></td>`).join('')}
-          <td class="num"><b>${ovr(t)}</b></td>
+      ${list.length ? `<div class="table-wrap"><table class="off-table"><thead><tr><th>Team</th><th>Head coach</th><th class="num" title="Rating points earned from last season's results, plus luck">Points</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th>Conference</th><th></th></tr></thead><tbody>
+        ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}${prev[t.school] ? `<div class="small muted">${rec(t.school)} in ${cur.year}</div>` : ''}</td>
+          ${coachCell(t)}${pointsCell(t)}
+          ${['off', 'pit', 'def'].map(k => ratingCell(t, k)).join('')}
+          <td class="num"><b>${ovr(t)}</b>${t.dev ? `<button class="btn sm ghost" data-auto="${esc(t.school)}" title="Re-spread this team's points automatically" aria-label="Auto-assign points">↺</button>` : ''}</td>
           <td><select data-dconf="${esc(t.school)}" aria-label="Move ${esc(t.school)}">${confs.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
           <td><button class="btn sm danger" data-drm="${esc(t.school)}" title="Leave the dynasty">✕</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted small">No teams yet. Move teams in with the Conference menus, or add a new one.</p>'}
       ${!list.length ? `<button class="btn sm danger" data-delconf="${esc(c)}">Delete conference</button>` : ''}</div>`;
   };
+  // ---- coaching carousel ----
+  const open = teams.filter(t => !t.coachId).sort((a, b) => a.school.localeCompare(b.school));
+  const avail = availableCoaches(L, d.teams).map(c => ({ ...c, ...careers[c.id] })).sort((a, b) => b.w - a.w || a.name.localeCompare(b.name));
+  const cline = c => `${c.w}-${c.l}${c.titles ? ` · ${c.titles} title${c.titles > 1 ? 's' : ''}` : ''}${c.mcws ? ` · ${c.mcws} MCWS` : ''}`;
+  const moveLine = m => {
+    const who = `<a class="team-link" href="${coachHref(m.coach)}">${esc(coachName(L, m.coach))}</a>`;
+    if (m.type === 'fire') return `<span class="mv-tag fire">Out</span><span>${who} out at <b>${esc(m.school)}</b></span>`;
+    if (m.from) return `<span class="mv-tag poach">Poached</span><span>${who} leaves ${esc(m.from)} for <b>${esc(m.school)}</b></span>`;
+    return `<span class="mv-tag hire">Hired</span><span>${who} takes over at <b>${esc(m.school)}</b></span>`;
+  };
+  const carousel = `<div class="card carousel">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Coaching carousel</h2><span class="muted small">${open.length} open job${open.length === 1 ? '' : 's'} · ${avail.length} available coach${avail.length === 1 ? '' : 'es'} · ${d.moves.length} move${d.moves.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" id="o-newcoach">+ New coach</button></div>
+    <div class="carousel-grid">
+      <section><h3>Open jobs</h3>${open.length ? open.map(t => `<div class="job"><span class="team">${logoImg(t, 22)}<b>${esc(t.school)}</b></span><span class="muted small">${esc(t.conference)}${prev[t.school] ? ` · ${rec(t.school)}` : ''}</span><button class="btn sm primary" data-hire="${esc(t.school)}">Find a coach</button></div>`).join('') : '<p class="muted small">Every program has a head coach. Use ✕ next to a coach to open a job, or "Change" to hire someone away.</p>'}</section>
+      <section><h3>Available</h3>${avail.length ? avail.slice(0, 12).map(c => `<div class="cand-mini"><a class="team-link" href="${coachHref(c.id)}"><b>${esc(c.name)}</b></a><span class="muted small">${c.seasons?.length ? cline(c) : 'No seasons yet'}</span></div>`).join('') + (avail.length > 12 ? `<p class="muted small">+${avail.length - 12} more on the Coaches page.</p>` : '') : '<p class="muted small">No coaches without a job.</p>'}</section>
+      <section><h3>Moves this offseason</h3>${d.moves.length ? `<ol class="moves">${[...d.moves].reverse().map(m => `<li>${moveLine(m)}</li>`).join('')}</ol>` : '<p class="muted small">No changes yet.</p>'}</section>
+    </div></div>`;
   const removed = Object.keys(d.removed || {});
+  const unplaced = teams.filter(t => t.dev && pointsLeft(t) !== 0).length;
   app.innerHTML = `
     <div class="section-head"><h1>${d.year} Offseason</h1><span class="muted">${teams.length} teams in ${new Set(teams.map(t => t.conference)).size} conferences</span><span class="spacer"></span>
       <button class="btn" id="o-conf">+ Add conference</button><button class="btn" id="o-team">+ Add team</button><button class="btn primary" id="o-start">Start the ${d.year} season</button></div>
-    <div class="hint">Set up the ${d.year} season. Ratings have already changed for the new year (shown as +/−). Move teams with the <b>Conference</b> menus, add new teams or conferences, and make coaching changes (hiring another program's coach opens that job). Nothing is scheduled until you start the season, so every team gets a full schedule.</div>
+    <div class="hint">Set up the ${d.year} season. Each team earned <b>rating points</b> from last season (a winning record and a deep postseason run earn more; teams near the top lose some to graduation; plus some luck). They start spread across OFF, PIT and DEF automatically; use − and + to place them where they make sense, or ↺ to re-spread. Move teams with the <b>Conference</b> menus, add teams or conferences, and run the coaching carousel. Nothing is scheduled until you start the season.</div>
     ${warnings.length ? `<div class="hint warn" style="margin-top:10px">${warnings.map(esc).join('<br>')}</div>` : ''}
     ${removed.length ? `<div class="card" style="margin-top:14px"><b>Leaving the dynasty:</b> ${removed.map(t => `<span class="chip-static">${esc(t)} <button class="btn sm" data-restore="${esc(t)}">Bring back</button></span>`).join(' ')}</div>` : ''}
-    <div class="off-grid" style="margin-top:14px">${confs.map(card).join('')}</div>`;
+    <div style="margin-top:14px">${carousel}</div>
+    <div class="row" style="margin:16px 0 0"><h2 style="margin:0">Teams</h2><span class="muted small">${unplaced ? `${unplaced} team${unplaced === 1 ? ' has' : 's have'} points to place or ${unplaced === 1 ? 'is' : 'are'} over budget` : 'Every team\'s points are placed'}</span><span class="spacer"></span><button class="btn sm" id="o-autoall">↺ Re-spread all points</button></div>
+    <div class="off-grid" style="margin-top:10px">${confs.map(card).join('')}</div>`;
   const T = d.teams;
-  bindCoachSelects(T, 'data-dcoach');
-  $$('[data-drate]').forEach(inp => (inp.onchange = () => { const t = T[inp.dataset.team], k = inp.dataset.drate; t[k] = rate(inp.value); t.base = { ...(t.base || {}), [k]: t[k] }; changed({ progress: false }); }));
+  const setRate = (t, k, v) => { t[k] = rate(v); t.base = { ...(t.base || {}), [k]: t[k] }; };
+  $$('[data-drate]').forEach(inp => (inp.onchange = () => { setRate(T[inp.dataset.team], inp.dataset.drate, inp.value); changed({ progress: false }); }));
+  $$('[data-step]').forEach(b => (b.onclick = () => { const t = T[b.dataset.team], k = b.dataset.k; setRate(t, k, t[k] + Number(b.dataset.step)); changed({ progress: false }); }));
+  $$('[data-auto]').forEach(b => (b.onclick = () => { spreadPoints(T[b.dataset.auto], Math.random); changed({ progress: false }); }));
+  $('#o-autoall').onclick = () => { if (!confirm('Re-spread every team\'s points automatically? Your manual changes to ratings will be replaced.')) return; for (const t of Object.values(T)) if (t.dev) spreadPoints(t, Math.random); changed({ progress: false }); };
+  $$('[data-hire]').forEach(b => (b.onclick = () => hireModal(d, b.dataset.hire)));
+  $$('[data-fire]').forEach(b => (b.onclick = () => {
+    const t = T[b.dataset.fire], id = t.coachId;
+    if (!confirm(`Fire ${coachName(L, id)} at ${t.school}? He stays in the dynasty as an available coach.`)) return;
+    t.coachId = null; d.moves.push({ type: 'fire', coach: id, school: t.school });
+    changed({ progress: false }); toast(`${t.school}'s head coach job is open.`);
+  }));
+  $('#o-newcoach').onclick = async () => { const n = await askCoachName('Add a coach'); if (n) { newCoach(L, n); changed({ progress: false }); toast(`${n} added as an available coach.`); } else ctx.render(); };
   $$('[data-dconf]').forEach(sel => (sel.onchange = () => { T[sel.dataset.dconf].conference = sel.value; changed({ progress: false }); toast(`${sel.dataset.dconf} moves to the ${sel.value}.`); }));
   $$('[data-drm]').forEach(b => (b.onclick = () => { if (confirm(`Remove ${b.dataset.drm} from the dynasty starting in ${d.year}? Its history stays.`)) { draftRemoveTeam(L, b.dataset.drm); changed({ progress: false }); } }));
   $$('[data-restore]').forEach(b => (b.onclick = () => { draftRestoreTeam(L, b.dataset.restore); changed({ progress: false }); }));
@@ -199,10 +273,43 @@ export function renderOffseason() {
   $('#o-team').onclick = () => teamForm(T);
   $('#o-conf').onclick = () => conferenceForm();
   $('#o-start').onclick = () => {
-    if (!confirm(`Start the ${d.year} season with ${Object.keys(T).length} teams? The schedule is built from this alignment.`)) return;
+    const extra = unplaced ? ` ${unplaced} team${unplaced === 1 ? ' still has' : 's still have'} rating points not placed exactly; ratings stay as they are now.` : '';
+    if (!confirm(`Start the ${d.year} season with ${Object.keys(T).length} teams? The schedule is built from this alignment.${extra}`)) return;
     try { const ns = startNextSeason(L); L.viewYear = ns.year; } catch (e) { return toast(e.message, true); }
     location.hash = '#/home'; changed({ progress: false }); toast(`Welcome to ${d.year}.`);
   };
+}
+
+// Hiring for one program: every candidate (available coaches first, then
+// coaches at other programs, who would leave for this job) with their résumé.
+function hireModal(d, school) {
+  const L = ctx.league, T = d.teams, careers = coachCareers();
+  const current = T[school].coachId;
+  const cands = Object.values(L.coaches || {}).filter(c => c.id !== current).map(c => {
+    const k = careers[c.id] || { w: 0, l: 0, seasons: [], titles: 0, mcws: 0, ncaa: 0 };
+    return { ...c, ...k, at: coachSchool(T, c.id), pct: k.w + k.l ? k.w / (k.w + k.l) : 0 };
+  }).sort((a, b) => (a.at ? 1 : 0) - (b.at ? 1 : 0) || b.titles - a.titles || b.mcws - a.mcws || b.pct - a.pct || a.name.localeCompare(b.name));
+  const row = c => `<div class="cand"><div class="cand-main"><b>${esc(c.name)}</b>
+      <div class="small muted">${c.at ? `Head coach at ${esc(c.at)}` : 'Available'}${c.seasons.length ? ` · ${c.seasons.length} season${c.seasons.length > 1 ? 's' : ''}` : ' · No seasons yet'}</div></div>
+    <div class="cand-stats"><span><b>${c.w}-${c.l}</b><span class="muted small">${c.w + c.l ? fmtPctLocal(c.pct) : ''}</span></span><span title="NCAA tournaments"><b>${c.ncaa}</b><span class="muted small">NCAA</span></span><span title="MCWS trips"><b>${c.mcws}</b><span class="muted small">MCWS</span></span><span title="National titles"><b>${c.titles}</b><span class="muted small">Titles</span></span></div>
+    <button class="btn sm ${c.at ? '' : 'primary'}" data-pick="${c.id}">${c.at ? 'Hire away' : 'Hire'}</button></div>`;
+  modal.innerHTML = `<div class="modal-head"><h2>${esc(school)} head coach</h2><button class="btn ghost" data-x>✕</button></div>
+    <div class="modal-body"><p class="small muted" style="margin-top:0">${current ? `Replacing ${esc(coachName(L, current))}, who becomes available.` : 'This job is open.'} Hiring a coach from another program opens that job.</p>
+      <div class="cand-list">${cands.map(row).join('') || '<p class="muted">No other coaches in the dynasty yet.</p>'}</div></div>
+    <div class="modal-foot"><button class="btn" id="hm-new">+ New coach</button><span class="spacer"></span><button class="btn" data-x>Cancel</button></div>`;
+  $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+  modal.onclose = () => ctx.render();
+  const hire = id => {
+    const was = T[school].coachId;
+    const from = hireCoach(T, school, id);
+    if (was && was !== id) d.moves.push({ type: 'fire', coach: was, school });
+    d.moves.push({ type: 'hire', coach: id, school, from });
+    modal.close(); changed({ progress: false });
+    toast(from ? `${coachName(L, id)} leaves ${from} for ${school}. ${from} needs a new coach.` : `${coachName(L, id)} is ${school}'s head coach.`);
+  };
+  $$('[data-pick]', modal).forEach(b => (b.onclick = () => hire(b.dataset.pick)));
+  $('#hm-new', modal).onclick = async () => { modal.onclose = null; modal.close(); await new Promise(r => setTimeout(r, 0)); const n = await askCoachName(`New head coach for ${school}`); if (n) hire(newCoach(L, n)); else ctx.render(); };
+  modal.showModal();
 }
 
 // ---------- Team profile ----------
@@ -425,18 +532,21 @@ export function renderCoachPage(id) {
 export function renderCoaches() {
   const L = ctx.league, cur = L.seasons[L.currentYear];
   const teamsNow = L.draft && cur.phase === 'complete' ? L.draft.teams : cur.teams;
-  const careers = Object.values(coachCareers()).map(c => ({ ...c, now: coachSchool(teamsNow, c.id) }))
-    .sort((a, b) => (b.now ? 1 : 0) - (a.now ? 1 : 0) || b.w - a.w || a.name.localeCompare(b.name));
+  const st = ui.coachSort;
+  const all = Object.values(coachCareers()).map(c => ({ ...c, now: coachSchool(teamsNow, c.id) }));
+  const val = (c, k) => ({ name: c.name, now: c.now ? 1e6 + c.w : c.w, seasons: c.seasons.length, w: c.w, pct: c.w + c.l ? c.w / (c.w + c.l) : null, ct: c.ct, ncaa: c.ncaa, mcws: c.mcws, titles: c.titles })[k];
+  const careers = sortBy(all.sort((a, b) => a.name.localeCompare(b.name)), st, val);
   app.innerHTML = `
     <div class="section-head"><h1>Coaches</h1><span class="muted">${careers.filter(c => c.now).length} head coaches · ${careers.filter(c => !c.now).length} available</span><span class="spacer"></span><button class="btn primary" id="co-add">+ Add coach</button></div>
     <div class="hint">Coaches are people in the dynasty. Change a program's coach from the Teams page, the team's page, or the Offseason. Picking a coach who leads another program hires him away and leaves that job open. Coaches without a job stay here as available.</div>
     <div class="card" style="margin-top:14px"><div class="table-wrap"><table>
-      <thead><tr><th>Coach</th><th>Now</th><th class="num">Seasons</th><th class="num">W-L</th><th class="num">Pct</th><th class="num">Conf. tourney titles</th><th class="num">NCAA</th><th class="num">MCWS</th><th class="num">Natl. titles</th><th>Career</th><th></th></tr></thead>
+      <thead><tr>${sortTh(st, 'name', 'Coach', { num: false, text: true })}${sortTh(st, 'now', 'Now', { num: false, title: 'Head coaches first, then available' })}${sortTh(st, 'seasons', 'Seasons')}${sortTh(st, 'w', 'W-L', { title: 'Sort by wins' })}${sortTh(st, 'pct', 'Pct')}${sortTh(st, 'ct', 'Conf. tourney titles')}${sortTh(st, 'ncaa', 'NCAA')}${sortTh(st, 'mcws', 'MCWS')}${sortTh(st, 'titles', 'Natl. titles')}<th>Career</th><th></th></tr></thead>
       <tbody>${careers.map(c => `<tr><td><b>${coachLink(c.id)}</b></td><td>${c.now ? team(c.now, { rank: false }) : '<span class="badge">Available</span>'}</td>
         <td class="num">${c.seasons.length}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? fmtPctLocal(c.w / (c.w + c.l)) : '—'}</td>
         <td class="num">${c.ct || ''}</td><td class="num">${c.ncaa || ''}</td><td class="num">${c.mcws || ''}</td><td class="num">${c.titles ? `<b>${c.titles}</b> 🏆` : ''}</td>
         <td class="small muted">${stints(c.seasons) || 'No seasons yet'}</td>
         <td class="num" style="white-space:nowrap"><button class="btn sm" data-rename="${c.id}">Rename</button>${!c.now && !c.seasons.length ? ` <button class="btn sm danger" data-cdel="${c.id}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  bindSort(st, renderCoaches);
   $('#co-add').onclick = async () => { const n = await askCoachName('Add a coach'); if (n) { newCoach(L, n); changed({ progress: false }); toast(`${n} added as an available coach.`); } else ctx.render(); };
   $$('[data-rename]').forEach(b => (b.onclick = async () => { const c = L.coaches[b.dataset.rename]; const n = await askCoachName('Rename coach', c.name); if (n) { c.name = n; changed({ progress: false }); } else ctx.render(); }));
   $$('[data-cdel]').forEach(b => (b.onclick = () => { delete L.coaches[b.dataset.cdel]; changed({ progress: false }); }));

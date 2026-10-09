@@ -125,6 +125,12 @@ try:
         pg.screenshot(path=f"{OUT}/11-team.png", full_page=True)
         pg.goto(url + "#/teams"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/12-teams.png")
+        pg.click("th[data-sort='pit']"); pg.wait_for_timeout(200)
+        pits = pg.evaluate("[...document.querySelectorAll('input[data-rate=pit]')].map(i => +i.value)")
+        assert pits == sorted(pits, reverse=True), "teams sorted by PIT"
+        pg.click("th[data-sort='pit']"); pg.wait_for_timeout(200)
+        pits = pg.evaluate("[...document.querySelectorAll('input[data-rate=pit]')].map(i => +i.value)")
+        assert pits == sorted(pits), "second click flips the order"
         pg.click("#t-add"); pg.fill("#f-school", "Oregon State"); pg.fill("#f-mascot", "Beavers"); pg.click("#f-save"); pg.wait_for_timeout(300)
         assert "Oregon State" in pg.content()
         pg.goto(url + "#/conferences"); pg.wait_for_timeout(300)
@@ -147,10 +153,19 @@ try:
             pg.select_option(f"select[data-dconf='{t}']", "Summit"); pg.wait_for_timeout(150)
         pg.click("button[data-addto='Summit']"); pg.fill("#f-school", "Omaha"); pg.fill("#f-coach", "Pat Casey"); pg.click("#f-save"); pg.wait_for_timeout(300)
         # Coaching carousel: Oklahoma hires Green Bay's coach, Green Bay hires someone new
-        pg.select_option("select[data-dcoach='Oklahoma']", label="Roman Foore (Green Bay)"); pg.wait_for_timeout(300)
-        assert pg.locator("select[data-dcoach='Green Bay'].vacant").count() == 1, "Green Bay job is open"
-        pg.select_option("select[data-dcoach='Green Bay']", "__new"); pg.wait_for_selector("#cn-name")
+        pg.click("button[data-hire='Oklahoma']"); pg.wait_for_selector("dialog[open] .cand")
+        pg.locator("dialog[open] .cand", has_text="Roman Foore").locator("[data-pick]").click(); pg.wait_for_timeout(300)
+        assert pg.locator(".job", has_text="Green Bay").count() == 1, "Green Bay job is open"
+        assert "leaves Green Bay for" in pg.locator(".moves").inner_text(), "move logged"
+        pg.locator(".job", has_text="Green Bay").locator("[data-hire]").click(); pg.wait_for_selector("#hm-new")
+        pg.click("#hm-new"); pg.wait_for_selector("#cn-name")
         pg.fill("#cn-name", "Sam Newman"); pg.click("#cn-save"); pg.wait_for_timeout(300)
+        # Rating points: one more point on Texas's offense puts it one over budget
+        row = pg.locator(".off-table tr", has_text="Texas Tech").first
+        before = row.locator(".pts-cell").inner_text()
+        row.locator("[data-step='1'][data-k='off']").click(); pg.wait_for_timeout(200)
+        row = pg.locator(".off-table tr", has_text="Texas Tech").first
+        assert row.locator(".pts-cell").inner_text() != before, "points left updates"
         pg.screenshot(path=f"{OUT}/15b-offseason-realigned.png", full_page=True)
         pg.click("#o-start"); pg.wait_for_timeout(800)
         pg.goto(url + "#/standings"); pg.wait_for_timeout(300)
@@ -161,6 +176,8 @@ try:
         pg.goto(url + "#/coaches"); pg.wait_for_timeout(300)
         assert "Sam Newman" in pg.content() and "JT Gasso" in pg.content()
         pg.screenshot(path=f"{OUT}/16d-coaches.png", full_page=True)
+        pg.click("th[data-sort='titles']"); pg.wait_for_timeout(200)
+        assert "sorted" in pg.locator("th[data-sort='titles']").get_attribute("class"), "coaches sort by titles"
         pg.click("a.team-link:has-text('Roman Foore')"); pg.wait_for_timeout(300)
         assert "Green Bay" in pg.content() and "Oklahoma" in pg.content(), "career shows both programs"
         pg.screenshot(path=f"{OUT}/16e-coach-page.png", full_page=True)
