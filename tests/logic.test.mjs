@@ -468,4 +468,7 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
     assert.ok(!B.firstOut.includes(loser) && !B.nextOut.includes(loser));
   }
 }
+{ const { mcwsVenue } = await import('../js/postseason.js');
+  assert.deepEqual(mcwsVenue(league.seasons[league.currentYear]), { stadium: 'Firestone Stadium', city: 'Akron, Ohio' });
+  assert.deepEqual(mcwsVenue({ settings: {} }), { stadium: 'Firestone Stadium', city: 'Akron, Ohio' }, 'older saves default to Akron'); }
 console.log(`ok in ${Date.now() - t0} ms`);

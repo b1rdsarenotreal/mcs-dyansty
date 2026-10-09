@@ -558,3 +558,13 @@ th.sortable.sorted { color: var(--accent); }
 .wk-rec.down { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .pts-btns { display: flex; gap: 4px; justify-content: flex-end; margin-top: 4px; }
 .pts-btns:empty { display: none; }
+
+/* MCWS venue */
+.venue-row { margin-bottom: 12px; align-items: center; }
+.venue-bar { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 10px 16px; border-radius: 12px; background: var(--board); color: #fff; border-left: 4px solid var(--optic); margin-bottom: 12px; }
+.venue-row .venue-bar { margin-bottom: 0; }
+.venue-kicker { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; opacity: .65; flex-basis: 100%; }
+.venue-name { font: 800 22px/1.1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+.venue-city { font-size: 13px; opacity: .8; }
+.meta .venue { font-weight: 600; }
+.venue-line { margin-top: -4px; }

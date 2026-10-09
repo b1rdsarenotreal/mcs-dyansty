@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261008231537';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261008231537';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261008231537';
-import { hashStr } from './util.js?v=20261008231537';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261008233028';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261008233028';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261008233028';
+import { hashStr } from './util.js?v=20261008233028';
 
 // ---------- tournament format ----------
 
@@ -468,6 +468,13 @@ export function reseedConfTourney(season, conf, seeds) {
   ev.seeds = seeds;
   ev.nodes = buildConfNodes(ev.kind, ev.size);
   ev.champion = null;
+}
+
+// Where the MCWS is played. Every MCWS game is at this neutral site.
+export const DEFAULT_MCWS_VENUE = { stadium: 'Firestone Stadium', city: 'Akron, Ohio' };
+export function mcwsVenue(season) {
+  const st = season?.settings || {};
+  return { stadium: st.mcwsVenue || DEFAULT_MCWS_VENUE.stadium, city: st.mcwsCity ?? DEFAULT_MCWS_VENUE.city };
 }
 
 // ---------- selection ----------

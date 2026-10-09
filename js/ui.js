@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261008231537';
-import { logoFor } from './logos.js?v=20261008231537';
-import { LOGO_ALIASES } from './data.js?v=20261008231537';
-import { ovr, winProbability } from './sim.js?v=20261008231537';
-import { records, isFinal, winnerOf } from './standings.js?v=20261008231537';
-import { latestPoll, pollRankMap } from './polls.js?v=20261008231537';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261008231537';
-import { regWeeksOf, shownSeed } from './postseason.js?v=20261008231537';
-import { DAY_ORDER } from './schedule.js?v=20261008231537';
-import { esc } from './util.js?v=20261008231537';
+import { saveLeague } from './store.js?v=20261008233028';
+import { logoFor } from './logos.js?v=20261008233028';
+import { LOGO_ALIASES } from './data.js?v=20261008233028';
+import { ovr, winProbability } from './sim.js?v=20261008233028';
+import { records, isFinal, winnerOf } from './standings.js?v=20261008233028';
+import { latestPoll, pollRankMap } from './polls.js?v=20261008233028';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261008233028';
+import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261008233028';
+import { DAY_ORDER } from './schedule.js?v=20261008233028';
+import { esc } from './util.js?v=20261008233028';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -175,6 +175,8 @@ export function gameCard(g) {
   const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
   let meta = '';
   if (g.label) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
+  const venue = g.type === 'mcws' ? mcwsVenue(s) : null;
+  if (venue) meta += `<span class="venue" title="${esc(venue.city)}">${esc(venue.stadium)}</span>`;
   if (fin) {
     const inn = Math.max(g.homeLine.length, g.awayLine.length);
     meta += `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>${g.source ? `<span class="badge ${g.source}">${g.source}</span>` : ''}`;
@@ -187,7 +189,7 @@ export function gameCard(g) {
       const host = Object.values(s.post?.confT || {}).find(e => e.id === g.event)?.host;
       if (host && g.neutral) meta += `<span>at ${esc(teamInfo(host)?.abbr || host)}</span>`;
       else if (g.neutral) meta += '<span>Neutral</span>';
-    } else if (g.neutral) meta += '<span>Neutral</span>';
+    } else if (g.neutral && !venue) meta += '<span>Neutral</span>';
     meta += `<button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>`;
   }
   const confAttrs = conf ? ` conf-game" style="--cc:${esc(confColor(conf))}` : '';
@@ -267,6 +269,7 @@ export function openGame(id, { isNew = false } = {}) {
   modal.innerHTML = `
     <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week, s)} · ${DAY_NAMES[g.day] || g.day}`)}</h2><button class="btn ghost" data-x>✕</button></div>
     <div class="modal-body stack">
+      ${g.type === 'mcws' ? (v => `<div class="small muted venue-line">${esc(v.stadium)}${v.city ? ` · ${esc(v.city)}` : ''}</div>`)(mcwsVenue(s)) : ''}
       ${regular ? `<div class="row">
         <label class="field" style="flex:1;min-width:140px">Away <select id="m-away">${teamOptions(g.away)}</select></label>
         <label class="field" style="flex:1;min-width:140px">Home <select id="m-home">${teamOptions(g.home)}</select></label>

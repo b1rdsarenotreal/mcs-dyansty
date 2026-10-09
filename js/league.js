@@ -1,20 +1,20 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008231537';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008231537';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008231537';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261008231537';
-import { replayRatings, ensureBase } from './ratings.js?v=20261008231537';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008231537';
-import { isFinal, records } from './standings.js?v=20261008231537';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261008231537';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008233028';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008233028';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008233028';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261008233028';
+import { replayRatings, ensureBase } from './ratings.js?v=20261008233028';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008233028';
+import { isFinal, records } from './standings.js?v=20261008233028';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261008233028';
 
 export const SCHEMA_VERSION = 4;
 
 export function defaultSettings() {
   return {
-    volatility: 1, runRule: true, tiebreaker: true, confTourney: {}, confFormat: {}, mcwsName: "Men's College World Series", development: 'normal', form: 'normal',
+    volatility: 1, runRule: true, tiebreaker: true, confTourney: {}, confFormat: {}, mcwsName: "Men's College World Series", mcwsVenue: 'Firestone Stadium', mcwsCity: 'Akron, Ohio', development: 'normal', form: 'normal',
     regWeeks: DEFAULT_REG_WEEKS, midweek: 'mixed', midweekStart: 4, midweekSkipLast: true, ncaa: { ...DEFAULT_NCAA },
   };
 }

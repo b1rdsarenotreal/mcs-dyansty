@@ -119,6 +119,7 @@ try:
         pg.click("#ps-all"); pg.wait_for_timeout(1500)
         pg.goto(url + "#/postseason"); pg.click("[data-pt=mcws]"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/10-mcws.png", full_page=True)
+        assert "Firestone Stadium" in pg.content() and "Akron, Ohio" in pg.content(), "MCWS venue"
         champ = pg.locator(".banner .big").first.text_content()
         print("champion:", champ)
         pg.goto(url + "#/team/" + champ); pg.wait_for_timeout(400)

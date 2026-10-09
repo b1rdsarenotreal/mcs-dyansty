@@ -1,16 +1,16 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008231537';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008231537';
-import { ovr } from './sim.js?v=20261008231537';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008231537';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261008231537';
-import { setRating } from './ratings.js?v=20261008231537';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008231537';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008231537';
-import { exportLeague, clearLeague } from './store.js?v=20261008231537';
-import { clamp, fmtPct } from './util.js?v=20261008231537';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008231537';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008233028';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008233028';
+import { ovr } from './sim.js?v=20261008233028';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008233028';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261008233028';
+import { setRating } from './ratings.js?v=20261008233028';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008233028';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008233028';
+import { exportLeague, clearLeague } from './store.js?v=20261008233028';
+import { clamp, fmtPct } from './util.js?v=20261008233028';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008233028';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -779,6 +779,8 @@ export function renderSettings() {
       <div class="card stack"><h2>League</h2>
         <label class="field">League name <input type="text" id="s-name" value="${esc(L.name)}"></label>
         <label class="field">${s.year} championship name <input type="text" id="s-mcws" value="${esc(st.mcwsName)}"></label>
+        <div class="row"><label class="field" style="flex:1;min-width:160px">MCWS stadium <input type="text" id="s-venue" value="${esc(st.mcwsVenue || 'Firestone Stadium')}"></label>
+          <label class="field" style="flex:1;min-width:140px">City <input type="text" id="s-city" value="${esc(st.mcwsCity ?? 'Akron, Ohio')}"></label></div>
         <label class="field">Poll size <select id="s-poll">${POLL_SIZES.map(n => `<option value="${n}" ${pollSizeOf(cur) === n ? 'selected' : ''}>Top ${n}</option>`).join('')}</select></label>
         <p class="small muted" style="margin-top:-6px">Polls released from now on rank this many teams. Polls already out keep their size; regenerate one on the Rankings page to resize it.</p>
         <label class="field">Ratings between seasons <select id="s-dev">${Object.entries({ none: 'Stay the same', small: 'Small changes', normal: 'Normal changes', big: 'Big changes' }).map(([k, l]) => `<option value="${k}" ${st.development === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -840,6 +842,8 @@ export function renderSettings() {
     toast(cur.post?.cfg ? `Saved. The new format starts in ${cur.year + 1}.` : `Saved. The ${cur.year} tournament will use ${fieldSize(cs.ncaa)} qualifiers.`);
   };
   $('#s-name').onchange = e => { L.name = e.target.value.trim() || L.name; changed({ progress: false }); };
+  $('#s-venue').onchange = e => { st.mcwsVenue = e.target.value.trim() || 'Firestone Stadium'; changed({ progress: false }); };
+  $('#s-city').onchange = e => { st.mcwsCity = e.target.value.trim(); changed({ progress: false }); };
   $('#s-mcws').onchange = e => { st.mcwsName = e.target.value.trim() || "Men's College World Series"; changed({ progress: false }); };
   $('#s-dev').onchange = e => { st.development = e.target.value; persist(); };
   $('#s-vol').onchange = e => { st.volatility = Number(e.target.value); persist(); };
