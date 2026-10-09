@@ -177,6 +177,13 @@ try:
         row.locator("[data-step='1'][data-k='off']").click(); pg.wait_for_timeout(200)
         row = pg.locator(".off-table tr", has_text="Texas Tech").first
         assert row.locator(".pts-cell").inner_text() != before, "points left updates"
+        if row.locator("[data-auto]").count():
+            row.locator("[data-auto]").click(); pg.wait_for_timeout(200)
+            row = pg.locator(".off-table tr", has_text="Texas Tech").first
+            assert "all placed" in row.locator(".pts-cell").inner_text(), "Auto places the rest"
+        row.locator("[data-clear]").click(); pg.wait_for_timeout(200)
+        row = pg.locator(".off-table tr", has_text="Texas Tech").first
+        assert row.locator(".pts-cell").inner_text().replace("Auto", "").replace("Reset", "").strip() == before.replace("Auto", "").replace("Reset", "").strip() or "to place" in row.locator(".pts-cell").inner_text() or "to take off" in row.locator(".pts-cell").inner_text(), "Reset"
         pg.screenshot(path=f"{OUT}/15b-offseason-realigned.png", full_page=True)
         pg.click("#o-start"); pg.wait_for_timeout(800)
         pg.goto(url + "#/standings"); pg.wait_for_timeout(300)

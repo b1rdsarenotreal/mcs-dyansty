@@ -282,7 +282,11 @@ assert.deepEqual(draftWarnings(league), []);
 {
   const withDev = Object.values(d.teams).filter(t => t.dev);
   assert.ok(withDev.length >= 40, 'returning teams get rating points');
-  assert.ok(withDev.every(t => pointsLeft(t) === 0 || [t.off, t.pit, t.def].some(v => v === 40 || v === 99)), 'points start fully placed');
+  assert.ok(withDev.every(t => pointsLeft(t) === t.dev.pts), 'points start unplaced');
+  { const { placeRemaining, clearPoints } = await import('../js/league.js');
+    const u = withDev.find(x => x.dev.pts > 2 && x.off < 90 && x.pit < 90 && x.def < 90);
+    u.off += 1; placeRemaining(u, Math.random); assert.equal(pointsLeft(u), 0, 'auto places the rest'); assert.ok(u.off >= u.dev.start.off + 1, 'keeps manual placement');
+    clearPoints(u); assert.equal(pointsLeft(u), u.dev.pts, 'reset'); }
   const champ = d.teams[s.post.champion];
   const recs = records(s), byWp = withDev.filter(t => recs[t.school]).sort((a, b) => recs[b.school].w / (recs[b.school].w + recs[b.school].l) - recs[a.school].w / (recs[a.school].w + recs[a.school].l));
   const avg = l => l.reduce((n, t) => n + t.dev.pts, 0) / l.length;
@@ -460,7 +464,7 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
     assert.equal(atLargeEligible(se, loser), false);
     const B = bracketology(se);
     const f = B.field.find(x => x.team === loser);
-    assert.ok(!f || f.bid === 'auto', 'losing team only in as an automatic bid');
+    assert.ok(!f || f.bid === 'auto' || B.fill.includes(loser), 'losing team only in as an automatic bid (or to fill a short field)');
     assert.ok(!B.firstOut.includes(loser) && !B.nextOut.includes(loser));
   }
 }

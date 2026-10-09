@@ -556,3 +556,5 @@ th.sortable.sorted { color: var(--accent); }
 .wk-rec { display: inline-block; min-width: 34px; padding: 1px 6px; border-radius: 6px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--chip); }
 .wk-rec.up { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .wk-rec.down { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.pts-btns { display: flex; gap: 4px; justify-content: flex-end; margin-top: 4px; }
+.pts-btns:empty { display: none; }

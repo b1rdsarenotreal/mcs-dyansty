@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008221743';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008221743';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008221743';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261008221743';
-import { replayRatings, ensureBase } from './ratings.js?v=20261008221743';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008221743';
-import { isFinal, records } from './standings.js?v=20261008221743';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261008221743';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008231537';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008231537';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008231537';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261008231537';
+import { replayRatings, ensureBase } from './ratings.js?v=20261008231537';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008231537';
+import { isFinal, records } from './standings.js?v=20261008231537';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261008231537';
 
 export const SCHEMA_VERSION = 4;
 
@@ -284,17 +284,35 @@ export function spreadPoints(t, r) {
   t.base = { off: t.off, pit: t.pit, def: t.def };
 }
 // Points the commissioner still has to place (negative = over budget).
+// Put a team's ratings back where they started the offseason.
+export function clearPoints(t) {
+  if (!t.dev) return;
+  for (const k of RATING_KEYS) t[k] = t.dev.start[k];
+  t.base = { off: t.off, pit: t.pit, def: t.def };
+}
+// Place only the points still unplaced, keeping the commissioner's changes.
+export function placeRemaining(t, r) {
+  let left = pointsLeft(t), guard = 0;
+  while (left !== 0 && guard++ < 200) {
+    const k = RATING_KEYS[Math.floor(r() * 3)];
+    const v = clamp(t[k] + Math.sign(left), 40, 99);
+    if (v !== t[k]) { t[k] = v; left -= Math.sign(left); }
+  }
+  t.base = { off: t.off, pit: t.pit, def: t.def };
+}
 export function pointsLeft(t) {
   if (!t.dev) return 0;
   return t.dev.pts - RATING_KEYS.reduce((n, k) => n + (t[k] - t.dev.start[k]), 0);
 }
-export function developTeams(teams, year, level = 'normal', season = null) {
+// Points start unplaced (the commissioner places them in the offseason);
+// `spread: true` places them at random, for seasons started without one.
+export function developTeams(teams, year, level = 'normal', season = null, { spread = false } = {}) {
   const r = rng(hashStr(`dev-${year}`));
   const out = JSON.parse(JSON.stringify(teams));
   const list = Object.values(out), avgO = list.reduce((n, t) => n + 0.4 * t.off + 0.4 * t.pit + 0.2 * t.def, 0) / (list.length || 1);
   for (const t of list) {
     t.dev = { pts: devPoints(t, season, r, level, avgO), start: { off: t.off, pit: t.pit, def: t.def } };
-    spreadPoints(t, r);
+    if (spread) spreadPoints(t, r);
   }
   return out;
 }
@@ -349,7 +367,7 @@ export function draftWarnings(league) {
 export function startNextSeason(league) {
   const prev = currentSeason(league);
   const year = prev.year + 1;
-  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development, prev);
+  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development, prev, { spread: true });
   if (Object.keys(teams).length < 16) throw new Error('The NCAA field needs at least 16 teams.');
   const moves = league.draft?.moves || [];
   delete league.draft;

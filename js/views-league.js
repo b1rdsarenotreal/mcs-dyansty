@@ -1,16 +1,16 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008221743';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008221743';
-import { ovr } from './sim.js?v=20261008221743';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008221743';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, spreadPoints, pointsLeft, migrateLeague } from './league.js?v=20261008221743';
-import { setRating } from './ratings.js?v=20261008221743';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008221743';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008221743';
-import { exportLeague, clearLeague } from './store.js?v=20261008221743';
-import { clamp, fmtPct } from './util.js?v=20261008221743';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008221743';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008231537';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008231537';
+import { ovr } from './sim.js?v=20261008231537';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008231537';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261008231537';
+import { setRating } from './ratings.js?v=20261008231537';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008231537';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008231537';
+import { exportLeague, clearLeague } from './store.js?v=20261008231537';
+import { clamp, fmtPct } from './util.js?v=20261008231537';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008231537';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -203,8 +203,11 @@ export function renderOffseason() {
   const pointsCell = t => {
     if (!t.dev) return '<td class="num muted small">New</td>';
     const left = pointsLeft(t), p = t.dev.pts;
-    return `<td class="num pts-cell"><b class="${p > 0 ? 'good' : p < 0 ? 'bad' : ''}" title="Points earned this offseason">${p > 0 ? '+' : ''}${p}</b>
-      <div class="small ${left ? 'warn-text' : 'muted'}">${left === 0 ? 'all placed' : left > 0 ? `${left} to place` : `${-left} over`}</div></td>`;
+    // For negative points, "left" counts down toward zero as ratings are lowered.
+    const label = left === 0 ? 'all placed' : Math.sign(left) === Math.sign(p) && p !== 0 ? `${Math.abs(left)} ${p < 0 ? 'to take off' : 'to place'}` : `${Math.abs(left)} over`;
+    return `<td class="num pts-cell"><b class="pts-big ${p > 0 ? 'good' : p < 0 ? 'bad' : ''}" title="Points earned this offseason">${p > 0 ? '+' : ''}${p}</b>
+      <div class="small ${left ? 'warn-text' : 'muted'}">${label}</div>
+      <div class="pts-btns">${left ? `<button class="btn sm" data-auto="${esc(t.school)}" title="Place the remaining points at random">Auto</button>` : ''}${left !== p ? `<button class="btn sm ghost" data-clear="${esc(t.school)}" title="Undo this team's placements">Reset</button>` : ''}</div></td>`;
   };
   const coachCell = t => {
     const id = t.coachId;
@@ -218,7 +221,7 @@ export function renderOffseason() {
         ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}${prev[t.school] ? `<div class="small muted">${rec(t.school)} in ${cur.year}</div>` : ''}</td>
           ${coachCell(t)}${pointsCell(t)}
           ${['off', 'pit', 'def'].map(k => ratingCell(t, k)).join('')}
-          <td class="num"><b>${ovr(t)}</b>${t.dev ? `<button class="btn sm ghost" data-auto="${esc(t.school)}" title="Re-spread this team's points automatically" aria-label="Auto-assign points">↺</button>` : ''}</td>
+          <td class="num"><b>${ovr(t)}</b></td>
           <td><select data-dconf="${esc(t.school)}" aria-label="Move ${esc(t.school)}">${confs.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
           <td><button class="btn sm danger" data-drm="${esc(t.school)}" title="Leave the dynasty">✕</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted small">No teams yet. Move teams in with the Conference menus, or add a new one.</p>'}
@@ -246,18 +249,20 @@ export function renderOffseason() {
   app.innerHTML = `
     <div class="section-head"><h1>${d.year} Offseason</h1><span class="muted">${teams.length} teams in ${new Set(teams.map(t => t.conference)).size} conferences</span><span class="spacer"></span>
       <button class="btn" id="o-conf">+ Add conference</button><button class="btn" id="o-team">+ Add team</button><button class="btn primary" id="o-start">Start the ${d.year} season</button></div>
-    <div class="hint">Set up the ${d.year} season. Each team earned <b>rating points</b> from last season (a winning record and a deep postseason run earn more; teams near the top lose some to graduation; plus some luck). They start spread across OFF, PIT and DEF automatically; use − and + to place them where they make sense, or ↺ to re-spread. Move teams with the <b>Conference</b> menus, add teams or conferences, and run the coaching carousel. Nothing is scheduled until you start the season.</div>
+    <div class="hint">Set up the ${d.year} season. Each team earned <b>rating points</b> from last season (a winning record and a deep postseason run earn more; teams near the top lose some to graduation; plus some luck). The <b>Points</b> column shows what each team has to place: use − and + on OFF, PIT and DEF to put them where they make sense (a team with negative points takes them off). <b>Auto</b> places a team's remaining points at random, and <b>Reset</b> undoes its placements. Move teams with the <b>Conference</b> menus, add teams or conferences, and run the coaching carousel. Nothing is scheduled until you start the season.</div>
     ${warnings.length ? `<div class="hint warn" style="margin-top:10px">${warnings.map(esc).join('<br>')}</div>` : ''}
     ${removed.length ? `<div class="card" style="margin-top:14px"><b>Leaving the dynasty:</b> ${removed.map(t => `<span class="chip-static">${esc(t)} <button class="btn sm" data-restore="${esc(t)}">Bring back</button></span>`).join(' ')}</div>` : ''}
     <div style="margin-top:14px">${carousel}</div>
-    <div class="row" style="margin:16px 0 0"><h2 style="margin:0">Teams</h2><span class="muted small">${unplaced ? `${unplaced} team${unplaced === 1 ? ' has' : 's have'} points to place or ${unplaced === 1 ? 'is' : 'are'} over budget` : 'Every team\'s points are placed'}</span><span class="spacer"></span><button class="btn sm" id="o-autoall">↺ Re-spread all points</button></div>
+    <div class="row" style="margin:16px 0 0"><h2 style="margin:0">Teams</h2><span class="muted small">${unplaced ? `${unplaced} team${unplaced === 1 ? ' has' : 's have'} points to place or ${unplaced === 1 ? 'is' : 'are'} over budget` : 'Every team\'s points are placed'}</span><span class="spacer"></span><button class="btn sm" id="o-autoall" ${unplaced ? '' : 'disabled'}>Auto-place all remaining</button><button class="btn sm ghost" id="o-clearall">Reset all</button></div>
     <div class="off-grid" style="margin-top:10px">${confs.map(card).join('')}</div>`;
   const T = d.teams;
   const setRate = (t, k, v) => { t[k] = rate(v); t.base = { ...(t.base || {}), [k]: t[k] }; };
   $$('[data-drate]').forEach(inp => (inp.onchange = () => { setRate(T[inp.dataset.team], inp.dataset.drate, inp.value); changed({ progress: false }); }));
   $$('[data-step]').forEach(b => (b.onclick = () => { const t = T[b.dataset.team], k = b.dataset.k; setRate(t, k, t[k] + Number(b.dataset.step)); changed({ progress: false }); }));
-  $$('[data-auto]').forEach(b => (b.onclick = () => { spreadPoints(T[b.dataset.auto], Math.random); changed({ progress: false }); }));
-  $('#o-autoall').onclick = () => { if (!confirm('Re-spread every team\'s points automatically? Your manual changes to ratings will be replaced.')) return; for (const t of Object.values(T)) if (t.dev) spreadPoints(t, Math.random); changed({ progress: false }); };
+  $$('[data-auto]').forEach(b => (b.onclick = () => { placeRemaining(T[b.dataset.auto], Math.random); changed({ progress: false }); }));
+  $$('[data-clear]').forEach(b => (b.onclick = () => { clearPoints(T[b.dataset.clear]); changed({ progress: false }); }));
+  $('#o-autoall').onclick = () => { if (!confirm(`Place the remaining points at random for ${unplaced} team${unplaced === 1 ? '' : 's'}? Points you've already placed stay put.`)) return; for (const t of Object.values(T)) if (t.dev) placeRemaining(t, Math.random); changed({ progress: false }); };
+  $('#o-clearall').onclick = () => { if (!confirm('Undo every team\'s point placements? Ratings go back to last season\'s.')) return; for (const t of Object.values(T)) clearPoints(t); changed({ progress: false }); };
   $$('[data-hire]').forEach(b => (b.onclick = () => hireModal(d, b.dataset.hire)));
   $$('[data-fire]').forEach(b => (b.onclick = () => {
     const t = T[b.dataset.fire], id = t.coachId;
@@ -274,7 +279,7 @@ export function renderOffseason() {
   $('#o-team').onclick = () => teamForm(T);
   $('#o-conf').onclick = () => conferenceForm();
   $('#o-start').onclick = () => {
-    const extra = unplaced ? ` ${unplaced} team${unplaced === 1 ? ' still has' : 's still have'} rating points not placed exactly; ratings stay as they are now.` : '';
+    const extra = unplaced ? ` ${unplaced} team${unplaced === 1 ? ' still has' : 's still have'} rating points not placed. Unplaced points are lost; ratings stay as they are now.` : '';
     if (!confirm(`Start the ${d.year} season with ${Object.keys(T).length} teams? The schedule is built from this alignment.${extra}`)) return;
     try { const ns = startNextSeason(L); L.viewYear = ns.year; } catch (e) { return toast(e.message, true); }
     location.hash = '#/home'; changed({ progress: false }); toast(`Welcome to ${d.year}.`);

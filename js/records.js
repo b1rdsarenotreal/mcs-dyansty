@@ -1,9 +1,9 @@
 // Dynasty record book: program totals, best single seasons, single-game
 // marks and coaching leaders, across every season in the league.
 
-import { records, isFinal, winnerOf, regSeasonChamps, conferences } from './standings.js?v=20261008221743';
-import { wsTeams } from './postseason.js?v=20261008221743';
-import { pct } from './util.js?v=20261008221743';
+import { records, isFinal, winnerOf, regSeasonChamps, conferences } from './standings.js?v=20261008231537';
+import { wsTeams } from './postseason.js?v=20261008231537';
+import { pct } from './util.js?v=20261008231537';
 
 export function recordBook(league) {
   const years = Object.keys(league.seasons).map(Number).sort((a, b) => a - b);
