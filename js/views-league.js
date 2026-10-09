@@ -1,17 +1,18 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008184207';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008184207';
-import { ovr } from './sim.js?v=20261008184207';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008184207';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, spreadPoints, pointsLeft } from './league.js?v=20261008184207';
-import { setRating } from './ratings.js?v=20261008184207';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008184207';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008184207';
-import { exportLeague, clearLeague } from './store.js?v=20261008184207';
-import { clamp, fmtPct } from './util.js?v=20261008184207';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008213636';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008213636';
+import { ovr } from './sim.js?v=20261008213636';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008213636';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, spreadPoints, pointsLeft, migrateLeague } from './league.js?v=20261008213636';
+import { setRating } from './ratings.js?v=20261008213636';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008213636';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008213636';
+import { exportLeague, clearLeague } from './store.js?v=20261008213636';
+import { clamp, fmtPct } from './util.js?v=20261008213636';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008213636';
 
-const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 } };
+const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
 // Click-to-sort table headers. `state` is { k, dir }; clicking the sorted
 // column flips the direction, clicking another starts high-to-low (A-Z for text).
@@ -341,6 +342,62 @@ function seasonSummary(season, name) {
   return { rec: recs[name], pos, confSize: st.length, tChamp: season.post?.confT?.[season.teams[name].conference]?.champion === name, ...(() => { const cs = regSeasonChamps(season, season.teams[name].conference, reg, rpi(season, g => g.type === 'regular')); return { regChamp: cs.includes(name), regShared: cs.includes(name) && cs.length > 1 }; })(), finish: postseasonFinish(season, name), finalRank: fp };
 }
 
+// Program history: all-time totals, poll history by season, dynasty record.
+function teamHistoryTab(name, t, history) {
+  const L = ctx.league;
+  const prog = recordBook(L).programs.find(p => p.team === name) || { seasons: 0, w: 0, l: 0, reg: 0, conf: 0, ncaa: 0, mcws: 0, titles: 0 };
+  const ph = teamPollHistory(L, name);
+  const sum = k => ph.reduce((a, x) => a + x[k], 0);
+  const finals = ph.filter(x => x.done);
+  const best = Math.min(...ph.map(x => x.high).filter(Boolean));
+  const color = t.color === '#000000' || t.color === '#FFFFFF' ? t.altColor : t.color;
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const nr = v => v ?? '<span class="muted">NR</span>';
+  const chartPts = finals.map(x => ({ label: `'${String(x.year).slice(-2)}`, title: `${x.year} final poll`, rank: x.final }));
+  return `
+    <div class="card"><h2>All-time</h2><div class="kpis kpis-sm">
+      ${kpi(prog.seasons, 'Seasons')}${kpi(`${prog.w}-${prog.l}`, 'Record')}${kpi(fmtPct(prog.w / ((prog.w + prog.l) || 1)), 'Win pct')}
+      ${kpi(prog.reg, 'Reg. season titles')}${kpi(prog.conf, 'Tournament titles')}${kpi(prog.ncaa, 'NCAA')}${kpi(prog.mcws, 'MCWS')}${kpi(prog.titles, 'National titles')}
+    </div></div>
+    <div class="card" style="margin-top:16px"><h2>Ranking history</h2>
+      <div class="kpis kpis-sm">
+        ${kpi(`${sum('ranked')}<span class="kpi-sep">/</span>${sum('polls')}`, 'Polls ranked')}${kpi(sum('at1'), 'Polls at #1')}${kpi(Number.isFinite(best) ? '#' + best : '—', 'Highest rank')}
+        ${kpi(finals.filter(x => x.final && x.final <= 10).length, 'Final top-10s')}${kpi(finals.filter(x => x.final).length, 'Final ranked')}${kpi(sum('fp'), 'First-place votes')}
+      </div>
+      ${chartPts.length > 1 ? `<h3 style="margin-top:14px">Final poll by season</h3>${pollChart(chartPts, color).replace(/<p class="small muted">[^<]*<\/p>/, '')}` : ''}
+      <div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Preseason</th><th class="num">Highest</th><th class="num">Lowest</th><th class="num">Final</th><th class="num">Polls ranked</th><th class="num">At #1</th><th class="num" title="First-place votes across the season">1st-place votes</th></tr></thead><tbody>
+        ${[...ph].reverse().map(x => `<tr><td>${x.year}${x.done ? '' : '<span class="muted">*</span>'}</td><td class="num">${nr(x.pre)}</td><td class="num">${nr(x.high)}</td><td class="num">${nr(x.low)}</td><td class="num">${x.done ? `<b>${nr(x.final)}</b>` : '<span class="muted">—</span>'}</td><td class="num">${x.ranked} of ${x.polls}</td><td class="num">${x.at1 || ''}</td><td class="num">${x.fp || ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">No polls yet.</td></tr>'}
+      </tbody></table></div>
+      <p class="small muted">"Lowest" is the lowest rank while ranked. * season in progress.</p></div>
+    <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Conference</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference finish</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>       ${history.map(([y, h]) => `<tr><td>${y}</td><td>${(() => { const c = ctx.league.seasons[y].teams[name].conference; return `<a class="conf-cell" href="${confHref(c)}">${confLogo(c, 18)}<span>${esc(c)}</span></a>`; })()}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+// All-time head-to-head against every opponent.
+function teamH2HTab(name) {
+  const f = ui.h2hFilter;
+  let rows = headToHead(ctx.league, name);
+  if (f === 'conf') rows = rows.filter(r => r.cw + r.cl).map(r => ({ ...r, w: r.cw, l: r.cl, g: r.cw + r.cl, pct: r.cw / (r.cw + r.cl) }));
+  if (f === 'post') rows = rows.filter(r => r.pw + r.pl).map(r => ({ ...r, w: r.pw, l: r.pl, g: r.pw + r.pl, pct: r.pw / (r.pw + r.pl) }));
+  const st = ui.h2hSort;
+  const val = (r, k) => k === 'opp' ? r.opp : k === 'last' ? r.last.year * 1000 + r.last.week : k === 'streak' ? r.streakN : k === 'conf' ? (teamInfo(r.opp)?.conference || '') : r[k];
+  rows = st.k === 'g' ? [...rows].sort((a, b) => st.dir * (a.g - b.g) || b.w - a.w || a.opp.localeCompare(b.opp)) : sortBy(rows, st, val);
+  const tot = rows.reduce((a, r) => ({ w: a.w + r.w, l: a.l + r.l }), { w: 0, l: 0 });
+  const winning = rows.filter(r => r.w > r.l).length, losing = rows.filter(r => r.w < r.l).length;
+  const last = r => { const x = r.last; return `<span class="small"><b class="${x.won ? 'good' : 'bad'}">${x.won ? 'W' : 'L'}</b> ${x.us}-${x.them} · ${x.year} ${x.type === 'regular' ? `Wk ${x.week}` : esc((x.label || '').split(' · ')[0])}${x.oppRank ? ` <span class="muted">vs #${x.oppRank}</span>` : ''}</span>`; };
+  return `<div class="card">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Head-to-head</h2><span class="spacer"></span>
+      <div class="seg">${[['all', 'All games'], ['conf', 'Conference'], ['post', 'Postseason']].map(([k, l]) => `<button class="btn sm ${f === k ? 'primary' : ''}" data-h2hf="${k}">${l}</button>`).join('')}</div></div>
+    <div class="kpis kpis-sm">
+      <div class="kpi"><div class="v">${rows.length}</div><div class="l">Opponents</div></div>
+      <div class="kpi"><div class="v">${tot.w}-${tot.l}</div><div class="l">Record</div></div>
+      <div class="kpi"><div class="v">${winning}</div><div class="l">Winning records vs</div></div>
+      <div class="kpi"><div class="v">${losing}</div><div class="l">Losing records vs</div></div>
+    </div>
+    <div class="table-wrap"><table class="h2h-table"><thead><tr>${sortTh(st, 'opp', 'Opponent', { num: false, text: true })}${sortTh(st, 'conf', 'Conference', { num: false, text: true })}${sortTh(st, 'g', 'G')}${sortTh(st, 'w', 'W')}${sortTh(st, 'l', 'L')}${sortTh(st, 'pct', 'Pct')}${f === 'all' ? sortTh(st, 'diff', 'Run diff', { title: 'Runs scored minus runs allowed, all meetings' }) : ''}${sortTh(st, 'streak', 'Streak')}${sortTh(st, 'first', 'First met')}${sortTh(st, 'last', 'Last meeting', { num: false })}</tr></thead>
+    <tbody>${rows.map(r => `<tr class="${r.w > r.l ? 'h2h-up' : r.w < r.l ? 'h2h-down' : ''}"><td>${team(r.opp, { rank: false, size: 18 })}</td><td class="small muted">${esc(teamInfo(r.opp)?.conference || '')}</td><td class="num">${r.g}</td><td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num"><b>${fmtPct(r.pct)}</b></td>${f === 'all' ? `<td class="num ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : ''}">${r.diff > 0 ? '+' : ''}${r.diff}</td>` : ''}<td class="num">${r.streak}</td><td class="num">${r.first}</td><td>${last(r)}</td></tr>`).join('') || `<tr><td colspan="10" class="muted">No ${f === 'post' ? 'postseason ' : f === 'conf' ? 'conference ' : ''}games yet.</td></tr>`}</tbody></table></div>
+    <p class="small muted">Every meeting in the dynasty, postseason included under All games. Streak and last meeting count all games. Ranks are from the poll in effect at the time.</p></div>`;
+}
+
 export function renderTeamPage(name) {
   const s = S(), t = s.teams[name] || teamInfo(name);
   if (!t) { app.innerHTML = `<div class="empty">No team called ${esc(name)}. <a href="#/teams">All teams</a></div>`; return; }
@@ -352,6 +409,7 @@ export function renderTeamPage(name) {
     .map(([w, p]) => ({ label: w === 'final' ? 'F' : w === '0' ? 'P' : +w === postWeeks(s).conf ? 'CT' : w, title: w === 'final' ? 'Final poll' : w === '0' ? 'Preseason' : +w === postWeeks(s).conf ? 'After conference tournaments' : `Week ${w}`, rank: pollRankMap(p)[name] ?? null }));
   const history = Object.keys(ctx.league.seasons).map(Number).sort((a, b) => b - a).map(y => [y, ctx.league.seasons[y]]).filter(([, se]) => se.teams[name]).map(([y, se]) => [y, seasonSummary(se, name)]);
   const confs = Object.keys(ctx.league.conferences).filter(c => !ctx.league.conferences[c].retired);
+  const tab = !inSeason && ui.teamTab === 'season' ? 'history' : ui.teamTab;
   app.innerHTML = `
     <div class="team-hero" style="--tc:${esc(t.color)};--ta:${esc(t.altColor)};color:${esc(readableOn(t.color, null))}">
       <div class="team-hero-logo">${logoImg(t, 64)}</div>
@@ -361,7 +419,9 @@ export function renderTeamPage(name) {
       </div>
       <a class="btn" href="#/teams">All teams</a>
     </div>
-    ${inSeason ? '' : `<div class="hint" style="margin-bottom:14px">${esc(name)} isn't in the ${s.year} season. Showing its dynasty record.</div>`}
+    <div class="steps">${Object.entries({ season: `${s.year} season`, history: 'Program history', h2h: 'Head-to-head' }).map(([k, l]) => `<a href="${teamHref(name)}" data-ttab="${k}" class="${tab === k ? 'active' : ''}">${l}</a>`).join('')}</div>
+    ${tab === 'history' ? teamHistoryTab(name, t, history) : tab === 'h2h' ? teamH2HTab(name) : `
+    ${inSeason ? '' : `<div class="hint" style="margin-bottom:14px">${esc(name)} isn't in the ${s.year} season. See Program history for its dynasty record.</div>`}
     <div class="grid">
       <div class="card"><h2>Ratings</h2>
         ${ratingBar('OFF', t.off, t.color, t.base?.off)}${ratingBar('PIT', t.pit, t.color, t.base?.pit)}${ratingBar('DEF', t.def, t.color, t.base?.def)}${ratingBar('OVR', ovr(t), t.color, t.base ? ovrOf(t.base) : null)}
@@ -392,8 +452,6 @@ export function renderTeamPage(name) {
             <td class="num muted small">${fin && cache.ranksAt(g.week)[name] ? '#' + cache.ranksAt(g.week)[name] : ''}</td>
             <td>${g.site ? (g.site === name ? '' : '@') : g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
-    <div class="card" style="margin-top:16px"><h2>Dynasty record</h2><div class="table-wrap"><table><thead><tr><th>Season</th><th>Conference</th><th>Coach</th><th class="num">Record</th><th class="num">Conf</th><th>Conference finish</th><th>Postseason</th><th class="num">Final rank</th></tr></thead><tbody>
-      ${history.map(([y, h]) => `<tr><td>${y}</td><td>${(() => { const c = ctx.league.seasons[y].teams[name].conference; return `<a class="conf-cell" href="${confHref(c)}">${confLogo(c, 18)}<span>${esc(c)}</span></a>`; })()}</td><td>${coachLink(ctx.league.seasons[y].teams[name].coachId) || '—'}</td><td class="num">${h.rec.w}-${h.rec.l}</td><td class="num">${h.rec.cw}-${h.rec.cl}</td><td>${h.pos ? `${h.pos} of ${h.confSize}` : ''}${h.regChamp ? ` <span class="badge">Reg. season ${h.regShared ? 'co-champ' : 'champ'}</span>` : ''}${h.tChamp ? ' <span class="badge gold">Tournament champ</span>' : ''}</td><td>${h.finish ? esc(h.finish) : '<span class="muted">—</span>'}</td><td class="num">${h.finalRank ?? '<span class="muted">NR</span>'}</td></tr>`).join('')}</tbody></table></div></div>
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
@@ -405,10 +463,15 @@ export function renderTeamPage(name) {
         <label class="btn" style="align-self:flex-end">Upload logo <input type="file" id="e-file" accept="image/*" hidden></label>
         ${t.logoOverride ? '<button class="btn" id="e-clearlogo" style="align-self:flex-end">Use default logo</button>' : ''}</div>
       <div class="row" style="margin-top:12px"><button class="btn primary" id="e-save">Save changes</button><span class="spacer"></span><button class="btn danger" id="e-remove">Remove from ${s.year}</button></div>
-    </div>` : ''}`;
+    </div>` : ''}`}`;
 
+  $$('[data-ttab]').forEach(a => (a.onclick = e => { e.preventDefault(); ui.teamTab = a.dataset.ttab; renderTeamPage(name); }));
   $$('[data-g]').forEach(rw => (rw.onclick = e => { if (!e.target.closest('a')) openGame(Number(rw.dataset.g)); }));
-  if (!inSeason) return;
+  if (tab === 'h2h') {
+    bindSort(ui.h2hSort, () => renderTeamPage(name));
+    $$('[data-h2hf]').forEach(b => (b.onclick = () => { ui.h2hFilter = b.dataset.h2hf; renderTeamPage(name); }));
+  }
+  if (!inSeason || tab !== 'season') return;
   $$('[data-r]').forEach(inp => (inp.onchange = () => { setRating(t, inp.dataset.r, rate(inp.value)); changed(); }));
   bindCoachSelects(s.teams, 'data-ecoach');
   const applyLogo = url => { for (const se of Object.values(ctx.league.seasons)) if (se.teams[name]) se.teams[name].logoOverride = url; };
@@ -794,6 +857,7 @@ export function renderSettings() {
       if (!data.seasons || !data.conferences) throw new Error('That file is not an MCS dynasty backup.');
       if (!confirm('Replace the current dynasty with this backup?')) return;
       data.viewYear = data.currentYear;
+      migrateLeague(data);
       ctx.league = data; await flushSave(); location.hash = '#/home'; ctx.render(); toast('Backup restored.');
     } catch (err) { toast(err.message, true); }
   };

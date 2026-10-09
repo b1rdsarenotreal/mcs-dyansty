@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008184207';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008184207';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008184207';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261008184207';
-import { replayRatings, ensureBase } from './ratings.js?v=20261008184207';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008184207';
-import { isFinal, records } from './standings.js?v=20261008184207';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261008184207';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261008213636';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261008213636';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261008213636';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261008213636';
+import { replayRatings, ensureBase } from './ratings.js?v=20261008213636';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261008213636';
+import { isFinal, records } from './standings.js?v=20261008213636';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261008213636';
 
 export const SCHEMA_VERSION = 4;
 
@@ -200,12 +200,23 @@ export function renameTeam(league, season, from, to) {
   }
 }
 
+// Keep conferences (and each season's conference tournaments) in A–Z order,
+// so every list built from them reads alphabetically.
+export function sortConferences(league) {
+  const az = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+  const sortObj = o => Object.fromEntries(Object.entries(o).sort(([a], [b]) => az(a, b)));
+  if (league.conferences) league.conferences = sortObj(league.conferences);
+  for (const s of Object.values(league.seasons || {})) if (s.post?.confT) s.post.confT = sortObj(s.post.confT);
+  return league;
+}
+
 export function addConference(league, name, { abbr, color = '#555555' } = {}) {
   name = name.trim();
   if (!name) throw new Error('Give the conference a name.');
   if (league.conferences[name]?.retired) { delete league.conferences[name].retired; league.conferences[name].color = color; return; }
   if (league.conferences[name]) throw new Error('That conference already exists.');
   league.conferences[name] = { abbr: abbr || name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4), color };
+  sortConferences(league);
 }
 
 export function renameConference(league, from, to) {
@@ -221,6 +232,7 @@ export function renameConference(league, from, to) {
     if (s.post?.confT?.[from]) { s.post.confT[to] = { ...s.post.confT[from], conf: to }; delete s.post.confT[from]; }
     for (const f of s.post?.field || []) if (f.conf === from) f.conf = to;
   }
+  sortConferences(league);
 }
 
 export function deleteConference(league, season, name) {
@@ -374,6 +386,7 @@ export const isRegularWeek = (w, season) => w <= regWeeksOf(season);
 // people and preseason ratings for in-season movement (v3), season length,
 // midweek format and NCAA tournament format as settings (v4).
 export function migrateLeague(league) {
+  sortConferences(league);
   const v = league.schema || 1;
   if (v >= SCHEMA_VERSION) return league;
   if (v < 4) {

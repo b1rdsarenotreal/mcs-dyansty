@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct, hashStr } from './util.js?v=20261008184207';
+import { pct, hashStr } from './util.js?v=20261008213636';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -194,7 +194,7 @@ export function confStandings(season, conf, recs = records(season), r = rpi(seas
 }
 
 export function conferences(season) {
-  return [...new Set(Object.values(season.teams).map(t => t.conference))].sort();
+  return [...new Set(Object.values(season.teams).map(t => t.conference))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export function regularSeasonDone(season) {

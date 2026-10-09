@@ -123,6 +123,17 @@ try:
         print("champion:", champ)
         pg.goto(url + "#/team/" + champ); pg.wait_for_timeout(400)
         pg.screenshot(path=f"{OUT}/11-team.png", full_page=True)
+        pg.click("[data-ttab=history]"); pg.wait_for_timeout(250)
+        assert "Ranking history" in pg.content() and "Dynasty record" in pg.content() and "Polls at #1" in pg.content(), "team history tab"
+        pg.screenshot(path=f"{OUT}/11b-team-history.png", full_page=True)
+        pg.click("[data-ttab=h2h]"); pg.wait_for_timeout(250)
+        assert pg.locator(".h2h-table tbody tr").count() > 3, "head-to-head rows"
+        pg.click(".h2h-table th[data-sort='w']"); pg.wait_for_timeout(200)
+        ws = pg.evaluate("[...document.querySelectorAll('.h2h-table tbody tr')].map(r => +r.children[3].textContent)")
+        assert ws == sorted(ws, reverse=True), "H2H sorted by wins"
+        pg.click("[data-h2hf=post]"); pg.wait_for_timeout(200)
+        pg.screenshot(path=f"{OUT}/11c-team-h2h.png", full_page=True)
+        pg.click("[data-h2hf=all]"); pg.click("[data-ttab=season]"); pg.wait_for_timeout(200)
         pg.goto(url + "#/teams"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/12-teams.png")
         pg.click("th[data-sort='pit']"); pg.wait_for_timeout(200)
@@ -173,6 +184,9 @@ try:
         pg.goto(url + "#/team/Oklahoma"); pg.wait_for_timeout(300)
         assert "Roman Foore" in pg.content()
         pg.screenshot(path=f"{OUT}/16c-team-2017.png", full_page=True)
+        pg.click("[data-ttab=history]"); pg.wait_for_timeout(250)
+        pg.screenshot(path=f"{OUT}/16c2-team-history.png", full_page=True)
+        pg.click("[data-ttab=season]"); pg.wait_for_timeout(150)
         pg.goto(url + "#/coaches"); pg.wait_for_timeout(300)
         assert "Sam Newman" in pg.content() and "JT Gasso" in pg.content()
         pg.screenshot(path=f"{OUT}/16d-coaches.png", full_page=True)
@@ -210,6 +224,9 @@ try:
         pg.goto(url + "#/records"); pg.wait_for_timeout(400)
         assert "Programs" in pg.content() and "Most runs in a game" in pg.content() and "Career wins" in pg.content(), "records page"
         pg.click("[data-psort=titles]"); pg.wait_for_timeout(200)
+        assert "Programs · in the polls" in pg.content() and "Biggest one-week rise" in pg.content(), "ranking records"
+        pg.click("[data-rsort=at1]"); pg.wait_for_timeout(200)
+        assert "sorted" in pg.locator("[data-rsort=at1]").get_attribute("class")
         pg.screenshot(path=f"{OUT}/17-records.png", full_page=True)
         # reload keeps data
         pg.goto(url + "#/home"); pg.reload(); pg.wait_for_selector(".kpis")
@@ -262,6 +279,12 @@ try:
                             r = lp.evaluate(CHECK)
                             if r["problems"]: layout_issues.append((w, path + "/" + tab, r["problems"]))
                             if r["truncatedCount"]: print(f"  {w}px {path}/{tab}: {r['truncatedCount']} names shortened, e.g. {r['truncated'][:3]}")
+                    continue
+                if path.startswith("#/team/"):
+                    for tab in ["history", "h2h", "season"]:
+                        lp.click(f"[data-ttab={tab}]"); lp.wait_for_timeout(150)
+                        r = lp.evaluate(CHECK)
+                        if r["problems"]: layout_issues.append((w, path + "/" + tab, r["problems"]))
                     continue
                 r = lp.evaluate(CHECK)
                 if r["problems"]: layout_issues.append((w, path, r["problems"]))

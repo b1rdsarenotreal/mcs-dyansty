@@ -418,4 +418,26 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.equal(h.w + h.l, games, 'MCWS W-L counts every MCWS game');
   assert.equal(mcwsHistory(league, champ, done[0].year).apps, 0, 'nothing before the first season');
 }
+// Team history: head-to-head, poll history, poll records; conferences A-Z
+{
+  const { headToHead, teamPollHistory, pollRecords, recordBook } = await import('../js/records.js');
+  const { sortConferences } = await import('../js/league.js');
+  const t = Object.keys(league.seasons[league.currentYear].teams)[0];
+  const h = headToHead(league, t);
+  const all = Object.values(league.seasons).flatMap(se => se.games.filter(g => isFinal(g) && (g.home === t || g.away === t)));
+  assert.equal(h.reduce((a, r) => a + r.g, 0), all.length, 'H2H covers every game');
+  const prog = recordBook(league).programs.find(p => p.team === t);
+  assert.equal(h.reduce((a, r) => a + r.w, 0), prog.w, 'H2H wins match program wins');
+  for (const r of h) assert.equal(r.w + r.l, r.g);
+  const ph = teamPollHistory(league, t);
+  for (const x of ph) { assert.ok(x.ranked <= x.polls); if (x.high) assert.ok(x.high <= x.low); }
+  const PR = pollRecords(league);
+  const p1 = PR.programs.reduce((a, p) => a + p.at1, 0);
+  const polls = Object.values(league.seasons).reduce((a, se) => a + Object.keys(se.polls || {}).length, 0);
+  assert.equal(p1, polls, 'exactly one #1 per poll');
+  for (const m of PR.moves.filter(m => m.to)) assert.equal(m.delta, m.from - m.to);
+  const L2 = { conferences: { 'Sun Belt': {}, ACC: {}, 'big West': {} }, seasons: {} };
+  sortConferences(L2);
+  assert.deepEqual(Object.keys(L2.conferences), ['ACC', 'big West', 'Sun Belt'], 'conferences A-Z');
+}
 console.log(`ok in ${Date.now() - t0} ms`);

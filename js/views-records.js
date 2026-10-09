@@ -1,11 +1,17 @@
 // Records page: the dynasty's record book.
 
-import { ctx, app, $$, esc, team } from './ui.js?v=20261008184207';
-import { recordBook, top } from './records.js?v=20261008184207';
-import { coachName } from './league.js?v=20261008184207';
-import { fmtPct } from './util.js?v=20261008184207';
+import { ctx, app, $$, esc, team } from './ui.js?v=20261008213636';
+import { recordBook, top, pollRecords } from './records.js?v=20261008213636';
+import { coachName, weekName } from './league.js?v=20261008213636';
+import { fmtPct } from './util.js?v=20261008213636';
 
-const ui = { programSort: 'w' };
+const ui = { programSort: 'w', pollSort: 'ranked' };
+
+const POLL_COLS = [
+  ['ranked', 'Polls ranked', 'Polls the team appeared in, preseason and final included'], ['at1', 'Polls at #1', ''], ['streak', 'Longest ranked run', 'Most polls in a row ranked, across seasons'],
+  ['pre1', 'Preseason #1', ''], ['final1', 'Final #1', ''], ['top5', 'Final top 5', ''], ['top10', 'Final top 10', ''],
+  ['vsRanked', 'Wins vs ranked', 'Ranks from the poll in effect at game time'], ['vsTop5', 'Wins vs top 5', ''], ['vs1', 'Wins vs #1', ''], ['fp', '1st-place votes', ''],
+];
 
 const PROGRAM_COLS = [
   ['seasons', 'Seasons'], ['w', 'Wins'], ['pct', 'Pct'], ['reg', 'Reg. season titles'], ['conf', 'Tournament titles'],
@@ -73,11 +79,37 @@ export function renderRecords() {
     ${board('MCWS appearances', top(C.filter(c => c.mcws), c => c.mcws + c.w / 1e5), c => c.mcws, csub)}
   </div>`;
 
+  // Poll records.
+  const PR = pollRecords(L);
+  const pkey = ui.pollSort;
+  const pprogs = PR.programs.filter(p => p.ranked).sort((a, b) => b[pkey] - a[pkey] || b.ranked - a.ranked || a.team.localeCompare(b.team));
+  const pollLabel = (year, key) => key === 0 ? 'Preseason' : key === 'final' ? 'Final poll' : weekName(key, L.seasons[year]);
+  const pollTable = `<div class="card"><h2>Programs · in the polls</h2>
+    <div class="table-wrap"><table class="rec-table"><thead><tr><th></th><th>Team</th>${POLL_COLS.map(([k, l, tip]) => `<th class="num sortable ${k === pkey ? 'sorted' : ''}" data-rsort="${k}" title="${esc(tip || 'Sort by ' + l)}">${esc(l)}</th>`).join('')}</tr></thead>
+    <tbody>${pprogs.map((p, i) => `<tr><td class="num muted">${i + 1}</td><td>${tm(p.team)}</td>${POLL_COLS.map(([k]) => `<td class="num">${k === pkey ? `<b>${p[k] || ''}</b>` : p[k] || ''}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${POLL_COLS.length + 2}" class="muted">No one has been ranked yet.</td></tr>`}</tbody></table></div>
+    <p class="small muted">Click a column to sort. Only programs that have been ranked are listed.</p></div>`;
+  const msub = x => ` ${x.year} · ${pollLabel(x.year, x.key)}`;
+  const rises = top(PR.moves.filter(m => m.to), m => m.delta + (m.to ? -m.to / 100 : 0));
+  const falls = top(PR.moves.filter(m => m.to), m => -m.delta - m.from / 100);
+  const debuts = top(PR.debuts.filter(d => d.key !== 0), d => -d.to);
+  const runs1 = top(PR.seasonRuns, r => r.n + r.n / r.of / 100);
+  const over1 = [...PR.bigWins].sort((a, b) => b.year - a.year || b.week - a.week);
+  const rankingsHtml = `${pollTable}<div class="rec-grid" style="margin-top:16px">
+    ${board('Biggest one-week rise', rises, m => `#${m.from} → #${m.to}`, m => `${msub(m)} · +${m.delta}`)}
+    ${board('Biggest one-week fall', falls, m => `#${m.from} → #${m.to}`, m => `${msub(m)} · ${m.delta}`)}
+    ${board('Highest debut from unranked', debuts, d => `#${d.to}`, msub)}
+    ${board('Most polls at #1 in a season', runs1, r => r.n, r => ` ${r.year} · of ${r.of} polls${r.n === r.of ? ' · wire to wire' : ''}`)}
+    ${board('Fell out from the highest rank', top(PR.moves.filter(m => !m.to), m => -m.from), m => `#${m.from} → NR`, msub)}
+    <div class="card rec-card"><h3>Wins over #1</h3>${over1.length ? `<ol class="rec-list">${over1.slice(0, 5).map(x => `<li><span class="rec-who">${tm(x.team)}<span class="small muted"> ${x.year} · ${x.type === 'regular' ? `Week ${x.week}` : esc((x.label || '').split(' · ')[0])} · over ${esc(x.opp)}${x.winRank ? ` · as #${x.winRank}` : ' · unranked'}</span></span><b class="rec-val">${x.score}</b></li>`).join('')}</ol>${over1.length > 5 ? `<p class="small muted">Latest 5 of ${over1.length}.</p>` : ''}` : '<p class="muted small">None yet.</p>'}</div>
+  </div>`;
+
   app.innerHTML = `<div class="section-head"><h1>Records</h1><span class="muted">${B.years[0]}–${B.years[B.years.length - 1]} · every season in the dynasty${inProgress ? ' · * season in progress' : ''}</span></div>
     ${programs}
     <h2 class="rec-section">Single season</h2>${seasons}
     <h2 class="rec-section">Single game</h2>${gamesHtml}
+    <h2 class="rec-section">Rankings</h2>${rankingsHtml}
     <h2 class="rec-section">Coaches</h2>${coachesHtml}
-    <p class="small muted">Season and game records count every game, postseason included. "Best winning percentage" and "fewest runs allowed" need at least 20 games; coaching percentage needs 100.</p>`;
+    <p class="small muted">Season, game and ranking records count every game, postseason included; a team's rank in a game is from the poll in effect when it was played. "Best winning percentage" and "fewest runs allowed" need at least 20 games; coaching percentage needs 100.</p>`;
   $$('[data-psort]').forEach(th => (th.onclick = () => { ui.programSort = th.dataset.psort; renderRecords(); }));
+  $$('[data-rsort]').forEach(th => (th.onclick = () => { ui.pollSort = th.dataset.rsort; renderRecords(); }));
 }

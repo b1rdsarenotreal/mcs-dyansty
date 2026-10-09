@@ -546,3 +546,10 @@ th.sortable.sorted { color: var(--accent); }
 .cand-stats > span { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
 @media (max-width: 600px) { .cand { grid-template-columns: minmax(0, 1fr) auto; } .cand-stats { grid-column: 1 / -1; order: 3; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mv-tag.hire { background: #183326; color: #7bd3a2; } :root:not([data-theme="light"]) .mv-tag.fire { background: #3a1820; color: #ff8d9b; } :root:not([data-theme="light"]) .mv-tag.poach { background: #3a3013; color: #f2cf6b; } }
+
+/* Team page: head-to-head and ranking history */
+.seg { display: flex; gap: 4px; flex-wrap: wrap; }
+.h2h-table tr.h2h-up td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+.h2h-table tr.h2h-down td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.h2h-table td:first-child { padding-left: 10px; }
+.rec-table td.rk-move { white-space: nowrap; }
