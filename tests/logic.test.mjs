@@ -146,7 +146,8 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 {
   assert.equal(s.phase, 'selection');
   const B = selectionBoard(s);
-  assert.equal(B.autos.length + B.spots, 16); assert.equal(B.board.length, B.spots + 10);
+  assert.equal(B.autos.length + B.spots, 16); assert.equal(B.board.length, Math.min(B.spots + 10, B.order.length - B.autos.length - B.ineligible.length));
+  for (const t of B.board) { const rr = records(s)[t]; assert.ok(rr.w >= rr.l || B.fill.includes(t), `${t} below .500 on the at-large board`); }
   assert.equal(s.post.fieldConfirmed, false);
   const out = B.chosen[B.chosen.length - 1], inn = B.board.find(t => !B.chosen.includes(t));
   assert.throws(() => setAtLarge(s, inn, true), /spots are taken/);
@@ -439,5 +440,28 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   const L2 = { conferences: { 'Sun Belt': {}, ACC: {}, 'big West': {} }, seasons: {} };
   sortConferences(L2);
   assert.deepEqual(Object.keys(L2.conferences), ['ACC', 'big West', 'Sun Belt'], 'conferences A-Z');
+}
+// At-large teams need a .500 record or better
+{
+  const { atLargeEligible } = await import('../js/postseason.js');
+  let checked = 0;
+  for (const se of Object.values(league.seasons)) {
+    const r = records(se, g => g.type === 'regular' || g.type === 'conf');
+    const inF = new Set((se.post?.field || []).map(f => f.team));
+    const allEligibleIn = Object.keys(se.teams).every(t => r[t].w < r[t].l || inF.has(t));
+    for (const f of se.post?.field || []) if (f.bid === 'at-large') { checked++; assert.ok(r[f.team].w >= r[f.team].l || allEligibleIn, `${se.year} ${f.team} at-large with a losing record while a .500 team sat out`); }
+  }
+  assert.ok(checked > 0);
+  // Force a losing team high in the order and check it is skipped.
+  const se = league.seasons[league.currentYear];
+  const recs = records(se);
+  const loser = Object.keys(se.teams).find(t => recs[t].w < recs[t].l);
+  if (loser) {
+    assert.equal(atLargeEligible(se, loser), false);
+    const B = bracketology(se);
+    const f = B.field.find(x => x.team === loser);
+    assert.ok(!f || f.bid === 'auto', 'losing team only in as an automatic bid');
+    assert.ok(!B.firstOut.includes(loser) && !B.nextOut.includes(loser));
+  }
 }
 console.log(`ok in ${Date.now() - t0} ms`);

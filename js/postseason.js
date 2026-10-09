@@ -11,10 +11,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261008213636';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261008213636';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261008213636';
-import { hashStr } from './util.js?v=20261008213636';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261008221743';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261008221743';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261008221743';
+import { hashStr } from './util.js?v=20261008221743';
 
 // ---------- tournament format ----------
 
@@ -485,6 +485,28 @@ export function committeeOrder(season) {
   return teams.sort((a, b) => score(a) - score(b) || r[b].rpi - r[a].rpi);
 }
 
+// At-large teams need a winning or .500 record (every game so far counts).
+// Teams below .500 only get in as their conference's automatic qualifier.
+export function atLargeEligible(season, t, recs = records(season)) {
+  const r = recs[t];
+  return !!r && r.w >= r.l;
+}
+
+// The teams that may take at-large spots, in committee order. If too few
+// teams are .500 or better to fill the field, the best of the rest fill the
+// remaining spots (listed in `fill`) so the bracket still works.
+export function atLargePool(season, order = committeeOrder(season), autoSet = new Set(Object.values(autoBids(season)).filter(Boolean))) {
+  const size = Math.min(fieldSize(ncaaConfig(season)), Object.keys(season.teams).length);
+  const recs = records(season);
+  const rest = order.filter(t => !autoSet.has(t));
+  const eligible = rest.filter(t => atLargeEligible(season, t, recs));
+  const ineligible = rest.filter(t => !atLargeEligible(season, t, recs));
+  const spots = Math.max(0, size - autoSet.size);
+  const fill = ineligible.slice(0, Math.max(0, spots - eligible.length));
+  const allowed = new Set([...eligible, ...fill]);
+  return { size, spots, eligible, ineligible, fill, pool: rest.filter(t => allowed.has(t)) };
+}
+
 export function autoBids(season) {
   const out = {};
   const recs = records(season, g => g.type === 'regular'), r = rpi(season, g => g.type === 'regular');
@@ -499,12 +521,14 @@ export function proposeField(season, size = Math.min(fieldSize(ncaaConfig(season
   const order = committeeOrder(season);
   const autos = autoBids(season);
   const autoSet = new Set(Object.values(autos).filter(Boolean));
+  const recs = records(season);
+  const { pool } = atLargePool(season, order, autoSet);
   const field = [...autoSet];
-  for (const t of order) { if (field.length >= size) break; if (!field.includes(t)) field.push(t); }
+  for (const t of pool) { if (field.length >= size) break; if (!field.includes(t)) field.push(t); }
   const seeded = order.filter(t => field.includes(t));
   season.post.field = seeded.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
-  season.post.firstOut = order.filter(t => !field.includes(t)).slice(0, 4);
+  season.post.firstOut = order.filter(t => !field.includes(t) && atLargeEligible(season, t, recs)).slice(0, 4);
   season.post.fieldConfirmed = false;
   season.phase = 'selection';
 }
@@ -523,28 +547,28 @@ export function bracketology(season) {
   // its best team in the committee order.
   for (const c of Object.keys(autos)) if (!autos[c]) autos[c] = order.find(t => season.teams[t].conference === c) || null;
   const autoSet = new Set(Object.values(autos).filter(Boolean));
+  const recs = records(season);
+  const { pool, fill } = atLargePool(season, order, autoSet);
   const chosen = [...autoSet];
-  for (const t of order) { if (chosen.length >= size) break; if (!chosen.includes(t)) chosen.push(t); }
+  for (const t of pool) { if (chosen.length >= size) break; if (!chosen.includes(t)) chosen.push(t); }
   const field = order.filter(t => chosen.includes(t)).map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   const atLarge = order.filter(t => chosen.includes(t) && !autoSet.has(t));
-  const out = order.filter(t => !chosen.includes(t) && !autoSet.has(t));
-  return { cfg, field, autos, regionals: pods(field, cfg.regionals), lastIn: atLarge.slice(-4), firstOut: out.slice(0, 4), nextOut: out.slice(4, 8) };
+  const out = order.filter(t => !chosen.includes(t) && !autoSet.has(t) && atLargeEligible(season, t, recs));
+  return { cfg, field, autos, fill, regionals: pods(field, cfg.regionals), lastIn: atLarge.slice(-4), firstOut: out.slice(0, 4), nextOut: out.slice(4, 8) };
 }
 
 // Selection, step 1: the commissioner settles which teams are in. Automatic
 // qualifiers are fixed; at-large spots go to any non-automatic team.
 export function selectionBoard(season, extra = 10) {
-  const size = Math.min(fieldSize(ncaaConfig(season)), Object.keys(season.teams).length);
   const order = committeeOrder(season);
   const autoSet = new Set(Object.values(autoBids(season)).filter(Boolean));
   const autos = order.filter(t => autoSet.has(t));
-  const spots = Math.max(0, size - autos.length);
-  const pool = order.filter(t => !autoSet.has(t));
+  const { size, spots, pool, ineligible, fill } = atLargePool(season, order, autoSet);
   const inField = new Set((season.post?.field || []).map(f => f.team));
   // Show the at-large spots plus the next `extra` teams, and never hide a team that's in.
   let board = pool.slice(0, spots + extra);
   for (const t of pool) if (inField.has(t) && !board.includes(t)) board.push(t);
-  return { size, autos, spots, board, order, chosen: pool.filter(t => inField.has(t)) };
+  return { size, autos, spots, board, order, pool, ineligible: ineligible.filter(t => !fill.includes(t)), fill, chosen: pool.filter(t => inField.has(t)) };
 }
 function reseedByCommittee(season, teams) {
   const order = committeeOrder(season);
@@ -552,13 +576,15 @@ function reseedByCommittee(season, teams) {
   const field = order.filter(t => teams.includes(t));
   season.post.field = field.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
-  season.post.firstOut = order.filter(t => !field.includes(t) && !autoSet.has(t)).slice(0, 4);
+  const recs = records(season);
+  season.post.firstOut = order.filter(t => !field.includes(t) && !autoSet.has(t) && atLargeEligible(season, t, recs)).slice(0, 4);
 }
 export function setAtLarge(season, team, on) {
   const p = season.post;
   if (p.fieldConfirmed) throw new Error('Unlock the field to change teams.');
   const b = selectionBoard(season);
   if (b.autos.includes(team)) throw new Error(`${team} is an automatic qualifier.`);
+  if (on && !b.pool.includes(team)) throw new Error(`${team} has a losing record and can only get in as an automatic qualifier.`);
   let teams = p.field.map(f => f.team);
   if (on && !teams.includes(team)) {
     if (b.chosen.length >= b.spots) throw new Error(`All ${b.spots} at-large spots are taken. Take a team out first.`);

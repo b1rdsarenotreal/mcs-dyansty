@@ -553,3 +553,6 @@ th.sortable.sorted { color: var(--accent); }
 .h2h-table tr.h2h-down td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 .h2h-table td:first-child { padding-left: 10px; }
 .rec-table td.rk-move { white-space: nowrap; }
+.wk-rec { display: inline-block; min-width: 34px; padding: 1px 6px; border-radius: 6px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--chip); }
+.wk-rec.up { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.wk-rec.down { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }

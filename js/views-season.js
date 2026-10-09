@@ -1,13 +1,13 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261008213636';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261008213636';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261008213636';
-import { ovr } from './sim.js?v=20261008213636';
-import { simGames, addGame, weekName } from './league.js?v=20261008213636';
-import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261008213636';
-import { fmtPct, hashStr } from './util.js?v=20261008213636';
-import { DAY_ORDER } from './schedule.js?v=20261008213636';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261008221743';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261008221743';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261008221743';
+import { ovr } from './sim.js?v=20261008221743';
+import { simGames, addGame, weekName } from './league.js?v=20261008221743';
+import { postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261008221743';
+import { fmtPct, hashStr } from './util.js?v=20261008221743';
+import { DAY_ORDER } from './schedule.js?v=20261008221743';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -210,8 +210,9 @@ function renderPollTab(root) {
   // Teams ranked in the previous poll but not in this one, with that week's results.
   const inNow = new Set(rows.map(r => r.team));
   const weekRec = t => {
-    if (key === 'final' || key === 0) return '';
-    const gs = s.games.filter(g => g.week === key && isFinal(g) && (g.home === t || g.away === t));
+    if (key === 0) return '';
+    const inWeek = key === 'final' ? g => g.type !== 'regular' && g.type !== 'conf' : g => g.week === key;
+    const gs = s.games.filter(g => inWeek(g) && isFinal(g) && (g.home === t || g.away === t));
     if (!gs.length) return '';
     const w = gs.filter(g => (g.homeR > g.awayR ? g.home : g.away) === t).length;
     return `${w}-${gs.length - w}`;
@@ -231,12 +232,12 @@ function renderPollTab(root) {
         ${poll.edited ? '<span class="badge manual">Commissioner edited</span>' : ''}<span class="spacer"></span>
         ${editing ? '<button class="btn" id="p-cancel">Cancel</button><button class="btn primary" id="p-save">Save poll</button>' : '<button class="btn" id="p-edit">Edit poll</button><button class="btn" id="p-regen">Regenerate</button>'}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>${editing ? '<th></th>' : '<th class="num">Points</th><th class="num">Prev</th><th></th>'}</tr></thead>
-        <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>
+        <thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>${key === 0 ? '' : `<th class="num" title="${key === 'final' ? 'NCAA tournament record' : "Record in this poll's week"}">${key === 'final' ? 'NCAA' : 'This week'}</th>`}${editing ? '<th></th>' : '<th class="num">Points</th><th class="num">Prev</th><th></th>'}</tr></thead>
+        <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>${key === 0 ? '' : (() => { const wr = weekRec(x.team); if (!wr) return '<td class="num muted">—</td>'; const [w, l] = wr.split('-').map(Number); return `<td class="num"><span class="wk-rec ${w > l ? 'up' : w < l ? 'down' : ''}">${wr}</span></td>`; })()}
           ${editing ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'}>▼</button> <button class="btn sm danger" data-rm="${i}">✕</button></td>`
           : `<td class="num">${x.pts ?? ''}</td><td class="num muted">${prevKey !== undefined ? prev[x.team] ?? 'NR' : ''}</td><td class="num">${mv(x.team, i)}</td>`}</tr>`).join('')}</tbody></table></div>
       ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps ${poll.size || poll.ranks.length} teams.</span></div>`
-      : `${dropped.length ? `<div class="dropped"><b>Dropped out:</b> ${dropped.map(d => `<span class="drop-item">${team(d.team, { rank: false, size: 16 })} <span class="muted small">was #${d.was}${d.week ? `, ${d.week} this week` : ''}</span></span>`).join('')}</div>` : prevKey !== undefined ? '<p class="small muted" style="margin-top:10px">No teams dropped out this week.</p>' : ''}
+      : `${dropped.length ? `<div class="dropped"><b>Dropped out:</b> ${dropped.map(d => `<span class="drop-item">${team(d.team, { rank: false, size: 16 })} <span class="muted small">was #${d.was}${d.week ? `, ${d.week} ${key === 'final' ? 'in the NCAA tournament' : 'this week'}` : ''}</span></span>`).join('')}</div>` : prevKey !== undefined ? '<p class="small muted" style="margin-top:10px">No teams dropped out this week.</p>' : ''}
         ${poll.others?.length ? `<p class="small muted" style="margin-top:10px"><b>Others receiving votes:</b> ${poll.others.map(o => `${esc(o.team)} ${o.pts}`).join(', ')}</p>` : ''}`}
       <p class="small muted">${poll.ballots ? `${poll.voters} voters` : `${poll.voters || 40} simulated voters`}. First-place votes in parentheses. ${poll.ranks.length !== pollSizeOf(s) ? `This poll ranks ${poll.ranks.length} teams; polls released from now on rank ${pollSizeOf(s)}. ` : ''}Polls come out when a week's games are all final.</p>
     </div>
@@ -317,7 +318,7 @@ function renderBracketology(root) {
   const regionals = B.regionals.map(teams => `<div class="card bo-reg"><div class="bo-head"><h3>${esc(teams[0])} Regional</h3><span class="muted small">Host: national seed ${seedOf[teams[0]]}</span></div>${teams.map(row).join('')}</div>`).join('');
   const list = (title, teams, note) => `<div class="bo-list"><h3>${title}</h3>${teams.length ? `<ol>${teams.map(t => `<li>${team(t, { rank: false, size: 16 })} <span class="muted small">${recs[t].w}-${recs[t].l} · RPI ${r[t]?.rank ?? '–'}</span></li>`).join('')}</ol>` : '<p class="muted small">—</p>'}${note ? `<p class="small muted">${note}</p>` : ''}</div>`;
   const autoList = Object.entries(B.autos).filter(([, t]) => t).sort((a, b) => a[0].localeCompare(b[0]));
-  root.innerHTML = `<div class="hint">Projected ${asOf}: ${B.field.length} teams in ${B.cfg.regionals} regionals. Automatic bids go to each conference's current leader${s.phase === 'conf' ? ' (or tournament champion)' : ''}; at-large spots and seeds follow the committee order (RPI 50%, poll 30%, strength of schedule 20%). It changes as games are played.</div>
+  root.innerHTML = `<div class="hint">Projected ${asOf}: ${B.field.length} teams in ${B.cfg.regionals} regionals. Automatic bids go to each conference's current leader${s.phase === 'conf' ? ' (or tournament champion)' : ''}; at-large spots and seeds follow the committee order (RPI 50%, poll 30%, strength of schedule 20%), and teams below .500 can't take an at-large spot. It changes as games are played.${B.fill.length ? ` <b>Too few at-large candidates are .500 or better to fill the field, so the best of the rest take the last ${B.fill.length} spot${B.fill.length > 1 ? 's' : ''}: ${B.fill.map(esc).join(', ')}.</b>` : ''}</div>
     <div class="bo-layout">
       <div class="bo-grid">${regionals}</div>
       <aside class="card bo-side">
@@ -595,7 +596,7 @@ function renderField(root) {
   const autoRows = B.autos.map(t => `<tr><td class="num muted">${crank[t]}</td>${teamCell(t)}${stats(t)}<td class="small muted">${via(t)}</td></tr>`).join('');
   const boardRows = B.board.map((t, i) => {
     const on = inField.has(t);
-    const tag = lastIn.has(t) ? '<span class="badge">Last 4 in</span>' : firstOut.has(t) ? '<span class="badge">First 4 out</span>' : '';
+    const tag = B.fill.includes(t) ? '<span class="badge manual" title="Not enough teams at .500 or better to fill the field">Below .500 · fills short field</span>' : lastIn.has(t) ? '<span class="badge">Last 4 in</span>' : firstOut.has(t) ? '<span class="badge">First 4 out</span>' : '';
     return `<tr class="${on ? 'sel-in' : ''}${i === B.spots - 1 ? ' cutline' : ''}"><td class="num"><input type="checkbox" data-al="${esc(t)}" ${on ? 'checked' : ''} ${confirmed ? 'disabled' : ''} aria-label="${esc(t)} in the field"></td>${teamCell(t)}${stats(t)}<td class="small">${tag}</td></tr>`;
   }).join('');
   const board = `<div class="card sel-board">
@@ -603,8 +604,9 @@ function renderField(root) {
     <div class="table-wrap"><table class="sel-table">${head('<th class="num" title="Committee order">#</th>')}<tbody>${autoRows}</tbody></table></div>
     <div class="row" style="margin:16px 0 6px"><h2 style="margin:0">At-large · ${B.chosen.length} of ${B.spots}</h2><span class="spacer"></span>
       ${editable && !confirmed ? `<button class="btn primary sm" id="f-confirm" ${B.chosen.length === B.spots ? '' : 'disabled'}>Confirm the ${B.size} teams</button>` : ''}</div>
-    <div class="small muted" style="margin-bottom:6px">The ${B.spots} at-large spots plus the next 10 teams, in committee order (RPI 50%, poll 30%, SOS 20%). The line marks the committee's cut.${editable && !confirmed ? ' Check or uncheck teams to set the field.' : ''}</div>
+    <div class="small muted" style="margin-bottom:6px">The ${B.spots} at-large spots plus the next 10 teams, in committee order (RPI 50%, poll 30%, SOS 20%). The line marks the committee's cut. Teams with a losing record can't take an at-large spot.${editable && !confirmed ? ' Check or uncheck teams to set the field.' : ''}</div>
     <div class="table-wrap"><table class="sel-table">${head('<th class="num">In</th>')}<tbody>${boardRows}</tbody></table></div>
+    ${(() => { const cut = B.order.indexOf(B.board[B.board.length - 1]); const skipped = B.ineligible.filter(t => B.order.indexOf(t) < cut); return skipped.length ? `<p class="small muted" style="margin:8px 0 0"><b>Not eligible (losing record):</b> ${skipped.map(t => `${esc(t)} ${recs[t].w}-${recs[t].l}`).join(', ')}</p>` : ''; })()}
     <p class="small muted" style="margin:8px 0 0">Quadrants split every team into quarters by RPI rank: Q1 is the top ${Math.ceil(Object.keys(s.teams).length / 4)}. Q1–Q4 are each team's record against teams in that quadrant.</p>
   </div>`;
   const seedRows = field.map((f, i) => `<div class="seed-row${i < cfg.regionals ? ' host' : ''}"><span class="seed-n">${f.seed}</span><span class="seed-team">${team(f.team, { rank: false, size: 16 })}</span>${i < cfg.regionals ? '<span class="badge gold">Host</span>' : ''}
