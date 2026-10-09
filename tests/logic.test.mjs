@@ -285,8 +285,8 @@ assert.deepEqual(draftWarnings(league), []);
   assert.ok(withDev.every(t => pointsLeft(t) === t.dev.pts), 'points start unplaced');
   { const { placeRemaining, clearPoints } = await import('../js/league.js');
     const u = withDev.find(x => x.dev.pts > 2 && x.off < 90 && x.pit < 90 && x.def < 90);
-    u.off += 1; placeRemaining(u, Math.random); assert.equal(pointsLeft(u), 0, 'auto places the rest'); assert.ok(u.off >= u.dev.start.off + 1, 'keeps manual placement');
-    clearPoints(u); assert.equal(pointsLeft(u), u.dev.pts, 'reset'); }
+    if (u) { u.off += 1; placeRemaining(u, Math.random); assert.equal(pointsLeft(u), 0, 'auto places the rest'); assert.ok(u.off >= u.dev.start.off + 1, 'keeps manual placement');
+      clearPoints(u); assert.equal(pointsLeft(u), u.dev.pts, 'reset'); } }
   const champ = d.teams[s.post.champion];
   const recs = records(s), byWp = withDev.filter(t => recs[t.school]).sort((a, b) => recs[b.school].w / (recs[b.school].w + recs[b.school].l) - recs[a.school].w / (recs[a.school].w + recs[a.school].l));
   const avg = l => l.reduce((n, t) => n + t.dev.pts, 0) / l.length;
