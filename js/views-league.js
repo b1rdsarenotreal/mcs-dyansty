@@ -1,16 +1,16 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261008233028';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261008233028';
-import { ovr } from './sim.js?v=20261008233028';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261008233028';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261008233028';
-import { setRating } from './ratings.js?v=20261008233028';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261008233028';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261008233028';
-import { exportLeague, clearLeague } from './store.js?v=20261008233028';
-import { clamp, fmtPct } from './util.js?v=20261008233028';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261008233028';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261009001601';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261009001601';
+import { ovr } from './sim.js?v=20261009001601';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261009001601';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261009001601';
+import { setRating } from './ratings.js?v=20261009001601';
+import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261009001601';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261009001601';
+import { exportLeague, clearLeague } from './store.js?v=20261009001601';
+import { clamp, fmtPct } from './util.js?v=20261009001601';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261009001601';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -198,7 +198,7 @@ export function renderOffseason() {
   const ratingCell = (t, k) => {
     const from = t.dev?.start?.[k] ?? prev[t.school]?.[k];
     const x = from != null ? t[k] - from : 0;
-    return `<td class="num"><span class="rstep"><button class="btn sm" data-step="-1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Lower ${k.toUpperCase()}">−</button><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}" aria-label="${esc(t.school)} ${k.toUpperCase()}"><button class="btn sm" data-step="1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Raise ${k.toUpperCase()}">+</button></span><span class="delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}">${x ? (x > 0 ? '+' : '') + x : ''}</span></td>`;
+    return `<td class="num"><span class="rstep"><button class="btn sm" data-step="-1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Lower ${k.toUpperCase()}">−</button><input type="number" min="40" max="99" class="rin" data-drate="${k}" data-team="${esc(t.school)}" value="${t[k]}" aria-label="${esc(t.school)} ${k.toUpperCase()}"><button class="btn sm" data-step="1" data-k="${k}" data-team="${esc(t.school)}" aria-label="Raise ${k.toUpperCase()}">+</button></span><span class="delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}" data-delta="${k}">${x ? (x > 0 ? '+' : '') + x : ''}</span></td>`;
   };
   const pointsCell = t => {
     if (!t.dev) return '<td class="num muted small">New</td>';
@@ -218,10 +218,10 @@ export function renderOffseason() {
     const list = teams.filter(t => t.conference === c).sort((a, b) => a.school.localeCompare(b.school));
     return `<div class="card off-conf"><div class="row" style="margin-bottom:8px">${confLogo(c, 28)}<h2 style="margin:0">${esc(c)}</h2><span class="muted small">${list.length} team${list.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" data-addto="${esc(c)}">+ Team</button></div>
       ${list.length ? `<div class="table-wrap"><table class="off-table"><thead><tr><th>Team</th><th>Head coach</th><th class="num" title="Rating points earned from last season's results, plus luck">Points</th><th class="num">OFF</th><th class="num">PIT</th><th class="num">DEF</th><th class="num">OVR</th><th>Conference</th><th></th></tr></thead><tbody>
-        ${list.map(t => `<tr><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}${prev[t.school] ? `<div class="small muted">${rec(t.school)} in ${cur.year}</div>` : ''}</td>
+        ${list.map(t => `<tr data-row="${esc(t.school)}"><td><span class="team">${logoImg(t, 18)}${prev[t.school] ? `<a class="team-link" href="${teamHref(t.school)}">${esc(t.school)}</a>` : esc(t.school)}</span>${!prev[t.school] ? ' <span class="badge real">New</span>' : moved(t) ? ` <span class="badge manual" title="From ${esc(prev[t.school].conference)}">Moved</span>` : ''}${prev[t.school] ? `<div class="small muted">${rec(t.school)} in ${cur.year}</div>` : ''}</td>
           ${coachCell(t)}${pointsCell(t)}
           ${['off', 'pit', 'def'].map(k => ratingCell(t, k)).join('')}
-          <td class="num"><b>${ovr(t)}</b></td>
+          <td class="num ovr-cell"><b>${ovr(t)}</b></td>
           <td><select data-dconf="${esc(t.school)}" aria-label="Move ${esc(t.school)}">${confs.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
           <td><button class="btn sm danger" data-drm="${esc(t.school)}" title="Leave the dynasty">✕</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted small">No teams yet. Move teams in with the Conference menus, or add a new one.</p>'}
@@ -245,7 +245,8 @@ export function renderOffseason() {
       <section><h3>Moves this offseason</h3>${d.moves.length ? `<ol class="moves">${[...d.moves].reverse().map(m => `<li>${moveLine(m)}</li>`).join('')}</ol>` : '<p class="muted small">No changes yet.</p>'}</section>
     </div></div>`;
   const removed = Object.keys(d.removed || {});
-  const unplaced = teams.filter(t => t.dev && pointsLeft(t) !== 0).length;
+  let unplaced = teams.filter(t => t.dev && pointsLeft(t) !== 0).length;
+  const ptsStatus = n => n ? `${n} team${n === 1 ? ' has' : 's have'} points to place or ${n === 1 ? 'is' : 'are'} over budget` : 'Every team\'s points are placed';
   app.innerHTML = `
     <div class="section-head"><h1>${d.year} Offseason</h1><span class="muted">${teams.length} teams in ${new Set(teams.map(t => t.conference)).size} conferences</span><span class="spacer"></span>
       <button class="btn" id="o-conf">+ Add conference</button><button class="btn" id="o-team">+ Add team</button><button class="btn primary" id="o-start">Start the ${d.year} season</button></div>
@@ -253,14 +254,42 @@ export function renderOffseason() {
     ${warnings.length ? `<div class="hint warn" style="margin-top:10px">${warnings.map(esc).join('<br>')}</div>` : ''}
     ${removed.length ? `<div class="card" style="margin-top:14px"><b>Leaving the dynasty:</b> ${removed.map(t => `<span class="chip-static">${esc(t)} <button class="btn sm" data-restore="${esc(t)}">Bring back</button></span>`).join(' ')}</div>` : ''}
     <div style="margin-top:14px">${carousel}</div>
-    <div class="row" style="margin:16px 0 0"><h2 style="margin:0">Teams</h2><span class="muted small">${unplaced ? `${unplaced} team${unplaced === 1 ? ' has' : 's have'} points to place or ${unplaced === 1 ? 'is' : 'are'} over budget` : 'Every team\'s points are placed'}</span><span class="spacer"></span><button class="btn sm" id="o-autoall" ${unplaced ? '' : 'disabled'}>Auto-place all remaining</button><button class="btn sm ghost" id="o-clearall">Reset all</button></div>
+    <div class="row" style="margin:16px 0 0"><h2 style="margin:0">Teams</h2><span class="muted small" id="o-ptsstatus">${ptsStatus(unplaced)}</span><span class="spacer"></span><button class="btn sm" id="o-autoall" ${unplaced ? '' : 'disabled'}>Auto-place all remaining</button><button class="btn sm ghost" id="o-clearall">Reset all</button></div>
     <div class="off-grid" style="margin-top:10px">${confs.map(card).join('')}</div>`;
   const T = d.teams;
   const setRate = (t, k, v) => { t[k] = rate(v); t.base = { ...(t.base || {}), [k]: t[k] }; };
-  $$('[data-drate]').forEach(inp => (inp.onchange = () => { setRate(T[inp.dataset.team], inp.dataset.drate, inp.value); changed({ progress: false }); }));
-  $$('[data-step]').forEach(b => (b.onclick = () => { const t = T[b.dataset.team], k = b.dataset.k; setRate(t, k, t[k] + Number(b.dataset.step)); changed({ progress: false }); }));
-  $$('[data-auto]').forEach(b => (b.onclick = () => { placeRemaining(T[b.dataset.auto], Math.random); changed({ progress: false }); }));
-  $$('[data-clear]').forEach(b => (b.onclick = () => { clearPoints(T[b.dataset.clear]); changed({ progress: false }); }));
+  // Rating changes update their own row in place, so the page doesn't jump.
+  const refreshRow = school => {
+    const t = T[school], tr = app.querySelector(`tr[data-row="${CSS.escape(school)}"]`);
+    if (!tr) return;
+    for (const k of ['off', 'pit', 'def']) {
+      const inp = tr.querySelector(`[data-drate="${k}"]`);
+      if (inp && document.activeElement !== inp) inp.value = t[k];
+      const from = t.dev?.start?.[k] ?? prev[school]?.[k], x = from != null ? t[k] - from : 0;
+      const sp = tr.querySelector(`[data-delta="${k}"]`);
+      if (sp) { sp.textContent = x ? (x > 0 ? '+' : '') + x : ''; sp.className = `delta ${x > 0 ? 'good' : x < 0 ? 'bad' : ''}`; }
+    }
+    const pc = tr.querySelector('.pts-cell');
+    if (pc) pc.outerHTML = pointsCell(t);
+    tr.querySelector('.ovr-cell').innerHTML = `<b>${ovr(t)}</b>`;
+    unplaced = Object.values(T).filter(x => x.dev && pointsLeft(x) !== 0).length;
+    $('#o-ptsstatus').textContent = ptsStatus(unplaced);
+    $('#o-autoall').disabled = !unplaced;
+    persist();
+  };
+  const grid = $('.off-grid');
+  grid.addEventListener('click', e => {
+    const b = e.target.closest('[data-step], [data-auto], [data-clear]');
+    if (!b) return;
+    if (b.dataset.step) { const t = T[b.dataset.team], k = b.dataset.k; setRate(t, k, t[k] + Number(b.dataset.step)); refreshRow(t.school); }
+    else if (b.dataset.auto) { placeRemaining(T[b.dataset.auto], Math.random); refreshRow(b.dataset.auto); }
+    else if (b.dataset.clear) { clearPoints(T[b.dataset.clear]); refreshRow(b.dataset.clear); }
+  });
+  grid.addEventListener('change', e => {
+    const inp = e.target.closest('[data-drate]');
+    if (!inp) return;
+    setRate(T[inp.dataset.team], inp.dataset.drate, inp.value); inp.value = T[inp.dataset.team][inp.dataset.drate]; refreshRow(inp.dataset.team);
+  });
   $('#o-autoall').onclick = () => { if (!confirm(`Place the remaining points at random for ${unplaced} team${unplaced === 1 ? '' : 's'}? Points you've already placed stay put.`)) return; for (const t of Object.values(T)) if (t.dev) placeRemaining(t, Math.random); changed({ progress: false }); };
   $('#o-clearall').onclick = () => { if (!confirm('Undo every team\'s point placements? Ratings go back to last season\'s.')) return; for (const t of Object.values(T)) clearPoints(t); changed({ progress: false }); };
   $$('[data-hire]').forEach(b => (b.onclick = () => hireModal(d, b.dataset.hire)));

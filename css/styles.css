@@ -323,7 +323,8 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 a.btn.primary { color: var(--accent-ink); }
 a.btn.disabled { opacity: .5; pointer-events: none; }
 input.coach-in { width: 100%; min-width: 150px; }
-.off-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 760px), 1fr)); }
+.off-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.off-table { width: 100%; }
 .off-grid .card + .card { margin-top: 0; }
 .off-table th, .off-table td { padding: 6px 5px; }
 .off-table input.rin { width: 54px; }

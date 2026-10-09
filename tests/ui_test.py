@@ -175,9 +175,12 @@ try:
         # Rating points: one more point on Texas's offense puts it one over budget
         row = pg.locator(".off-table tr", has_text="Texas Tech").first
         before = row.locator(".pts-cell").inner_text()
+        row.scroll_into_view_if_needed(); y0 = pg.evaluate("scrollY")
         row.locator("[data-step='1'][data-k='off']").click(); pg.wait_for_timeout(200)
+        assert pg.evaluate("scrollY") == y0, "page stays put after +"
         row = pg.locator(".off-table tr", has_text="Texas Tech").first
         assert row.locator(".pts-cell").inner_text() != before, "points left updates"
+        assert pg.evaluate("Math.max(...[...document.querySelectorAll('.off-conf .table-wrap')].map(w => w.scrollWidth - w.clientWidth))") <= 1, "offseason tables fit without sideways scrolling"
         if row.locator("[data-auto]").count():
             row.locator("[data-auto]").click(); pg.wait_for_timeout(200)
             row = pg.locator(".off-table tr", has_text="Texas Tech").first
