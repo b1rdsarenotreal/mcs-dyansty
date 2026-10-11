@@ -1,16 +1,16 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261009001601';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261009001601';
-import { ovr } from './sim.js?v=20261009001601';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261009001601';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261009001601';
-import { setRating } from './ratings.js?v=20261009001601';
-import { postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261009001601';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261009001601';
-import { exportLeague, clearLeague } from './store.js?v=20261009001601';
-import { clamp, fmtPct } from './util.js?v=20261009001601';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261009001601';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261011011351';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261011011351';
+import { ovr } from './sim.js?v=20261011011351';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261011011351';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261011011351';
+import { setRating } from './ratings.js?v=20261011011351';
+import { confFormatName, postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261011011351';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261011011351';
+import { exportLeague, clearLeague } from './store.js?v=20261011011351';
+import { clamp, fmtPct } from './util.js?v=20261011011351';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261011011351';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -736,7 +736,7 @@ export function renderConferencePage(c) {
     <div class="card" style="margin-top:16px"><h2>Champions by season</h2><div class="table-wrap"><table class="champ-table"><thead><tr><th>Season</th><th>Regular season</th><th>Tournament</th><th>Host</th><th class="num">vs. other conf.</th><th class="num">NCAA bids</th><th class="num">NCAA W-L</th><th>Best finish</th></tr></thead><tbody>
       ${hist.map(h => `<tr><td><b>${h.y}</b>${h.inProgress ? '<div class="small muted">In progress</div>' : ''}</td>
         <td>${h.reg.length ? `<div class="stack-tight">${h.reg.map(t => `<span>${team(t, { rank: false })} <span class="muted small">${h.regRec(t)}</span></span>`).join('')}</div>${h.reg.length > 1 ? '<div class="small muted">Shared</div>' : ''}` : '<span class="muted">—</span>'}</td>
-        <td>${h.t ? team(h.t, { rank: false }) : '<span class="muted">—</span>'}${h.tKind ? `<div class="small muted">${h.tKind === 'double' ? 'Double' : 'Single'} elimination</div>` : ''}</td>
+        <td>${h.t ? team(h.t, { rank: false }) : '<span class="muted">—</span>'}${h.tKind ? `<div class="small muted">${confFormatName(h.tKind)}</div>` : ''}</td>
         <td class="small">${h.host ? esc(h.host) : '<span class="muted">—</span>'}</td>
         <td class="num">${wl(h.w, h.l)}</td><td class="num">${h.bids || '<span class="muted">0</span>'}</td><td class="num">${h.nw + h.nl ? `${h.nw}-${h.nl}` : '<span class="muted">—</span>'}</td>
         <td>${h.best ? `${team(h.best.team, { rank: false, size: 16 })}<div class="small muted">${esc(h.best.finish)}</div>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>

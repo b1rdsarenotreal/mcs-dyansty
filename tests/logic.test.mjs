@@ -471,4 +471,32 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
 { const { mcwsVenue } = await import('../js/postseason.js');
   assert.deepEqual(mcwsVenue(league.seasons[league.currentYear]), { stadium: 'Firestone Stadium', city: 'Akron, Ohio' });
   assert.deepEqual(mcwsVenue({ settings: {} }), { stadium: 'Firestone Stadium', city: 'Akron, Ohio' }, 'older saves default to Akron'); }
+// Play-in, then double elimination: play-in losers are out after one game;
+// everyone else needs two losses (the single championship game aside).
+{ const { confKind } = await import('../js/postseason.js');
+  assert.equal(confKind('playin', 4), 'double', 'play-in needs 5 or more teams');
+  assert.equal(confKind('playin', 2), 'single');
+  for (let run = 0; run < 3; run++) {
+    const Lp = newLeague(), sp = Lp.seasons[Lp.currentYear];
+    sp.settings.confFormat = { 'Big Ten': 'playin', Horizon: 'playin', MAC: 'playin', 'Big West': 'playin' };
+    sp.settings.confTourney = { 'Big Ten': 8, Horizon: 6, MAC: 5, 'Big West': 7 };
+    simGames(sp, g => g.type === 'regular' || g.type === 'conf');
+    for (const [c, size] of [['Big Ten', 8], ['Horizon', 6], ['MAC', 5], ['Big West', 7]]) {
+      const ev = sp.post.confT[c];
+      assert.equal(ev.kind, 'playin', `${c} plays a play-in`);
+      const gs = sp.games.filter(g => g.event === ev.id);
+      const pre = gs.filter(g => g.node.startsWith('P-'));
+      assert.equal(pre.length, size - 4, `${c}: ${size - 4} play-in games`);
+      const byes = ev.seeds.slice(0, 8 - size);
+      assert.ok(pre.every(g => !byes.includes(g.home) && !byes.includes(g.away)), `${c}: top ${8 - size} seeds have byes`);
+      assert.ok(pre.every(g => g.day === 'Wed') && gs.find(g => g.node === 'CH').day === 'Sun', `${c}: play-in Wednesday, final Sunday`);
+      const out = pre.map(g => (g.homeR > g.awayR ? g.away : g.home));
+      for (const t of out) assert.equal(gs.filter(g => g.home === t || g.away === t).length, 1, `${t} is out after the play-in`);
+      const losses = {}; for (const g of gs) { const l = g.homeR > g.awayR ? g.away : g.home; losses[l] = (losses[l] || 0) + 1; }
+      const finalLoser = ev.nodes.find(n => n.key === 'CH').loser;
+      for (const t of ev.seeds.filter(t => !out.includes(t) && t !== ev.champion && t !== finalLoser)) assert.equal(losses[t], 2, `${c}: ${t} out after two losses`);
+      assert.ok(ev.seeds.includes(ev.champion) && !out.includes(ev.champion));
+    }
+  }
+}
 console.log(`ok in ${Date.now() - t0} ms`);

@@ -1,4 +1,5 @@
-// Postseason: conference tournaments (single or double elimination), then
+// Postseason: conference tournaments (single elimination, double elimination,
+// or a play-in round then double elimination), then
 // an NCAA tournament whose shape comes from the season's settings:
 //   - regionals: how many, and how many teams in each (2 = best-of-three
 //     series; 3 to 6 = double elimination with an "if necessary" final;
@@ -11,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261009001601';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261009001601';
-import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261009001601';
-import { hashStr } from './util.js?v=20261009001601';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261011011351';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp } from './standings.js?v=20261011011351';
+import { latestPoll, pollRankMap, generatePoll } from './polls.js?v=20261011011351';
+import { hashStr } from './util.js?v=20261011011351';
 
 // ---------- tournament format ----------
 
@@ -202,7 +203,48 @@ function fixRegionalDays(season, ev) {
 }
 const regionalKind = size => (size === 2 ? 'series' : size === 4 ? 'regional' : 'de');
 
-function buildConfNodes(kind, size) { return kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size); }
+// Play-in, then double elimination: the lowest seeds play a single-
+// elimination first round (lose and you're out) while the top seeds have a
+// bye. The play-in winners and the bye teams then play a double-elimination
+// bracket of 4 (or 8) with one championship game. A top 6 is 3 vs 6 and
+// 4 vs 5, then 1, 2 and the two winners in double elimination; a top 8 has
+// no byes, so all eight play in.
+function playInDoubleConf(size) {
+  if (size < 5) return doubleElimConf(size);
+  const D = 2 ** Math.floor(Math.log2(size - 1)); // double-elimination field
+  const order = bracketOrder(2 * D);
+  const pre = [], slot = {};
+  let k = 0;
+  for (let i = 0; i < order.length; i += 2) {
+    const hi = Math.min(order[i], order[i + 1]) - 1, lo = Math.max(order[i], order[i + 1]) - 1;
+    const real = lo < size;
+    const key = `P-${i / 2 + 1}`;
+    pre.push({ key, code: real ? `Play-in ${++k}` : 'Bye', a: { seed: hi }, b: { seed: lo }, sec: 'W', col: 0, label: 'Play-in round' });
+    slot[hi] = key;
+  }
+  if (k === 1) pre.find(n => n.code === 'Play-in 1').code = 'Play-in';
+  const de = doubleElimConf(D);
+  for (const n of de) {
+    for (const side of ['a', 'b']) if (n[side] && 'seed' in n[side]) n[side] = { w: slot[n[side].seed] };
+    if (n.sec !== 'F') n.col += 1;
+    delete n.day; delete n.depth;
+  }
+  return assignDays([...pre, ...de]);
+}
+
+// The format a conference tournament of `size` teams actually uses.
+export function confKind(want, size) {
+  if (want === 'playin' && size >= 5) return 'playin';
+  if ((want === 'double' || want === 'playin') && size >= 3) return 'double';
+  return 'single';
+}
+export const CONF_FORMATS = [['single', 'Single elimination'], ['double', 'Double elimination'], ['playin', 'Play-in, then double elimination']];
+export const confFormatName = kind => (CONF_FORMATS.find(([k]) => k === kind) || CONF_FORMATS[0])[1];
+
+function buildConfNodes(kind, size) {
+  if (kind === 'playin') return playInDoubleConf(size);
+  return kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size);
+}
 
 function doubleElim(final = 'g7') {
   const n = [
@@ -377,7 +419,7 @@ function seriesChampion(ev, keys) {
 }
 
 function eventChampion(ev) {
-  if (ev.kind === 'single' || ev.kind === 'double') { const w = ev.nodes[ev.nodes.length - 1].winner; return w && w !== BYE ? w : null; }
+  if (ev.kind === 'single' || ev.kind === 'double' || ev.kind === 'playin') { const w = ev.nodes[ev.nodes.length - 1].winner; return w && w !== BYE ? w : null; }
   if (ev.kind === 'regional') {
     const g6 = nodeOf(ev, 'G6'), g7 = nodeOf(ev, 'G7');
     if (g7.winner) return g7.winner;
@@ -453,7 +495,7 @@ export function setupConfTourneys(season) {
     const size = Math.min(n, season.settings.confTourney?.[conf] ?? defaultConfTourneySize(n));
     if (size < 2) continue;
     const seeds = confTourneySeeds(season, conf).slice(0, size);
-    const kind = size >= 3 && season.settings.confFormat?.[conf] === 'double' ? 'double' : 'single';
+    const kind = confKind(season.settings.confFormat?.[conf], size);
     season.post.confT[conf] = { id: `ct-${conf}`, kind, conf, size, seeds, nodes: buildConfNodes(kind, size), champion: null, host: confHost(season, conf) };
   }
   season.phase = 'conf';
@@ -824,7 +866,7 @@ export function setConfFormat(season, conf, kind) {
   const ids = new Set(ev.nodes.map(n => n.gameId).filter(Boolean));
   if (season.games.some(g => ids.has(g.id) && isFinal(g))) throw new Error('That tournament has already started.');
   season.games = season.games.filter(g => !ids.has(g.id));
-  ev.kind = ev.size >= 3 && kind === 'double' ? 'double' : 'single';
+  ev.kind = confKind(kind, ev.size);
   ev.nodes = buildConfNodes(ev.kind, ev.size);
   ev.champion = null;
 }

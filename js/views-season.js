@@ -1,13 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261009001601';
-import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261009001601';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261009001601';
-import { ovr } from './sim.js?v=20261009001601';
-import { simGames, addGame, weekName } from './league.js?v=20261009001601';
-import { mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261009001601';
-import { fmtPct, hashStr } from './util.js?v=20261009001601';
-import { DAY_ORDER } from './schedule.js?v=20261009001601';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261011011351';
+import { isFinal, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261011011351';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261011011351';
+import { ovr } from './sim.js?v=20261011011351';
+import { simGames, addGame, weekName } from './league.js?v=20261011011351';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261011011351';
+import { mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261011011351';
+import { fmtPct, hashStr } from './util.js?v=20261011011351';
+import { DAY_ORDER } from './schedule.js?v=20261011011351';
 
 const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -157,7 +158,7 @@ export function renderStandings() {
           <td class="num">${x.streak || ''}</td></tr>`).join('')}</tbody></table></div>
       <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
         <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamps({ ...s, overrides: {} }, c, regRecs, r).join(' & ') || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
-        <label class="field">Tournament format <select data-format="${esc(c)}" ${canSize ? '' : 'disabled'}>${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${(s.settings.confFormat?.[c] || 'single') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Tournament format <select data-format="${esc(c)}" ${canSize ? '' : 'disabled'}>${CONF_FORMATS.map(([k, l]) => `<option value="${k}" ${(s.settings.confFormat?.[c] || 'single') === k ? 'selected' : ''}>${l}${k === 'playin' && size < 5 ? ' (top 5 or more; double elimination for now)' : ''}</option>`).join('')}</select></label>
         <label class="field">Tournament teams <select data-size="${esc(c)}" ${canSize ? '' : 'disabled'}>${[0, 2, 3, 4, 5, 6, 7, 8].filter(k => k <= n).map(k => `<option value="${k}" ${k === size ? 'selected' : ''}>${k ? `Top ${k}` : 'No tournament'}</option>`).join('')}</select></label>
       </div>${canSize ? '' : `<p class="muted">Tournament size and format are locked once the tournaments are set. You can still switch a tournament's format on the Postseason page until its first game.</p>`}</details>
     </div>`;
@@ -503,7 +504,7 @@ function renderConfTourneys(root) {
         const n = Object.values(s.teams).filter(t => t.conference === c).length;
         const size = Math.min(n, s.settings.confTourney?.[c] ?? defaultConfTourneySize(n));
         const seeds = confTourneySeeds(s, c).slice(0, size);
-        return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, ${size >= 3 && s.settings.confFormat?.[c] === 'double' ? 'double' : 'single'} elimination` : 'No tournament: regular-season champion gets the bid'}</span></div>
+        return `<div class="card"><div class="row"><a href="${confHref(c)}">${confLogo(c, 26)}</a><h3 style="margin:0">${esc(c)} Tournament</h3><span class="spacer"></span><span class="muted small">${size ? `Top ${size}, ${confFormatName(confKind(s.settings.confFormat?.[c], size)).toLowerCase()}` : 'No tournament: regular-season champion gets the bid'}</span></div>
           ${size ? hostPicker(s, c) : ''}
           <ol class="seedlist">${seeds.map(t => `<li>${team(t)}</li>`).join('')}</ol></div>`;
       }).join('')}</div>`;
@@ -517,7 +518,7 @@ function renderConfTourneys(root) {
       const started = ev.nodes.some(n => n.gameId && s.games.find(g => g.id === n.gameId && isFinal(g)));
       return `<div class="card"><div class="row" style="margin-bottom:10px"><a href="${confHref(ev.conf)}">${confLogo(ev.conf, 28)}</a><h2 style="margin:0">${esc(ev.conf)} Tournament</h2>
         ${ev.champion ? `<span class="badge gold">Champion: ${esc(ev.champion)}</span>` : ''}<span class="spacer"></span>
-        ${started ? `<span class="muted small">${ev.kind === 'double' ? 'Double' : 'Single'} elimination</span>` : `${ev.size >= 3 ? `<select class="sm-select" data-cformat="${esc(ev.conf)}" aria-label="${esc(ev.conf)} tournament format">${[['single', 'Single elimination'], ['double', 'Double elimination']].map(([k, l]) => `<option value="${k}" ${ev.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
+        ${started ? `<span class="muted small">${confFormatName(ev.kind)}</span>` : `${ev.size >= 3 ? `<select class="sm-select" data-cformat="${esc(ev.conf)}" aria-label="${esc(ev.conf)} tournament format">${CONF_FORMATS.filter(([k]) => k !== 'playin' || ev.size >= 5).map(([k, l]) => `<option value="${k}" ${ev.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<button class="btn sm" data-reseed="${esc(ev.conf)}">Edit seeds</button>`}</div>
         ${hostPicker(s, ev.conf, ev)}
         <div class="small muted" style="margin-bottom:8px">Seeds: ${ev.seeds.map((t, i) => `${i + 1}. ${esc(t)}`).join(' · ')}</div>
         ${eventBracket(ev, t => ev.seeds.indexOf(t) + 1 || null)}</div>`;
