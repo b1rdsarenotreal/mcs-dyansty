@@ -15,11 +15,12 @@ These stay different on purpose. Never copy them across:
 | | MCS Dynasty | SACAA Dynasty |
 |---|---|---|
 | Teams, conferences, coaches, colors, ratings, start year (`js/data.js`) | 45 teams, 6 conferences, 2016 | 56 teams, 7 conferences, 2030 |
-| Championship name and abbreviation | Men's College World Series (MCWS) | Women's College World Series (WCWS) |
+| Championship name | Men's College World Series (MCWS) | National Championships (no abbreviation) |
 | Default venue | Firestone Stadium, Akron, Ohio | Devon Park, Oklahoma City, Oklahoma |
 | Save and logo-cache keys (`js/store.js`, `js/logos.js`) | `mcs-dynasty`, `mcs-logo-table-v1` | `sacaa-dynasty`, `sacaa-logo-table-v1` |
 | Team and conference names used in `tests/` | MCS teams (Oklahoma, Big Ten, ...) | SACAA teams (UCLA, Pac-10, ...) |
 | README sections "The league" and "Ratings" (how starting ratings were made) | | |
+| Postseason column in team and coach histories | Finish only ("NCAA Regional") | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route). The owner asked for this in SACAA only. |
 
 Internal identifiers such as `mcws`, `mcwsVenue` and `mcwsName` are shared by both apps. Keep them the same so code ports cleanly. Only text the user sees differs.
 
