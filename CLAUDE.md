@@ -21,6 +21,7 @@ These stay different on purpose. Never copy them across:
 | Team and conference names used in `tests/` | MCS teams (Oklahoma, Big Ten, ...) | SACAA teams (UCLA, Pac-10, ...) |
 | README sections "The league" and "Ratings" (how starting ratings were made) | | |
 | Postseason column in team and coach histories | Finish only ("NCAA Regional") | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route). The owner asked for this in SACAA only. |
+| Game box design and visual refresh (`gameCard` in `js/ui.js`, the scoreboard-tile and refresh blocks at the end of `css/styles.css`, home page mini scoreboards) | Scoreboard tiles: logos left/right, score in the middle, winner's color wash. The owner asked for this in MCS only. | Original line-score boxes |
 
 Internal identifiers such as `mcws`, `mcwsVenue` and `mcwsName` are shared by both apps. Keep them the same so code ports cleanly. Only text the user sees differs.
 

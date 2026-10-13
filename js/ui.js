@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261012174643';
-import { logoFor } from './logos.js?v=20261012174643';
-import { LOGO_ALIASES } from './data.js?v=20261012174643';
-import { ovr, winProbability } from './sim.js?v=20261012174643';
-import { records, isFinal, winnerOf } from './standings.js?v=20261012174643';
-import { latestPoll, pollRankMap } from './polls.js?v=20261012174643';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261012174643';
-import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261012174643';
-import { DAY_ORDER } from './schedule.js?v=20261012174643';
-import { esc } from './util.js?v=20261012174643';
+import { saveLeague } from './store.js?v=20261012185705';
+import { logoFor } from './logos.js?v=20261012185705';
+import { LOGO_ALIASES } from './data.js?v=20261012185705';
+import { ovr, winProbability } from './sim.js?v=20261012185705';
+import { records, isFinal, winnerOf } from './standings.js?v=20261012185705';
+import { latestPoll, pollRankMap } from './polls.js?v=20261012185705';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261012185705';
+import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261012185705';
+import { DAY_ORDER } from './schedule.js?v=20261012185705';
+import { esc } from './util.js?v=20261012185705';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -159,6 +159,10 @@ export function resultText(g) {
   return `${w} ${Math.max(g.homeR, g.awayR)}, ${l} ${Math.min(g.homeR, g.awayR)}${extra}`;
 }
 
+// A scoreboard tile: away team on the left, home team on the right, each
+// with its logo, abbreviation and rank; the score in the middle. A played
+// game takes a light wash of the winner's color, strongest on its side, and
+// keeps the inning-by-inning line score in a quiet strip underneath.
 export function gameCard(g) {
   const s = S();
   const n = Math.max(7, g.homeLine.length, g.awayLine.length);
@@ -166,35 +170,60 @@ export function gameCard(g) {
   const w = fin ? winnerOf(g) : null;
   const confGame = g.type === 'regular' && g.confGame;
   const conf = confGame ? s.teams[g.home]?.conference : g.type === 'conf' ? g.event.replace(/^ct-/, '') : null;
-  const cell = (arr, i) => (fin ? (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '') : '');
   const recs = cache.recs();
-  const line = (t, arr, R, H, E) => `<div class="line sb" style="--q:${n}">
-      <div class="${fin ? (w === t ? 'winner' : 'loser') : ''}">${team(t, { seed: seedOf(g, t), abbrAlt: true, rank: showsRank(g.type), ranks: fin ? cache.ranksAt(g.week) : null })}${!fin && recs[t] ? ` <span class="pre-rec">${recs[t].w}-${recs[t].l}${confGame ? ` (${recs[t].cw}-${recs[t].cl})` : ''}</span>` : ''}</div>
-      ${Array.from({ length: n }, (_, i) => `<div class="q">${cell(arr, i)}</div>`).join('')}
-      <div class="total">${fin ? R : ''}</div><div class="q he">${fin ? H : ''}</div><div class="q he">${fin ? E : ''}</div></div>`;
-  const head = `<div class="line sb head" style="--q:${n}"><div class="series-tag">${seriesStatus(g, 31 - (n - 7) * 3)}</div>${Array.from({ length: n }, (_, i) => `<div class="q">${i + 1}</div>`).join('')}<div class="q">R</div><div class="q">H</div><div class="q">E</div></div>`;
+  const ranks = showsRank(g.type) ? (fin ? cache.ranksAt(g.week) : cache.ranks()) : {};
+  const inn = Math.max(g.homeLine.length, g.awayLine.length);
+  const side = (t, R, where) => {
+    const info = teamInfo(t);
+    const seed = seedOf(g, t), rk = ranks[t];
+    const rec = recs[t] && !fin ? `${recs[t].w}-${recs[t].l}${confGame ? ` <span class="gc-conf">(${recs[t].cw}-${recs[t].cl})</span>` : ''}` : '';
+    const label = `${seed ? `<span class="gc-seed" title="Seed">(${seed})</span>` : ''}${rk ? `<span class="gc-rank" title="Poll ranking">${rk}</span>` : ''}<span class="gc-abbr">${esc(info?.abbr || t || 'TBD')}</span>`;
+    return `<div class="gc-side gc-${where} ${fin ? (w === t ? 'is-win' : 'is-loss') : ''}">
+      ${t ? `<a class="gc-logo" href="${teamHref(t)}" title="${esc(t)}">${logoImg(info, 44)}</a>` : '<span class="gc-logo"></span>'}
+      <a class="gc-name" href="${t ? teamHref(t) : '#'}" title="${esc(t || '')}">${label}</a>
+      ${rec ? `<span class="gc-rec">${rec}</span>` : ''}</div>`;
+  };
+  let center;
+  if (fin) {
+    const a = `<span class="gc-r ${w === g.away ? 'is-win' : ''}">${g.awayR}</span>`, h = `<span class="gc-r ${w === g.home ? 'is-win' : ''}">${g.homeR}</span>`;
+    center = `<div class="gc-mid"><div class="gc-score">${a}<span class="gc-dash">–</span>${h}</div><div class="gc-status">Final${inn !== 7 ? `/${inn}` : ''}</div></div>`;
+  } else {
+    let sub = '';
+    if (g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
+      const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
+      const fav = wp >= 0.5 ? g.home : g.away;
+      sub = `${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%`;
+    }
+    center = `<div class="gc-mid"><div class="gc-at">${g.neutral ? 'vs' : 'at'}</div>${sub ? `<div class="gc-status" title="Win probability">${sub}</div>` : ''}</div>`;
+  }
+  // Line score strip.
+  const cell = (arr, i) => (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '');
+  const lrow = (t, arr, R, H, E) => `<div class="gc-lrow ${w === t ? 'is-win' : ''}"><span class="gc-lt">${esc(teamInfo(t)?.abbr || t)}</span>${Array.from({ length: n }, (_, i) => `<span>${cell(arr, i)}</span>`).join('')}<b>${R}</b><span>${H}</span><span>${E}</span></div>`;
+  const lines = fin ? `<div class="gc-lines" style="--q:${n}"><div class="gc-lrow gc-lhead"><span></span>${Array.from({ length: n }, (_, i) => `<span>${i + 1}</span>`).join('')}<b>R</b><span>H</span><span>E</span></div>${lrow(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${lrow(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}</div>` : '';
+  // Top: conference logo and series standing; bottom: label, venue, sim.
+  const series = seriesStatus(g, 34);
+  const top = `<div class="gc-top">${conf ? `<a class="gc-conflogo" href="${confHref(conf)}" title="${esc(conf)}${confGame ? ' game' : ' Tournament'}">${confLogo(conf, 18)}</a>` : ''}<span class="series-tag">${series}</span></div>`;
   let meta = '';
   if (g.label) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
   const venue = g.type === 'mcws' ? mcwsVenue(s) : null;
   if (venue) meta += `<span class="venue" title="${esc(venue.city)}">${esc(venue.stadium)}</span>`;
   if (fin) {
-    const inn = Math.max(g.homeLine.length, g.awayLine.length);
-    meta += `<span class="badge final">Final${inn !== 7 ? '/' + inn : ''}</span>${g.source ? `<span class="badge ${g.source}">${g.source}</span>` : ''}`;
+    if (g.source && g.source !== 'sim') meta += `<span class="badge ${g.source}" title="Score entered by hand">${g.source === 'manual' ? 'Entered' : g.source}</span>`;
   } else if (g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
-    const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
-    const fav = wp >= 0.5 ? g.home : g.away;
-    meta += `<span>${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%</span>`;
     if (g.site && g.site !== g.home) meta += `<span>at ${esc(teamInfo(g.site)?.abbr || g.site)}</span>`;
     else if (g.type === 'conf' && g.event) {
       const host = Object.values(s.post?.confT || {}).find(e => e.id === g.event)?.host;
       if (host && g.neutral) meta += `<span>at ${esc(teamInfo(host)?.abbr || host)}</span>`;
-      else if (g.neutral) meta += '<span>Neutral</span>';
-    } else if (g.neutral && !venue) meta += '<span>Neutral</span>';
+      else if (g.neutral) meta += '<span>Neutral site</span>';
+    } else if (g.neutral && !venue) meta += '<span>Neutral site</span>';
     meta += `<button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>`;
   }
-  const confAttrs = conf ? ` conf-game" style="--cc:${esc(confColor(conf))}` : '';
-  const corner = conf ? `<a class="corner-logo" href="${confHref(conf)}" title="${esc(conf)}${confGame ? ' game' : ' Tournament'}">${confLogo(conf, 20)}</a>` : '';
-  return `<div class="game${confAttrs}" data-game="${g.id}" tabindex="0">${corner}${head}${line(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${line(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}<div class="meta">${meta}</div></div>`;
+  const wc = fin ? teamInfo(w)?.color : null;
+  const style = [conf ? `--cc:${esc(confColor(conf))}` : '', /^#[0-9a-f]{6}$/i.test(wc || '') ? `--wc:${esc(wc)}` : ''].filter(Boolean).join(';');
+  const cls = ['game', 'gc', conf ? 'conf-game' : '', fin ? `won-${w === g.home ? 'home' : 'away'}` : 'upcoming'].filter(Boolean).join(' ');
+  return `<div class="${cls}"${style ? ` style="${style}"` : ''} data-game="${g.id}" tabindex="0">${top}
+    <div class="gc-match">${side(g.away, g.awayR, 'away')}${center}${side(g.home, g.homeR, 'home')}</div>
+    ${lines}${meta ? `<div class="meta gc-meta">${meta}</div>` : ''}</div>`;
 }
 
 // ---------- series tally ----------
