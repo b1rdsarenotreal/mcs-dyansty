@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261012185705';
-import { logoFor } from './logos.js?v=20261012185705';
-import { LOGO_ALIASES } from './data.js?v=20261012185705';
-import { ovr, winProbability } from './sim.js?v=20261012185705';
-import { records, isFinal, winnerOf } from './standings.js?v=20261012185705';
-import { latestPoll, pollRankMap } from './polls.js?v=20261012185705';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261012185705';
-import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261012185705';
-import { DAY_ORDER } from './schedule.js?v=20261012185705';
-import { esc } from './util.js?v=20261012185705';
+import { saveLeague } from './store.js?v=20261012190636';
+import { logoFor } from './logos.js?v=20261012190636';
+import { LOGO_ALIASES } from './data.js?v=20261012190636';
+import { ovr, winProbability } from './sim.js?v=20261012190636';
+import { records, isFinal, winnerOf } from './standings.js?v=20261012190636';
+import { latestPoll, pollRankMap } from './polls.js?v=20261012190636';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261012190636';
+import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261012190636';
+import { DAY_ORDER } from './schedule.js?v=20261012190636';
+import { esc } from './util.js?v=20261012190636';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -207,9 +207,7 @@ export function gameCard(g) {
   if (g.label) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
   const venue = g.type === 'mcws' ? mcwsVenue(s) : null;
   if (venue) meta += `<span class="venue" title="${esc(venue.city)}">${esc(venue.stadium)}</span>`;
-  if (fin) {
-    if (g.source && g.source !== 'sim') meta += `<span class="badge ${g.source}" title="Score entered by hand">${g.source === 'manual' ? 'Entered' : g.source}</span>`;
-  } else if (g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
+  if (!fin && g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
     if (g.site && g.site !== g.home) meta += `<span>at ${esc(teamInfo(g.site)?.abbr || g.site)}</span>`;
     else if (g.type === 'conf' && g.event) {
       const host = Object.values(s.post?.confT || {}).find(e => e.id === g.event)?.host;
