@@ -1,16 +1,16 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261012190636';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261012190636';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261012190636';
-import { ovr } from './sim.js?v=20261012190636';
-import { simGames, addGame, weekName } from './league.js?v=20261012190636';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261012190636';
-import { mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261012190636';
-import { fmtPct, hashStr } from './util.js?v=20261012190636';
-import { DAY_ORDER } from './schedule.js?v=20261012190636';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261012191924';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants } from './standings.js?v=20261012191924';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261012191924';
+import { ovr } from './sim.js?v=20261012191924';
+import { simGames, addGame, weekName } from './league.js?v=20261012191924';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261012191924';
+import { mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261012191924';
+import { fmtPct, hashStr } from './util.js?v=20261012191924';
+import { DAY_ORDER } from './schedule.js?v=20261012191924';
 
-const ui = { week: null, pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
+const ui = { week: null, schedFilter: 'all', pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
 
 const PHASE_TEXT = { regular: 'Regular season', conf: 'Conference tournaments', selection: 'Selection', regionals: 'NCAA Regionals', supers: 'Super Regionals', mcws: "Men's College World Series", complete: 'Season complete' };
@@ -111,6 +111,24 @@ export function renderSchedule() {
   });
   const unplayed = games.filter(g => !isFinal(g));
   const days = [...new Set(games.map(g => g.day))];
+  // Filter (All games unless the commissioner picks another; the sim buttons
+  // still cover the whole week). A game counts as ranked if either team was
+  // ranked in the poll in effect when it was played (the latest poll if not).
+  const confs = conferences(s);
+  if (ui.schedFilter !== 'all' && !['ranked', 'top'].includes(ui.schedFilter) && !confs.includes(ui.schedFilter.replace(/^conf:/, ''))) ui.schedFilter = 'all';
+  const rankedIn = g => { const r = isFinal(g) ? cache.ranksAt(g.week) : cache.ranks(); return [g.home, g.away].filter(t => r[t]).length; };
+  const sf = ui.schedFilter, filtering = sf !== 'all';
+  const keep = sf === 'ranked' ? g => rankedIn(g) >= 1 : sf === 'top' ? g => rankedIn(g) === 2
+    : sf.startsWith('conf:') ? (c => g => s.teams[g.home]?.conference === c || s.teams[g.away]?.conference === c)(sf.slice(5)) : () => true;
+  const shown = games.filter(keep);
+  const shownDays = days.filter(d => shown.some(g => g.day === d));
+  const filterName = sf === 'ranked' ? 'ranked-team' : sf === 'top' ? 'ranked vs. ranked' : sf.startsWith('conf:') ? sf.slice(5) : '';
+  const fchip = (v, label, extra = '') => `<button type="button" class="fchip ${sf === v ? 'active' : ''}" data-sf="${esc(v)}" aria-pressed="${sf === v}"${extra}>${label}</button>`;
+  const filterBar = `<div class="sched-filter" role="group" aria-label="Filter games">
+      ${fchip('all', 'All games')}${fchip('ranked', 'Ranked teams', ' title="Games with at least one ranked team"')}${fchip('top', 'Ranked vs. ranked', ' title="Both teams ranked"')}
+      <span class="fsep" aria-hidden="true"></span>
+      ${confs.map(c => fchip(`conf:${c}`, `${confLogo(c, 16)}<span>${esc(confInfo(c).abbr || c)}</span>`, ` title="Games with a ${esc(c)} team"`)).join('')}
+    </div>`;
   const firstOpenDay = unplayed[0]?.day;
   const isDone = w => s.games.filter(g => g.week === w).every(isFinal);
   const finals = s.games.filter(isFinal).length;
@@ -125,10 +143,13 @@ export function renderSchedule() {
       ${regLeft && ui.week <= regWeeksOf(s) ? `<button class="btn" id="w-rest">Sim rest of regular season (${regLeft})</button>` : ''}
       ${ui.week <= regWeeksOf(s) ? '<button class="btn" id="w-add">+ Add game</button>' : ''}
     </div>
-    ${days.map(d => `<h3 class="day-head">${DAY_NAMES[d] || esc(d)} <span class="muted small">${(n => `${n} game${n === 1 ? '' : 's'}`)(games.filter(g => g.day === d).length)}</span></h3>
-      <div class="games">${games.filter(g => g.day === d).map(gameCard).join('')}</div>`).join('') || '<div class="empty">No games this week.</div>'}
+    ${filterBar}
+    ${shownDays.map(d => { const all = games.filter(g => g.day === d).length, n = shown.filter(g => g.day === d).length; return `<h3 class="day-head">${DAY_NAMES[d] || esc(d)} <span class="muted small">${filtering ? `${n} of ${all} games` : `${n} game${n === 1 ? '' : 's'}`}</span></h3>
+      <div class="games">${shown.filter(g => g.day === d).map(gameCard).join('')}</div>`; }).join('') || `<div class="empty">${filtering && games.length ? `No ${esc(filterName)} games in ${esc(weekName(ui.week, s))}. <button class="btn sm" id="sf-clear">Show all games</button>` : 'No games this week.'}</div>`}
     <p class="small muted" style="margin-top:16px">Click a game to enter its line score by inning or simulate it. Percentages are pre-game win chances from the teams' OFF, PIT and DEF ratings and the day's starting pitchers (Friday aces, Saturday and Sunday starters, midweek arms). Rotation order and starters can be changed in the game editor.</p>`;
   $$('[data-week]').forEach(b => (b.onclick = () => { ui.week = Number(b.dataset.week); renderSchedule(); }));
+  $$('[data-sf]').forEach(b => (b.onclick = () => { ui.schedFilter = b.dataset.sf; renderSchedule(); }));
+  if ($('#sf-clear')) $('#sf-clear').onclick = () => { ui.schedFilter = 'all'; renderSchedule(); };
   bindGameCards();
   if ($('#w-day')) $('#w-day').onclick = () => simAndReport(g => g.week === ui.week && g.day === firstOpenDay, `on ${DAY_NAMES[firstOpenDay] || firstOpenDay}`);
   if ($('#w-sim')) $('#w-sim').onclick = () => simAndReport(g => g.week === ui.week, `in ${weekName(ui.week, s)}`);

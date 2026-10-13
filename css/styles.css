@@ -674,3 +674,13 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
   :root:not([data-theme="light"]) .card { box-shadow: none; }
   :root:not([data-theme="light"]) .chip.active { box-shadow: inset 0 -3px 0 var(--optic); }
 }
+
+/* Schedule filter */
+.sched-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 6px; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 4px 11px; font: 600 12.5px/1.2 var(--body); cursor: pointer; }
+.fchip:hover { color: var(--ink); border-color: var(--muted); }
+.fchip.active { background: var(--board); border-color: var(--board); color: #fff; }
+.fchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fchip .conf-badge, .fchip .conf-logo { flex: none; }
+.fsep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fchip.active { background: var(--optic); border-color: var(--optic); color: #0f1b2d; } }
