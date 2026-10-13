@@ -569,3 +569,15 @@ th.sortable.sorted { color: var(--accent); }
 .venue-city { font-size: 13px; opacity: .8; }
 .meta .venue { font-weight: 600; }
 .venue-line { margin-top: -4px; }
+
+/* Hot seat (suggested firings) */
+.hotseat .hs-row { display: grid; grid-template-columns: minmax(200px, 1.1fr) 2fr 250px; gap: 8px 16px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); }
+.hotseat .hs-row .team { display: flex; gap: 8px; align-items: center; }
+.hotseat .hs-act { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.hotseat .hs-done { opacity: .55; }
+.hotseat details.hs-warm { margin-top: 8px; }
+.hotseat details.hs-warm summary { cursor: pointer; padding: 4px 0; }
+.badge.heat-fire { background: #b3261e; color: #fff; }
+.badge.heat-hot { background: #e87722; color: #fff; }
+.badge.heat-warm { background: #f2c94c; color: #3a2a00; }
+@media (max-width: 760px) { .hotseat .hs-row { grid-template-columns: 1fr; } .hotseat .hs-act { justify-content: flex-start; } }

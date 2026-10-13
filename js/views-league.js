@@ -1,16 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261011011351';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261011011351';
-import { ovr } from './sim.js?v=20261011011351';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261011011351';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261011011351';
-import { setRating } from './ratings.js?v=20261011011351';
-import { confFormatName, postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261011011351';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261011011351';
-import { exportLeague, clearLeague } from './store.js?v=20261011011351';
-import { clamp, fmtPct } from './util.js?v=20261011011351';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261011011351';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261012174643';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261012174643';
+import { ovr } from './sim.js?v=20261012174643';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261012174643';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261012174643';
+import { hotSeat, HEAT } from './hotseat.js?v=20261012174643';
+import { setRating } from './ratings.js?v=20261012174643';
+import { confFormatName, postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261012174643';
+import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261012174643';
+import { exportLeague, clearLeague } from './store.js?v=20261012174643';
+import { clamp, fmtPct } from './util.js?v=20261012174643';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261012174643';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -178,6 +179,16 @@ function conferenceForm(after = () => {}) {
 
 // ---------- Offseason ----------
 
+// The hot-seat list for a finished season. Past results don't change in the
+// offseason, so it's worked out once per season.
+const hotSeatCache = new WeakMap();
+function hotSeatFor(L) {
+  const se = L.seasons[L.currentYear];
+  if (!hotSeatCache.has(se)) hotSeatCache.set(se, hotSeat(L));
+  return hotSeatCache.get(se);
+}
+const ordinalWord = n => ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'][n - 1] || `${n}th`;
+
 export function renderOffseason() {
   const L = ctx.league, cur = L.seasons[L.currentYear];
   if (cur.phase !== 'complete') {
@@ -237,7 +248,25 @@ export function renderOffseason() {
     if (m.from) return `<span class="mv-tag poach">Poached</span><span>${who} leaves ${esc(m.from)} for <b>${esc(m.school)}</b></span>`;
     return `<span class="mv-tag hire">Hired</span><span>${who} takes over at <b>${esc(m.school)}</b></span>`;
   };
-  const carousel = `<div class="card carousel">
+  // ---- hot seat: suggested firings (the commissioner decides) ----
+  const T0 = d.teams;
+  d.kept ||= {};
+  const hs = hotSeatFor(L);
+  const hsRow = x => {
+    const t = T0[x.school], gone = !t ? 'Left the dynasty' : t.coachId !== x.coachId ? (t.coachId ? 'Replaced' : 'Fired') : null;
+    const kept = !gone && d.kept[x.school];
+    return `<div class="hs-row hs-${x.level}${gone || kept ? ' hs-done' : ''}">
+      <span class="team">${logoImg(t || prev[x.school], 22)}<span><b>${esc(x.school)}</b><div class="small"><a class="team-link" href="${coachHref(x.coachId)}">${esc(coachName(L, x.coachId))}</a> <span class="muted">· ${ordinalWord(x.seasons)} season · ${x.w}-${x.l} there</span></div></span></span>
+      <span class="hs-why small">${x.reasons.map(esc).join(' · ') || '<span class="muted">Below expectations</span>'}${x.cool.length ? `<div class="muted">In their favor: ${x.cool.map(esc).join(' · ')}</div>` : ''}</span>
+      <span class="hs-act"><span class="badge heat-${x.level}" title="Heat score ${x.score}">${HEAT[x.level].label}</span>
+        ${gone ? `<span class="badge">${gone}</span>` : kept ? `<span class="badge">Kept</span><button class="btn sm ghost" data-unkeep="${esc(x.school)}">Undo</button>` : `<button class="btn sm danger" data-fire="${esc(x.school)}">Fire</button><button class="btn sm" data-keep="${esc(x.school)}">Keep</button>`}</span></div>`;
+  };
+  const hsMain = hs.filter(x => x.level !== 'warm'), hsWarm = hs.filter(x => x.level === 'warm');
+  const hotSeatCard = `<div class="card hotseat"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">Hot seat</h2><span class="muted small">${hs.filter(x => x.level === 'fire').length} firing${hs.filter(x => x.level === 'fire').length === 1 ? '' : 's'} suggested · ${hs.filter(x => x.level === 'hot').length} on the hot seat · ${hsWarm.length} warm</span></div>
+    <p class="small muted" style="margin:0 0 10px">Suggestions only, based on each coach's results at the school against what the roster should have done, recent trend, losing streaks, missed NCAA tournaments and conference finish. Titles, deep runs and a new coach's first seasons count in their favor. Nothing changes unless you fire someone.</p>
+    ${hsMain.length ? hsMain.map(hsRow).join('') : '<p class="muted small">No coach is on the hot seat this offseason.</p>'}
+    ${hsWarm.length ? `<details class="hs-warm"><summary class="small">Warm seats (${hsWarm.length})</summary>${hsWarm.map(hsRow).join('')}</details>` : ''}</div>`;
+  const carousel = `${hotSeatCard}<div class="card carousel" style="margin-top:14px">
     <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Coaching carousel</h2><span class="muted small">${open.length} open job${open.length === 1 ? '' : 's'} · ${avail.length} available coach${avail.length === 1 ? '' : 'es'} · ${d.moves.length} move${d.moves.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm" id="o-newcoach">+ New coach</button></div>
     <div class="carousel-grid">
       <section><h3>Open jobs</h3>${open.length ? open.map(t => `<div class="job"><span class="team">${logoImg(t, 22)}<b>${esc(t.school)}</b></span><span class="muted small">${esc(t.conference)}${prev[t.school] ? ` · ${rec(t.school)}` : ''}</span><button class="btn sm primary" data-hire="${esc(t.school)}">Find a coach</button></div>`).join('') : '<p class="muted small">Every program has a head coach. Use ✕ next to a coach to open a job, or "Change" to hire someone away.</p>'}</section>
@@ -299,6 +328,8 @@ export function renderOffseason() {
     t.coachId = null; d.moves.push({ type: 'fire', coach: id, school: t.school });
     changed({ progress: false }); toast(`${t.school}'s head coach job is open.`);
   }));
+  $$('[data-keep]').forEach(b => (b.onclick = () => { d.kept[b.dataset.keep] = true; changed({ progress: false }); toast(`${b.dataset.keep} keeps its coach.`); }));
+  $$('[data-unkeep]').forEach(b => (b.onclick = () => { delete d.kept[b.dataset.unkeep]; changed({ progress: false }); }));
   $('#o-newcoach').onclick = async () => { const n = await askCoachName('Add a coach'); if (n) { newCoach(L, n); changed({ progress: false }); toast(`${n} added as an available coach.`); } else ctx.render(); };
   $$('[data-dconf]').forEach(sel => (sel.onchange = () => { T[sel.dataset.dconf].conference = sel.value; changed({ progress: false }); toast(`${sel.dataset.dconf} moves to the ${sel.value}.`); }));
   $$('[data-drm]').forEach(b => (b.onclick = () => { if (confirm(`Remove ${b.dataset.drm} from the dynasty starting in ${d.year}? Its history stays.`)) { draftRemoveTeam(L, b.dataset.drm); changed({ progress: false }); } }));

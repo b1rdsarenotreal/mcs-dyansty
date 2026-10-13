@@ -499,4 +499,25 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
     }
   }
 }
+// Hot seat: suggested firings after a season (suggestions only)
+{ const { hotSeat } = await import('../js/hotseat.js');
+  const Lh = newLeague();
+  simGames(Lh.seasons[Lh.currentYear], undefined, { autoLock: true });
+  const first = hotSeat(Lh);
+  assert.ok(first.every(x => x.level !== 'fire'), 'nobody is told to fire a first-year coach');
+  beginOffseason(Lh); startNextSeason(Lh);
+  simGames(Lh.seasons[Lh.currentYear], undefined, { autoLock: true });
+  beginOffseason(Lh); startNextSeason(Lh);
+  const sh = Lh.seasons[Lh.currentYear];
+  simGames(sh, undefined, { autoLock: true });
+  const before = JSON.stringify(Object.values(sh.teams).map(t => t.coachId));
+  const hs = hotSeat(Lh);
+  assert.equal(JSON.stringify(Object.values(sh.teams).map(t => t.coachId)), before, 'the list never fires anyone');
+  const n = Object.keys(sh.teams).length, fire = hs.filter(x => x.level === 'fire').length;
+  console.log('hot seat after 3 seasons:', fire, 'fire,', hs.filter(x => x.level === 'hot').length, 'hot,', hs.filter(x => x.level === 'warm').length, 'warm; top:', hs[0] && `${hs[0].school} (${hs[0].reasons.join('; ')})`);
+  assert.ok(fire <= Math.ceil(n * 0.2), 'only a handful of firings suggested');
+  assert.ok(hs.every((x, i) => i === 0 || hs[i - 1].score >= x.score), 'hottest first');
+  assert.ok(hs.every(x => x.reasons.length || x.cool.length), 'every entry says why');
+  assert.ok(!hs.some(x => x.school === sh.post.champion && x.level !== 'warm'), 'the national champion is safe');
+  for (const x of hs) assert.equal(sh.teams[x.school].coachId, x.coachId); }
 console.log(`ok in ${Date.now() - t0} ms`);

@@ -159,6 +159,8 @@ try:
         pg.click("#n-save"); pg.wait_for_timeout(300)
         # Offseason: new conference, move teams, add a team, start the season
         pg.goto(url + "#/offseason"); pg.wait_for_selector("#o-start")
+        assert pg.locator(".hotseat h2", has_text="Hot seat").count() == 1, "hot seat panel"
+        assert pg.locator(".hotseat [data-fire]").count() == pg.locator(".hotseat [data-keep]").count(), "every suggestion has Fire and Keep"
         pg.screenshot(path=f"{OUT}/15-offseason.png", full_page=True)
         pg.click("#o-conf"); pg.fill("#cf-name", "Summit"); pg.click("#cf-save"); pg.wait_for_timeout(300)
         for t in ["Saint Louis", "UMKC", "North Dakota State"]:
