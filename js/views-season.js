@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015124358';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261015124358';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261015124358';
-import { ovr } from './sim.js?v=20261015124358';
-import { simGames, addGame, weekName } from './league.js?v=20261015124358';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015124358';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015124358';
-import { fmtPct, hashStr } from './util.js?v=20261015124358';
-import { DAY_ORDER } from './schedule.js?v=20261015124358';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015132936';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261015132936';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261015132936';
+import { ovr } from './sim.js?v=20261015132936';
+import { simGames, addGame, weekName } from './league.js?v=20261015132936';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015132936';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015132936';
+import { fmtPct, hashStr } from './util.js?v=20261015132936';
+import { DAY_ORDER } from './schedule.js?v=20261015132936';
 
 const ui = { week: null, schedFilter: 'all', pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -78,6 +78,8 @@ export function renderHome() {
 function tourneyStandings(s, weekGames) {
   const ids = [...new Set(weekGames.filter(g => g.tourney).map(g => g.tourney))];
   if (!ids.length) return '';
+  // Poll ranks as they stood when the tournament was played (as on the game boxes).
+  const weekRanks = cache.ranksAt(weekGames.find(g => g.tourney).week);
   const tables = ids.map(id => {
     const gs = weekGames.filter(g => g.tourney === id);
     const host = gs.find(g => !g.neutral)?.home || gs[0].site || gs[0].home;
@@ -98,7 +100,7 @@ function tourneyStandings(s, weekGames) {
     return `<div class="tst"><div class="row tst-head"><b>${esc(gs[0].label)}</b><span class="spacer"></span><span class="muted small">${done ? `Champion: ${esc(list[0].t)}` : `${played} of ${gs.length} games played`}</span></div>
       <div class="muted small" style="margin-bottom:4px">Hosted by ${esc(host)} · round robin, Thursday–Sunday</div>
       <table class="tst-table"><thead><tr><th></th><th>Team</th><th class="num">W-L</th><th class="num">RS</th><th class="num">RA</th><th class="num">Diff</th></tr></thead>
-      <tbody>${list.map((x, i) => `<tr class="${done && i === 0 ? 'tst-champ' : ''}"><td class="num muted">${i + 1}</td><td>${team(x.t, { size: 16 })}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num">${x.rs}</td><td class="num">${x.ra}</td><td class="num ${x.rs - x.ra > 0 ? 'good' : x.rs - x.ra < 0 ? 'bad' : ''}">${x.rs - x.ra > 0 ? '+' : ''}${x.rs - x.ra}</td></tr>`).join('')}</tbody></table></div>`;
+      <tbody>${list.map((x, i) => `<tr class="${done && i === 0 ? 'tst-champ' : ''}"><td class="num muted">${i + 1}</td><td>${team(x.t, { size: 16, ranks: weekRanks })}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num">${x.rs}</td><td class="num">${x.ra}</td><td class="num ${x.rs - x.ra > 0 ? 'good' : x.rs - x.ra < 0 ? 'bad' : ''}">${x.rs - x.ra > 0 ? '+' : ''}${x.rs - x.ra}</td></tr>`).join('')}</tbody></table></div>`;
   });
   return `<details class="card tstand"${ui.tstandOpen ? ' open' : ''}><summary><b>Tournament standings</b> <span class="muted small">${ids.length} event${ids.length === 1 ? '' : 's'} this week</span></summary>
     <div class="tst-grid">${tables.join('')}</div>
