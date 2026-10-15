@@ -698,3 +698,11 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .fchip .conf-badge, .fchip .conf-logo { flex: none; }
 .fsep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fchip.active { background: var(--optic); border-color: var(--optic); color: #0f1b2d; } }
+
+/* Early-season tournament standings (Schedule page) */
+.tstand { margin: 4px 0 6px; padding: 12px 16px; }
+.tstand > summary { cursor: pointer; list-style: revert; }
+.tst-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px 22px; margin-top: 12px; }
+.tst-head { margin-bottom: 2px; }
+.tst-table td, .tst-table th { padding: 4px 6px; }
+.tst-table tr.tst-champ td { background: color-mix(in srgb, var(--optic) 22%, transparent); }

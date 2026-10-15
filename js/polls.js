@@ -8,11 +8,13 @@
 // leans a little according to a built-in personality: some trust talent,
 // some trust numbers, some punish bad losses, some watch one conference
 // closely. The leans are small, so the poll stays close to a consensus.
-// Personalities live here in the code and aren't editable in the app.
-// The commissioner can still edit any published poll.
+// The 23 built-in personalities live here in the code. The commissioner can
+// add more voters, each with a random personality (stored in the season's
+// settings, so they carry into later seasons), remove added voters, and
+// edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261015122354';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261015122354';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261015124358';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261015124358';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];
@@ -53,6 +55,57 @@ export const VOTER_PANEL = [
   { id: 'v23', name: 'Frank Lacey', outlet: 'Coastal Chronicle', style: 'Regional voter. Keeps a close eye on the {conf}.', ...P({ region: 4, regionBoost: 0.08 }) },
 ];
 export const VOTERS = VOTER_PANEL.length;
+
+// The whole panel for a season: the built-in voters plus any added ones.
+export function votersOf(season) {
+  return [...VOTER_PANEL, ...(season?.settings?.extraVoters || [])];
+}
+
+// ---------- added voters with a random personality ----------
+const FIRST = ['Avery', 'Bo', 'Cal', 'Dee', 'Eli', 'Fran', 'Gus', 'Hollis', 'Ines', 'Jo', 'Kip', 'Lou', 'Mack', 'Nell', 'Otis', 'Pia', 'Quinn', 'Rory', 'Sal', 'Tess', 'Uma', 'Vic', 'Wade', 'Xavi', 'Yara', 'Zeke', 'Bianca', 'Cody', 'Darnell', 'Elena', 'Felix', 'Greta', 'Hector', 'Isla', 'Jonah', 'Keiko', 'Luis', 'Maeve', 'Nico', 'Odette', 'Pedro', 'Rosa', 'Silas', 'Tamsin', 'Vera', 'Wes'];
+const LAST = ['Abbott', 'Barrera', 'Castillo', 'Delaney', 'Ellison', 'Fontaine', 'Gallagher', 'Holloway', 'Ibarra', 'Jansen', 'Kaplan', 'Lockhart', 'Maddox', 'Nakamura', 'Okafor', 'Pruett', 'Quintero', 'Ramsey', 'Sandoval', 'Tolliver', 'Underwood', 'Valdez', 'Whitaker', 'Yates', 'Zamora', 'Brennan', 'Cardenas', 'Dorsey', 'Escobar', 'Farrow', 'Greer', 'Hartley', 'Iverson', 'Keane', 'Lindgren', 'Marsh', 'Novak', 'Ortega', 'Pierce', 'Rhodes', 'Stroud', 'Thorne', 'Voss', 'Wilder'];
+const OUTLETS = ['Bleacher Bulletin', 'Infield Fly Media', 'Box Seat Digest', 'Rally Cap Radio', 'Line Drive Daily', 'Backstop Blog', 'Ninth Inning News', 'Bullpen Report', 'County Courier', 'Metro Sports Desk', 'Sunday Sports Page', 'Prairie Press', 'Harbor Herald', 'Capital Sports Wire', 'Upper Deck Journal', 'The Scorecard', 'Basepath Network', 'Pitch Count Podcast', 'Ridgeline Register', 'Tri-County Times'];
+// Personality types; each new voter gets one, with its numbers nudged a little.
+const ARCHETYPES = [
+  { style: 'Old school. Trusts proven programs and is slow to move teams.', p: { talent: 0.25, loyalty: 1.3, noise: 0.08 } },
+  { style: 'Numbers first. Leans on the RPI and strength of schedule.', p: { talent: -0.2, rpi: 0.72, sos: 0.13, loyalty: 0.85 } },
+  { style: 'Regional voter. Gives the {conf} a little extra credit.', p: { regionBoost: 0.08 }, region: true },
+  { style: 'Consensus voter. Rarely far from the field.', p: { noise: 0.05 } },
+  { style: 'Reacts to last week. Big weeks move teams up fast.', p: { recency: 0.18, loyalty: 0.75, noise: 0.12 } },
+  { style: 'Punishes bad losses.', p: { losses: 0.12 } },
+  { style: 'Win-loss record above all.', p: { talent: -0.15, rpi: 0.25 } },
+  { style: 'Rewards teams that play tough schedules.', p: { sos: 0.15, rpi: 0.6 } },
+  { style: 'Talent evaluator. Ranks the best rosters, records aside.', p: { talent: 0.3, loyalty: 1.1 } },
+  { style: 'Steady. Rarely moves a team more than a spot or two.', p: { loyalty: 1.4, noise: 0.06 } },
+  { style: 'Wildcard. Their ballot is the hardest to predict.', p: { noise: 0.2 } },
+  { style: 'Likes hot teams. Streaks and big weeks count.', p: { recency: 0.14, loyalty: 0.85 } },
+  { style: 'Résumé voter. Moves to results early in the season.', p: { talent: -0.25, rpi: 0.45 } },
+];
+// A new voter with a random name, outlet and personality, added to the
+// season's panel. Returns the voter.
+export function addRandomVoter(season, random = Math.random) {
+  season.settings.extraVoters ||= [];
+  const panel = votersOf(season);
+  const pick = a => a[Math.floor(random() * a.length)];
+  let name = '';
+  for (let i = 0; i < 50 && (!name || panel.some(v => v.name === name)); i++) name = `${pick(FIRST)} ${pick(LAST)}`;
+  const a = pick(ARCHETYPES);
+  const jig = (x, d) => Math.round((x + (random() - 0.5) * d) * 1000) / 1000;
+  const base = P(a.p);
+  const p = { talent: jig(base.talent, 0.1), rpi: clamp(jig(base.rpi, 0.1), 0.2, 0.8), sos: Math.max(0, jig(base.sos, 0.04)), loyalty: clamp(jig(base.loyalty, 0.15), 0.6, 1.5),
+    recency: Math.max(0, jig(base.recency, 0.05)), losses: Math.max(0, jig(base.losses, 0.04)), regionBoost: a.region ? clamp(jig(base.regionBoost, 0.03), 0.05, 0.11) : 0,
+    region: a.region ? Math.floor(random() * 12) : null, noise: clamp(jig(base.noise, 0.04), 0.04, 0.22) };
+  const used = new Set(panel.map(v => v.id));
+  let n = season.settings.extraVoters.length + 1;
+  while (used.has(`x${n}`)) n++;
+  const outlets = OUTLETS.filter(o => !panel.some(v => v.outlet === o));
+  const v = { id: `x${n}`, name, outlet: pick(outlets.length ? outlets : OUTLETS), style: a.style, added: true, ...p };
+  season.settings.extraVoters.push(v);
+  return v;
+}
+export function removeVoter(season, id) {
+  season.settings.extraVoters = (season.settings.extraVoters || []).filter(v => v.id !== id);
+}
 
 // The conference a regional voter covers this season (by position, so it
 // still works after conferences are renamed or added).
@@ -183,7 +236,8 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
   }
 
   const pts = {}, fp = {}, ballots = {};
-  for (const v of VOTER_PANEL) {
+  const panel = votersOf(season);
+  for (const v of panel) {
     const vconf = voterConference(season, v);
     const noise = rng(hashStr(`${v.id}|${season.year}|${final ? 'final' : week}`));
     // Personality: how much strength vs résumé, and how much of the résumé is RPI.
@@ -215,13 +269,13 @@ export function generatePoll(season, week, { final = false, postBonus = null } =
   if (final && season.post?.champion) {
     const c = season.post.champion;
     order = [c, ...order.filter(t => t !== c)];
-    pts[c] = VOTERS * size; fp[c] = VOTERS;
+    pts[c] = panel.length * size; fp[c] = panel.length;
     for (const t of Object.keys(fp)) if (t !== c) fp[t] = 0;
     for (const id of Object.keys(ballots)) ballots[id] = [c, ...ballots[id].filter(t => t !== c)].slice(0, size);
   }
   const rec = t => `${recs[t].w}-${recs[t].l}`;
   return {
-    week: final ? 'final' : week, voters: VOTERS, size, edited: false, ballots,
+    week: final ? 'final' : week, voters: panel.length, size, edited: false, ballots,
     ranks: order.slice(0, size).map(t => ({ team: t, pts: pts[t], fp: fp[t] || 0, record: rec(t) })),
     others: order.slice(size).filter(t => pts[t] > 0).map(t => ({ team: t, pts: pts[t], record: rec(t) })),
   };

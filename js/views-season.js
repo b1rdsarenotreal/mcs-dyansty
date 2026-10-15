@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015122354';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261015122354';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261015122354';
-import { ovr } from './sim.js?v=20261015122354';
-import { simGames, addGame, weekName } from './league.js?v=20261015122354';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015122354';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015122354';
-import { fmtPct, hashStr } from './util.js?v=20261015122354';
-import { DAY_ORDER } from './schedule.js?v=20261015122354';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015124358';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261015124358';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261015124358';
+import { ovr } from './sim.js?v=20261015124358';
+import { simGames, addGame, weekName } from './league.js?v=20261015124358';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015124358';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015124358';
+import { fmtPct, hashStr } from './util.js?v=20261015124358';
+import { DAY_ORDER } from './schedule.js?v=20261015124358';
 
 const ui = { week: null, schedFilter: 'all', pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -69,6 +69,40 @@ export function renderHome() {
   $$('[data-open]').forEach(r => (r.onclick = () => openGame(Number(r.dataset.open))));
   if ($('#h-day')) $('#h-day').onclick = () => simAndReport(g => g.week === nx.week && g.day === nx.day, `on ${DAY_NAMES[nx.day] || nx.day}`);
   if ($('#h-week')) $('#h-week').onclick = () => simAndReport(g => g.week === nx.week, `in ${weekName(nx.week, s)}`);
+}
+
+// Standings for the week's early-season tournaments, in a panel that starts
+// closed. Order: wins, then fewest losses, head-to-head between two tied
+// teams, run differential, runs allowed. The leader is marked as champion once
+// every game of the event is final.
+function tourneyStandings(s, weekGames) {
+  const ids = [...new Set(weekGames.filter(g => g.tourney).map(g => g.tourney))];
+  if (!ids.length) return '';
+  const tables = ids.map(id => {
+    const gs = weekGames.filter(g => g.tourney === id);
+    const host = gs.find(g => !g.neutral)?.home || gs[0].site || gs[0].home;
+    const rows = {};
+    for (const t of new Set(gs.flatMap(g => [g.home, g.away]))) rows[t] = { t, w: 0, l: 0, rs: 0, ra: 0 };
+    for (const g of gs.filter(isFinal)) {
+      const w = winnerOf(g), l = w === g.home ? g.away : g.home;
+      rows[w].w++; rows[l].l++;
+      rows[g.home].rs += g.homeR; rows[g.home].ra += g.awayR; rows[g.away].rs += g.awayR; rows[g.away].ra += g.homeR;
+    }
+    const h2h = (a, b) => { const g = gs.find(x => isFinal(x) && [x.home, x.away].includes(a) && [x.home, x.away].includes(b)); return g ? (winnerOf(g) === a ? -1 : 1) : 0; };
+    const list = Object.values(rows).sort((a, b) => b.w - a.w || a.l - b.l).sort((a, b) => {
+      if (a.w !== b.w || a.l !== b.l) return 0;
+      const tied = Object.values(rows).filter(x => x.w === a.w && x.l === a.l).length;
+      return (tied === 2 ? h2h(a.t, b.t) : 0) || (b.rs - b.ra) - (a.rs - a.ra) || a.ra - b.ra || a.t.localeCompare(b.t);
+    });
+    const done = gs.every(isFinal), played = gs.filter(isFinal).length;
+    return `<div class="tst"><div class="row tst-head"><b>${esc(gs[0].label)}</b><span class="spacer"></span><span class="muted small">${done ? `Champion: ${esc(list[0].t)}` : `${played} of ${gs.length} games played`}</span></div>
+      <div class="muted small" style="margin-bottom:4px">Hosted by ${esc(host)} · round robin, Thursday–Sunday</div>
+      <table class="tst-table"><thead><tr><th></th><th>Team</th><th class="num">W-L</th><th class="num">RS</th><th class="num">RA</th><th class="num">Diff</th></tr></thead>
+      <tbody>${list.map((x, i) => `<tr class="${done && i === 0 ? 'tst-champ' : ''}"><td class="num muted">${i + 1}</td><td>${team(x.t, { size: 16 })}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num">${x.rs}</td><td class="num">${x.ra}</td><td class="num ${x.rs - x.ra > 0 ? 'good' : x.rs - x.ra < 0 ? 'bad' : ''}">${x.rs - x.ra > 0 ? '+' : ''}${x.rs - x.ra}</td></tr>`).join('')}</tbody></table></div>`;
+  });
+  return `<details class="card tstand"${ui.tstandOpen ? ' open' : ''}><summary><b>Tournament standings</b> <span class="muted small">${ids.length} event${ids.length === 1 ? '' : 's'} this week</span></summary>
+    <div class="tst-grid">${tables.join('')}</div>
+    <p class="small muted" style="margin:10px 0 0">Ordered by record. Ties: head-to-head when two teams are tied, then run differential, then fewest runs allowed. Tournament games count in the standings, RPI and polls like any non-conference game.</p></details>`;
 }
 
 // One finished game as a compact scoreboard row: logos, abbreviations,
@@ -145,11 +179,13 @@ export function renderSchedule() {
       ${ui.week <= regWeeksOf(s) ? '<button class="btn" id="w-add">+ Add game</button>' : ''}
     </div>
     ${filterBar}
+    ${tourneyStandings(s, games)}
     ${shownDays.map(d => { const all = games.filter(g => g.day === d).length, n = shown.filter(g => g.day === d).length; return `<h3 class="day-head">${DAY_NAMES[d] || esc(d)} <span class="muted small">${filtering ? `${n} of ${all} games` : `${n} game${n === 1 ? '' : 's'}`}</span></h3>
       <div class="games">${shown.filter(g => g.day === d).map(gameCard).join('')}</div>`; }).join('') || `<div class="empty">${filtering && games.length ? `No ${esc(filterName)} games in ${esc(weekName(ui.week, s))}. <button class="btn sm" id="sf-clear">Show all games</button>` : 'No games this week.'}</div>`}
     <p class="small muted" style="margin-top:16px">Click a game to enter its line score by inning or simulate it. Percentages are pre-game win chances from the teams' OFF, PIT and DEF ratings and the day's starting pitchers (Friday aces, Saturday and Sunday starters, midweek arms). Rotation order and starters can be changed in the game editor.</p>`;
   $$('[data-week]').forEach(b => (b.onclick = () => { ui.week = Number(b.dataset.week); renderSchedule(); }));
   $$('[data-sf]').forEach(b => (b.onclick = () => { ui.schedFilter = b.dataset.sf; renderSchedule(); }));
+  const tsd = $('details.tstand'); if (tsd) tsd.ontoggle = () => { ui.tstandOpen = tsd.open; };
   if ($('#sf-clear')) $('#sf-clear').onclick = () => { ui.schedFilter = 'all'; renderSchedule(); };
   bindGameCards();
   if ($('#w-day')) $('#w-day').onclick = () => simAndReport(g => g.week === ui.week && g.day === firstOpenDay, `on ${DAY_NAMES[firstOpenDay] || firstOpenDay}`);
@@ -280,7 +316,18 @@ function renderPollTab(root) {
       <p class="small muted">${poll.ballots ? `${poll.voters} voters` : `${poll.voters || 40} simulated voters`}. First-place votes in parentheses. ${poll.ranks.length !== pollSizeOf(s) ? `This poll ranks ${poll.ranks.length} teams; polls released from now on rank ${pollSizeOf(s)}. ` : ''}Polls come out when a week's games are all final.</p>
     </div>
     ${voterPanel(s, poll)}`;
-  $$('[data-voter]', root).forEach(b => (b.onclick = () => { ui.voter = ui.voter === b.dataset.voter ? null : b.dataset.voter; renderRankings(); }));
+  $$('[data-voter]', root).forEach(b => (b.onclick = e => { if (e.target.closest('[data-unvoter]')) return; ui.voter = ui.voter === b.dataset.voter ? null : b.dataset.voter; renderRankings(); }));
+  if ($('#v-add', root)) $('#v-add', root).onclick = () => {
+    const cur = ctx.league.seasons[ctx.league.currentYear];
+    const v = addRandomVoter(cur);
+    changed({ progress: false });
+    toast(`${v.name} (${v.outlet}) joins the panel and votes from the next poll. ${voterStyle(cur, v)}`);
+  };
+  $$('[data-unvoter]', root).forEach(b => (b.onclick = () => {
+    const cur = ctx.league.seasons[ctx.league.currentYear], v = votersOf(cur).find(x => x.id === b.dataset.unvoter);
+    if (!v || !confirm(`Remove ${v.name} from the voter panel? Polls already out keep their ballot.`)) return;
+    removeVoter(cur, v.id); if (ui.voter === v.id) ui.voter = null; changed({ progress: false });
+  }));
   $$('[data-pw]', root).forEach(b => (b.onclick = () => { ui.pollWeek = b.dataset.pw === 'final' ? 'final' : Number(b.dataset.pw); ui.editPoll = null; renderRankings(); }));
   const recs = cache.recs();
   if ($('#p-edit', root)) $('#p-edit', root).onclick = () => { ui.editPoll = { key, ranks: poll.ranks.map(x => ({ ...x })) }; renderRankings(); };
@@ -315,7 +362,9 @@ function renderPollTab(root) {
 function voterPanel(s, poll) {
   if (!poll.ballots) return `<div class="card" style="margin-top:16px"><h2>The voters</h2><p class="muted">Individual ballots weren't saved for this poll. Regenerate it to see them.</p></div>`;
   const rank = pollRankMap(poll);
-  const pick = ui.voter && poll.ballots[ui.voter] ? VOTER_PANEL.find(v => v.id === ui.voter) : null;
+  const panel = votersOf(s);
+  const canEdit = s.year === ctx.league.currentYear;
+  const pick = ui.voter && poll.ballots[ui.voter] ? panel.find(v => v.id === ui.voter) : null;
   const ballot = pick ? poll.ballots[pick.id] : null;
   const diff = (t, i) => {
     const r = rank[t];
@@ -324,11 +373,11 @@ function voterPanel(s, poll) {
     return d === 0 ? '<span class="muted">same</span>' : d > 0 ? `<span class="move up">poll #${r}</span>` : `<span class="move down">poll #${r}</span>`;
   };
   return `<div class="card" style="margin-top:16px">
-    <div class="row" style="margin-bottom:6px"><h2 style="margin:0">The voters</h2><span class="muted small">${VOTER_PANEL.length} voters, each with their own way of ranking. Click a voter to see their ballot.</span></div>
+    <div class="row" style="margin-bottom:6px"><h2 style="margin:0">The voters</h2><span class="muted small">${panel.length} voters, each with their own way of ranking. Click a voter to see their ballot.</span><span class="spacer"></span>${canEdit ? '<button class="btn sm" id="v-add" title="Add a voter with a random name, outlet and personality">+ Add voter</button>' : ''}</div>
     <div class="voter-layout">
       <div class="table-wrap"><table class="voters">
         <thead><tr><th>Voter</th><th>Tendency</th><th>#1 vote</th></tr></thead>
-        <tbody>${VOTER_PANEL.map(v => `<tr class="clickable ${pick?.id === v.id ? 'sel' : ''}" data-voter="${v.id}"><td><b>${esc(v.name)}</b><div class="small muted">${esc(v.outlet)}</div></td><td class="small">${esc(voterStyle(s, v))}</td><td>${poll.ballots[v.id]?.[0] ? team(poll.ballots[v.id][0], { rank: false, size: 16, link: false }) : ''}</td></tr>`).join('')}</tbody></table></div>
+        <tbody>${panel.map(v => `<tr class="clickable ${pick?.id === v.id ? 'sel' : ''}" data-voter="${v.id}"><td><b>${esc(v.name)}</b>${v.added ? ' <span class="badge">Added</span>' : ''}<div class="small muted">${esc(v.outlet)}</div></td><td class="small">${esc(voterStyle(s, v))}</td><td>${poll.ballots[v.id]?.[0] ? team(poll.ballots[v.id][0], { rank: false, size: 16, link: false }) : v.added ? '<span class="small muted">Joined after this poll</span>' : ''}${v.added && canEdit ? ` <button class="btn sm ghost" data-unvoter="${v.id}" title="Remove ${esc(v.name)} from the panel" aria-label="Remove voter">✕</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
       ${pick ? `<div class="ballot"><h3>${esc(pick.name)}'s ballot</h3><div class="small muted" style="margin-bottom:6px">${esc(pick.outlet)} · ${esc(voterStyle(s, pick))}</div>
         <table><tbody>${ballot.map((t, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(t, { rank: false, size: 16 })}</td><td class="num small">${diff(t, i)}</td></tr>`).join('')}</tbody></table>
         <p class="small muted">${poll.edited ? 'The published poll was edited by the commissioner after the votes came in.' : 'Green: this voter ranks the team higher than the poll. Red: lower.'}</p></div>` : ''}
