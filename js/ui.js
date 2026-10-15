@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261015121530';
-import { logoFor } from './logos.js?v=20261015121530';
-import { LOGO_ALIASES } from './data.js?v=20261015121530';
-import { ovr, winProbability } from './sim.js?v=20261015121530';
-import { records, isFinal, winnerOf } from './standings.js?v=20261015121530';
-import { latestPoll, pollRankMap } from './polls.js?v=20261015121530';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261015121530';
-import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261015121530';
-import { DAY_ORDER } from './schedule.js?v=20261015121530';
-import { esc } from './util.js?v=20261015121530';
+import { saveLeague } from './store.js?v=20261015122354';
+import { logoFor } from './logos.js?v=20261015122354';
+import { LOGO_ALIASES } from './data.js?v=20261015122354';
+import { ovr, winProbability } from './sim.js?v=20261015122354';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261015122354';
+import { latestPoll, pollRankMap } from './polls.js?v=20261015122354';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261015122354';
+import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261015122354';
+import { DAY_ORDER } from './schedule.js?v=20261015122354';
+import { esc } from './util.js?v=20261015122354';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -384,7 +384,7 @@ export function openGame(id, { isNew = false } = {}) {
   if (regular) {
     const onTeams = () => {
       const t = cur();
-      if (t.home && t.away && s.teams[t.home] && s.teams[t.away]) $('#m-conf', modal).checked = s.teams[t.home].conference === s.teams[t.away].conference;
+      if (t.home && t.away && s.teams[t.home] && s.teams[t.away]) $('#m-conf', modal).checked = sameConf(s.teams, t.home, t.away);
       drawGrid(); refresh();
     };
     $('#m-home', modal).onchange = onTeams; $('#m-away', modal).onchange = onTeams;

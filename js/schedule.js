@@ -19,7 +19,8 @@
 // teams that played fewer weekend games getting a few more so season totals
 // stay close together.
 
-import { rng, shuffle, hashStr } from './util.js?v=20261015121530';
+import { isIndependent } from './standings.js?v=20261015122354';
+import { rng, shuffle, hashStr } from './util.js?v=20261015122354';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -83,8 +84,8 @@ function crossPairs(pool, teams, met, r, played = null, sat = null) {
     let ok = true;
     while (left.length > 1) {
       const a = left.shift();
-      let j = left.findIndex(b => teams[b].conference !== teams[a].conference && !met.has(key(a, b)));
-      if (j < 0 && attempt > 120) j = left.findIndex(b => teams[b].conference !== teams[a].conference);
+      let j = left.findIndex(b => !rival(teams, a, b) && !met.has(key(a, b)));
+      if (j < 0 && attempt > 120) j = left.findIndex(b => !rival(teams, a, b));
       if (j < 0) { ok = false; break; }
       pairs.push([a, left.splice(j, 1)[0]]);
     }
@@ -93,6 +94,8 @@ function crossPairs(pool, teams, met, r, played = null, sat = null) {
   return { pairs: [], idle: [...idle, ...pool] };
 }
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+// Conference rivals; independents are nobody's rivals.
+const rival = (teams, a, b) => teams[a].conference === teams[b].conference && !isIndependent(teams[a].conference);
 
 export function generateSchedule(season, seed = hashStr(String(season.year)), prev = null) {
   const r = rng(seed);
@@ -133,7 +136,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   const midSkipLast = season.settings?.midweekSkipLast ?? true;
   season.regWeeks = REG;
   const byConf = {};
-  for (const n of names) (byConf[teams[n].conference] ||= []).push(n);
+  for (const n of names) if (!isIndependent(teams[n].conference)) (byConf[teams[n].conference] ||= []).push(n);
   // Conference rounds go in the last weeks of the season.
   const confWeeks = confWeeksFor(REG, Math.max(0, ...Object.values(byConf).map(l => rrRounds(l.length))));
   const weekPairs = {}; // week -> conference pairs
@@ -180,7 +183,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     const used = new Set();
     const pickFrom = (ev, size) => {
       while (ev.length < size) {
-        const open = cands.filter(n => !used.has(n) && !ev.some(x => teams[x].conference === teams[n].conference));
+        const open = cands.filter(n => !used.has(n) && !ev.some(x => rival(teams, x, n)));
         if (!open.length) return;
         const demand = {};
         for (const n of names) if (want(n)) demand[teams[n].conference] = (demand[teams[n].conference] || 0) + (tCount[n] === 0 ? 3 : 1);
@@ -191,7 +194,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     };
     for (let e = 0; e < E; e++) { const ev = []; pickFrom(ev, 5); if (ev.length < 5) { ev.forEach(n => used.delete(n)); break; } events.push(ev); }
     // Sixth teams where there's room, starting with teams that haven't played one.
-    for (const ev of events) if (wanting.some(n => !used.has(n) && tCount[n] === 0 && !ev.some(x => teams[x].conference === teams[n].conference)) || r() < 0.6) pickFrom(ev, 6);
+    for (const ev of events) if (wanting.some(n => !used.has(n) && tCount[n] === 0 && !ev.some(x => rival(teams, x, n))) || r() < 0.6) pickFrom(ev, 6);
     const out = [];
     for (const ev of events) out.push(ev);
     for (const ev of out) {
@@ -236,7 +239,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     // fewer games so far. Teams in a tournament that week are busy Thursday.
     const thu = new Set();
     for (const a of shuffle(idle, r)) {
-      const opts = names.filter(b => b !== a && !thu.has(b) && !idle.includes(b) && !inTourney.has(b) && teams[b].conference !== teams[a].conference);
+      const opts = names.filter(b => b !== a && !thu.has(b) && !idle.includes(b) && !inTourney.has(b) && !rival(teams, a, b));
       if (!opts.length) continue;
       const score = b => (metThu.has(key(a, b)) ? 100 : 0) + (metSeries.has(key(a, b)) ? 10 : 0) + played[b] + r();
       const b = opts.reduce((x, y) => (score(y) < score(x) ? y : x));

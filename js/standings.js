@@ -1,6 +1,6 @@
 // Records, conference standings with tiebreakers, and the RPI.
 
-import { pct, hashStr } from './util.js?v=20261015121530';
+import { pct, hashStr } from './util.js?v=20261015122354';
 
 export const isFinal = g => g.final && g.homeR != null && g.awayR != null;
 export const winnerOf = g => (g.homeR > g.awayR ? g.home : g.away);
@@ -220,8 +220,15 @@ export function confStandings(season, conf, recs = records(season), r = rpi(seas
   }));
 }
 
+// Independent teams belong to no conference: no conference games, title,
+// tournament or automatic bid.
+export const INDEPENDENT = 'Independent';
+export const isIndependent = c => c === INDEPENDENT;
+// Conference rivals (independents are never rivals of each other).
+export const sameConf = (teams, a, b) => teams[a]?.conference === teams[b]?.conference && !isIndependent(teams[a]?.conference);
+
 export function conferences(season) {
-  return [...new Set(Object.values(season.teams).map(t => t.conference))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return [...new Set(Object.values(season.teams).map(t => t.conference))].filter(c => !isIndependent(c)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export function regularSeasonDone(season) {
@@ -231,6 +238,7 @@ export function regularSeasonDone(season) {
 // Regular-season champions: every team tied for the best conference winning
 // percentage shares the title (a commissioner override names one champion).
 export function regSeasonChamps(season, conf, recs = records(season, g => g.type === 'regular'), r = rpi(season, g => g.type === 'regular')) {
+  if (isIndependent(conf)) return [];
   if (season.overrides?.regChamps?.[conf]) return [season.overrides.regChamps[conf]];
   const st = confStandings(season, conf, recs, r);
   if (!st.length || st[0].cw + st[0].cl === 0) return [];

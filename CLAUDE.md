@@ -12,6 +12,8 @@ This app has a twin: **SACAA Dynasty** ([b1rdsarenotreal/sacaa-dynasty](https://
 
 These stay different on purpose. Never copy them across:
 
+(Shared code that is written to handle independents, such as the `rival()` check in `js/schedule.js`, is MCS-only too; when porting schedule changes to SACAA, port them without the independent handling.)
+
 | | MCS Dynasty | SACAA Dynasty |
 |---|---|---|
 | Teams, conferences, coaches, colors, ratings, start year (`js/data.js`) | 45 teams, 6 conferences, 2016 | 56 teams, 7 conferences, 2030 |
@@ -22,6 +24,7 @@ These stay different on purpose. Never copy them across:
 | README sections "The league" and "Ratings" (how starting ratings were made) | | |
 | Postseason column in team and coach histories | Finish only ("NCAA Regional") | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route). The owner asked for this in SACAA only. |
 | Color palette (the `:root` tokens at the top of `css/styles.css`, stat-band label colors, active tabs) | Night-game navy top bar | Lighter sky blue top bar (`--board: #2c71c7`), sky-tinted background. The owner asked for this in SACAA only. |
+| Independent teams (`INDEPENDENT` in `js/standings.js`, the Independents standings card, offseason/conference-page guards) | Supported: teams can be Independent (no conference games, title, tournament or automatic bid) | Not added. The owner asked for independents in MCS only. |
 
 Internal identifiers such as `mcws`, `mcwsVenue` and `mcwsName` are shared by both apps. Keep them the same so code ports cleanly. Only text the user sees differs.
 

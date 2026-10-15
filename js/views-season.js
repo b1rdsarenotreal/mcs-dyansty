@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015121530';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts } from './standings.js?v=20261015121530';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261015121530';
-import { ovr } from './sim.js?v=20261015121530';
-import { simGames, addGame, weekName } from './league.js?v=20261015121530';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015121530';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015121530';
-import { fmtPct, hashStr } from './util.js?v=20261015121530';
-import { DAY_ORDER } from './schedule.js?v=20261015121530';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261015122354';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261015122354';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle } from './polls.js?v=20261015122354';
+import { ovr } from './sim.js?v=20261015122354';
+import { simGames, addGame, weekName } from './league.js?v=20261015122354';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261015122354';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261015122354';
+import { fmtPct, hashStr } from './util.js?v=20261015122354';
+import { DAY_ORDER } from './schedule.js?v=20261015122354';
 
 const ui = { week: null, schedFilter: 'all', pollWeek: null, rankTab: 'poll', postTab: null, editPoll: null, voter: null };
 export function resetSeasonUi() { ui.week = null; ui.pollWeek = null; ui.postTab = null; ui.editPoll = null; }
@@ -36,7 +36,7 @@ export function renderHome() {
   const champ = s.post?.champion;
   const ct = champ ? teamInfo(champ) : null;
   const recent = s.games.filter(isFinal).sort((a, b) => b.week - a.week || b.order - a.order || b.id - a.id).slice(0, 8);
-  const leaders = Object.keys(ctx.league.conferences).filter(c => Object.values(s.teams).some(t => t.conference === c)).map(c => {
+  const leaders = Object.keys(ctx.league.conferences).filter(c => !isIndependent(c) && Object.values(s.teams).some(t => t.conference === c)).map(c => {
     const st = confStandings(s, c, recs);
     return { c, top: st[0] };
   });
@@ -115,6 +115,7 @@ export function renderSchedule() {
   // still cover the whole week). A game counts as ranked if either team was
   // ranked in the poll in effect when it was played (the latest poll if not).
   const confs = conferences(s);
+  if (Object.values(s.teams).some(t => isIndependent(t.conference))) confs.push(INDEPENDENT);
   if (ui.schedFilter !== 'all' && !['ranked', 'top'].includes(ui.schedFilter) && !confs.includes(ui.schedFilter.replace(/^conf:/, ''))) ui.schedFilter = 'all';
   const rankedIn = g => { const r = isFinal(g) ? cache.ranksAt(g.week) : cache.ranks(); return [g.home, g.away].filter(t => r[t]).length; };
   const sf = ui.schedFilter, filtering = sf !== 'all';
@@ -168,7 +169,13 @@ export function renderSchedule() {
 export function renderStandings() {
   const s = S(), recs = cache.recs(), r = rpi(s);
   const regRecs = records(s, g => g.type === 'regular');
-  const confs = Object.keys(ctx.league.conferences).filter(c => Object.values(s.teams).some(t => t.conference === c));
+  const confs = Object.keys(ctx.league.conferences).filter(c => !isIndependent(c) && Object.values(s.teams).some(t => t.conference === c));
+  // Independents: no conference record, so they're listed by overall record.
+  const indep = Object.values(s.teams).filter(t => isIndependent(t.conference)).map(t => t.school)
+    .sort((a, b) => (recs[b].w / Math.max(1, recs[b].w + recs[b].l)) - (recs[a].w / Math.max(1, recs[a].w + recs[a].l)) || (r[a]?.rank ?? 999) - (r[b]?.rank ?? 999));
+  const indepCard = indep.length ? `<div class="card"><div class="row" style="margin-bottom:8px"><a href="${confHref(INDEPENDENT)}">${confLogo(INDEPENDENT, 30)}</a><h2 style="margin:0"><a class="team-link" href="${confHref(INDEPENDENT)}">Independents</a></h2><span class="spacer"></span><span class="muted small">No conference: at-large bids only</span></div>
+      <div class="table-wrap"><table><thead><tr><th></th><th>Team</th><th class="num">Overall</th><th class="num">RPI</th><th class="num">Home</th><th class="num">Away</th><th class="num">Strk</th></tr></thead>
+        <tbody>${indep.map((t, i) => `<tr><td class="num muted">${i + 1}</td><td>${team(t)}</td><td class="num"><b>${recs[t].w}-${recs[t].l}</b></td><td class="num">${r[t]?.rank ?? '—'}</td><td class="num">${recs[t].hw}-${recs[t].hl}</td><td class="num">${recs[t].aw}-${recs[t].al}</td><td class="num">${recs[t].streak || ''}</td></tr>`).join('')}</tbody></table></div></div>` : '';
   const card = c => {
     const st = confStandings(s, c, regRecs, r);
     const n = st.length;
@@ -197,7 +204,7 @@ export function renderStandings() {
     <div class="section-head"><h1>${s.year} Standings</h1><span class="muted">Ordered by conference winning percentage. The line marks the conference tournament cut.</span></div>
     <details class="card small" style="margin-bottom:16px"><summary><b>Tiebreakers</b></summary><ol style="margin:8px 0 0 18px">${TIEBREAKERS.map(t => `<li>${esc(t)}</li>`).join('')}</ol>
       <p class="muted" style="margin:6px 0 0">The same order seeds the conference tournaments.</p></details>
-    <div class="grid wide">${confs.map(card).join('')}</div>`;
+    <div class="grid wide">${confs.map(card).join('')}${indepCard}</div>`;
   $$('[data-champ]').forEach(sel => (sel.onchange = () => {
     s.overrides.regChamps ||= {};
     if (sel.value) s.overrides.regChamps[sel.dataset.champ] = sel.value; else delete s.overrides.regChamps[sel.dataset.champ];

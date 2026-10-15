@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261015121530';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261015121530';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261015121530';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261015121530';
-import { replayRatings, ensureBase } from './ratings.js?v=20261015121530';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261015121530';
-import { isFinal, records } from './standings.js?v=20261015121530';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261015121530';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261015122354';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261015122354';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261015122354';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261015122354';
+import { replayRatings, ensureBase } from './ratings.js?v=20261015122354';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261015122354';
+import { isFinal, records, INDEPENDENT } from './standings.js?v=20261015122354';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261015122354';
 
 export const SCHEMA_VERSION = 4;
 
@@ -38,6 +38,7 @@ export function newLeague({ name = 'MCS Dynasty', year = START_YEAR, teams = see
     coaches: {}, nextCoachId: 1,
     seasons: { [year]: season },
   };
+  ensureIndependent(league);
   for (const t of Object.values(teams)) { t.coachId = t.coach ? newCoach(league, t.coach) : null; delete t.coach; }
   return league;
 }
@@ -221,6 +222,7 @@ export function addConference(league, name, { abbr, color = '#555555' } = {}) {
 
 export function renameConference(league, from, to) {
   to = to.trim();
+  if (from === INDEPENDENT || to === INDEPENDENT) throw new Error('Independent is reserved for teams without a conference.');
   if (!to || to === from) return;
   if (league.conferences[to]) throw new Error('That conference already exists.');
   league.conferences[to] = league.conferences[from];
@@ -236,6 +238,7 @@ export function renameConference(league, from, to) {
 }
 
 export function deleteConference(league, season, name) {
+  if (name === INDEPENDENT) throw new Error('Independent can\'t be deleted; it holds teams without a conference.');
   if (Object.values(season.teams).some(t => t.conference === name)) throw new Error('Move its teams to another conference first.');
   const usedEarlier = Object.values(league.seasons).some(s => Object.values(s.teams).some(t => t.conference === name));
   if (!usedEarlier) delete league.conferences[name];
@@ -403,7 +406,15 @@ export const isRegularWeek = (w, season) => w <= regWeeksOf(season);
 // Bring an older save up to date: no pitching staffs (v2), coaches as
 // people and preseason ratings for in-season movement (v3), season length,
 // midweek format and NCAA tournament format as settings (v4).
+// Every league has an Independent "conference" for teams without one.
+export function ensureIndependent(league) {
+  league.conferences ||= {};
+  league.conferences[INDEPENDENT] ||= { abbr: 'Ind.', color: '#5f6b7a' };
+  delete league.conferences[INDEPENDENT].retired;
+}
+
 export function migrateLeague(league) {
+  ensureIndependent(league);
   sortConferences(league);
   const v = league.schema || 1;
   if (v >= SCHEMA_VERSION) return league;

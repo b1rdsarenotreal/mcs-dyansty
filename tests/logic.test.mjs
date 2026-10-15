@@ -2,7 +2,7 @@ import { confWeeksFor } from '../js/schedule.js';
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason, pointsLeft } from '../js/league.js';
-import { newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
+import { deleteConference, newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
 import { bracketology, selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
 
@@ -553,4 +553,27 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.ok(hs.every(x => x.reasons.length || x.cool.length), 'every entry says why');
   assert.ok(!hs.some(x => x.school === sh.post.champion && x.level !== 'warm'), 'the national champion is safe');
   for (const x of hs) assert.equal(sh.teams[x.school].coachId, x.coachId); }
+// Independent teams: no conference games, title, tournament or automatic
+// bid; they fill their weekends with non-conference series.
+{ const { INDEPENDENT, conferences: confsOf, regSeasonChamps: rsc } = await import('../js/standings.js');
+  const Li = newLeague();
+  simGames(Li.seasons[Li.currentYear], undefined, { autoLock: true });
+  const di = beginOffseason(Li);
+  for (const t of ['Texas', 'Oakland']) di.teams[t].conference = INDEPENDENT;
+  const si = startNextSeason(Li);
+  const regi = si.games.filter(g => g.type === 'regular');
+  for (const t of ['Texas', 'Oakland']) {
+    const gs = regi.filter(g => g.home === t || g.away === t);
+    assert.equal(gs.filter(g => g.confGame).length, 0, `${t} plays no conference games`);
+    assert.ok(gs.length >= 44, `${t} plays a full schedule (${gs.length})`);
+    const weekends = new Set(gs.filter(g => ['Fri', 'Sat', 'Sun'].includes(g.day)).map(g => g.week)).size;
+    assert.ok(weekends >= 10, `${t} plays most weekends (${weekends} of 12)`);
+  }
+  assert.ok(!confsOf(si).includes(INDEPENDENT), 'Independent is not a conference');
+  simGames(si, undefined, { autoLock: true });
+  assert.equal(rsc(si, INDEPENDENT).length, 0, 'no independent regular-season title');
+  assert.ok(!si.post.confT[INDEPENDENT], 'no independent tournament');
+  assert.ok(Li.conferences[INDEPENDENT], 'every league has the Independent group');
+  assert.throws(() => deleteConference(Li, si, INDEPENDENT), /reserved|can't be deleted/);
+  console.log('independents:', ['Texas', 'Oakland'].map(t => `${t} ${regi.filter(g => g.home === t || g.away === t).length} games${si.post.field.some(f => f.team === t) ? ', at-large bid' : ''}`).join('; ')); }
 console.log(`ok in ${Date.now() - t0} ms`);

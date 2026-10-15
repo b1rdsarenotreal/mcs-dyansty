@@ -7,9 +7,9 @@
 // season cool it. These are suggestions only: nothing changes until the
 // commissioner fires someone.
 
-import { records, rpi, confStandings, regSeasonChamps } from './standings.js?v=20261015121530';
-import { wsTeams } from './postseason.js?v=20261015121530';
-import { ovr } from './sim.js?v=20261015121530';
+import { records, rpi, confStandings, regSeasonChamps, isIndependent } from './standings.js?v=20261015122354';
+import { wsTeams } from './postseason.js?v=20261015122354';
+import { ovr } from './sim.js?v=20261015122354';
 
 export const HEAT = {
   fire: { label: 'Fire suggested', min: 2.6 },
@@ -28,7 +28,7 @@ function seasonFacts(season, memo) {
   const pre = Object.fromEntries(Object.values(season.teams).map(t => [t.school, ovr(t.base || t)]));
   const vals = Object.values(pre), avg = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
   const confPlace = {}, regTitle = new Set();
-  for (const c of new Set(Object.values(season.teams).map(t => t.conference))) {
+  for (const c of new Set(Object.values(season.teams).map(t => t.conference).filter(c => !isIndependent(c)))) {
     const st = confStandings(season, c, reg, r);
     st.forEach((x, i) => { confPlace[x.team] = { pos: i + 1, of: st.length }; });
     for (const t of regSeasonChamps(season, c, reg, r)) regTitle.add(t);
