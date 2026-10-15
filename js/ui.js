@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261014163118';
-import { logoFor } from './logos.js?v=20261014163118';
-import { LOGO_ALIASES } from './data.js?v=20261014163118';
-import { ovr, winProbability } from './sim.js?v=20261014163118';
-import { records, isFinal, winnerOf } from './standings.js?v=20261014163118';
-import { latestPoll, pollRankMap } from './polls.js?v=20261014163118';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261014163118';
-import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261014163118';
-import { DAY_ORDER } from './schedule.js?v=20261014163118';
-import { esc } from './util.js?v=20261014163118';
+import { saveLeague } from './store.js?v=20261015121530';
+import { logoFor } from './logos.js?v=20261015121530';
+import { LOGO_ALIASES } from './data.js?v=20261015121530';
+import { ovr, winProbability } from './sim.js?v=20261015121530';
+import { records, isFinal, winnerOf } from './standings.js?v=20261015121530';
+import { latestPoll, pollRankMap } from './polls.js?v=20261015121530';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261015121530';
+import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261015121530';
+import { DAY_ORDER } from './schedule.js?v=20261015121530';
+import { esc } from './util.js?v=20261015121530';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -201,10 +201,10 @@ export function gameCard(g) {
   const lrow = (t, arr, R, H, E) => `<div class="gc-lrow ${w === t ? 'is-win' : ''}"><span class="gc-lt">${esc(teamInfo(t)?.abbr || t)}</span>${Array.from({ length: n }, (_, i) => `<span>${cell(arr, i)}</span>`).join('')}<b>${R}</b><span>${H}</span><span>${E}</span></div>`;
   const lines = fin ? `<div class="gc-lines" style="--q:${n}"><div class="gc-lrow gc-lhead"><span></span>${Array.from({ length: n }, (_, i) => `<span>${i + 1}</span>`).join('')}<b>R</b><span>H</span><span>E</span></div>${lrow(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${lrow(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}</div>` : '';
   // Top: conference logo and series standing; bottom: label, venue, sim.
-  const series = seriesStatus(g, 34);
+  const series = g.tourney ? `<span title="Early-season tournament">${esc(g.label)}</span>` : seriesStatus(g, 34);
   const top = `<div class="gc-top">${conf ? `<a class="gc-conflogo" href="${confHref(conf)}" title="${esc(conf)}${confGame ? ' game' : ' Tournament'}">${confLogo(conf, 18)}</a>` : ''}<span class="series-tag">${series}</span></div>`;
   let meta = '';
-  if (g.label) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
+  if (g.label && !g.tourney) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
   const venue = g.type === 'mcws' ? mcwsVenue(s) : null;
   if (venue) meta += `<span class="venue" title="${esc(venue.city)}">${esc(venue.stadium)}</span>`;
   if (!fin && g.home && g.away && s.teams[g.home] && s.teams[g.away]) {

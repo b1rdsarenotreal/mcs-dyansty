@@ -11,7 +11,7 @@ const league = newLeague();
 const s = currentSeason(league);
 assert.equal(Object.keys(s.teams).length, 45);
 
-// Schedule shape: 12 weeks, weekend series, two-game midweek sets
+// Schedule shape: 12 weeks, early tournaments, weekend series, two-game midweek sets
 assert.equal(s.regWeeks, 12);
 const reg = s.games.filter(g => g.type === 'regular');
 assert.equal(Math.max(...reg.map(g => g.week)), 12);
@@ -44,8 +44,27 @@ for (const g of reg) { per[g.home] = (per[g.home] || 0) + 1; per[g.away] = (per[
 const counts = Object.values(per);
 const hist={}; counts.forEach(c=>hist[c]=(hist[c]||0)+1); console.log('games-per-team histogram', JSON.stringify(hist));
 console.log('games per team', Math.min(...counts), '-', Math.max(...counts), 'total', reg.length);
-assert.ok(Math.min(...counts) >= 46 && Math.max(...counts) <= 52, 'about 48-52 games per team');
-assert.ok(counts.filter(c => c >= 48).length >= counts.length - 2, 'nearly every team plays 48-52');
+assert.ok(Math.min(...counts) >= 44 && Math.max(...counts) <= 52, 'about 46-50 games per team');
+assert.ok(Math.max(...counts) - Math.min(...counts) <= 4, 'season totals stay close together');
+// Early-season tournaments: weeks 1-3, Thursday to Sunday round robins of 5
+// or 6 teams with no two from the same conference; every team plays one or
+// two; a team in a tournament plays nothing else that week.
+const tg = reg.filter(g => g.tourney);
+const tids = [...new Set(tg.map(g => g.tourney))];
+assert.ok(tids.length >= 6, 'tournaments are scheduled');
+for (const id of tids) {
+  const gs = tg.filter(g => g.tourney === id), ts = [...new Set(gs.flatMap(g => [g.home, g.away]))];
+  assert.ok(ts.length === 5 || ts.length === 6, `${id}: 5 or 6 teams`);
+  assert.equal(new Set(ts.map(t => s.teams[t].conference)).size, ts.length, `${id}: no conference rivals`);
+  assert.equal(gs.length, ts.length * (ts.length - 1) / 2, `${id}: full round robin`);
+  assert.ok(gs.every(g => g.week <= 3 && ['Thu', 'Fri', 'Sat', 'Sun'].includes(g.day) && g.label === gs[0].label), `${id}: Thursday-Sunday in weeks 1-3`);
+  for (const t of ts) assert.equal(reg.filter(g => g.week === gs[0].week && !g.tourney && (g.home === t || g.away === t)).length, 0, `${t} plays only the tournament that week`);
+}
+for (const t of Object.keys(s.teams)) { const k = new Set(tg.filter(g => g.home === t || g.away === t).map(g => g.tourney)).size; assert.ok(k >= 1 && k <= 2, `${t} plays ${k} tournaments`); }
+console.log(`tournaments: ${tids.length}, e.g. ${tg[0].label}`);
+// Midweek about every other week, not every week
+const midPer = Object.keys(s.teams).map(t => new Set(reg.filter(g => g.midweek && (g.home === t || g.away === t)).map(g => g.series)).size);
+assert.ok(Math.max(...midPer) < 8 && midPer.reduce((a, b) => a + b, 0) / midPer.length >= 3.5, 'midweek sets in about half the weeks');
 assert.ok(!reg.some(g => (g.day === 'Tue' || g.day === 'Wed') && (g.week < 4 || g.week === 12)), 'midweek games run weeks 4-11');
 for (const conf of ['Horizon', 'Big Ten', 'MAC']) {
   const teams = Object.values(s.teams).filter(t => t.conference === conf).map(t => t.school);

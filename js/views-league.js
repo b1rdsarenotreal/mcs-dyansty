@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261014163118';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261014163118';
-import { ovr } from './sim.js?v=20261014163118';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261014163118';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261014163118';
-import { hotSeat, HEAT } from './hotseat.js?v=20261014163118';
-import { setRating } from './ratings.js?v=20261014163118';
-import { confFormatName, postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261014163118';
-import { MIDWEEK, DEFAULT_REG_WEEKS } from './schedule.js?v=20261014163118';
-import { exportLeague, clearLeague } from './store.js?v=20261014163118';
-import { clamp, fmtPct } from './util.js?v=20261014163118';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261014163118';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261015121530';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps } from './standings.js?v=20261015121530';
+import { ovr } from './sim.js?v=20261015121530';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261015121530';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261015121530';
+import { hotSeat, HEAT } from './hotseat.js?v=20261015121530';
+import { setRating } from './ratings.js?v=20261015121530';
+import { confFormatName, postseasonFinish, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261015121530';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261015121530';
+import { exportLeague, clearLeague } from './store.js?v=20261015121530';
+import { clamp, fmtPct } from './util.js?v=20261015121530';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261015121530';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -819,9 +819,12 @@ export function renderHistory() {
 // for teams left without a weekend opponent).
 function gamesEstimate(cs) {
   const R = cs.regWeeks ?? 12, start = cs.midweekStart ?? 4, skip = (cs.midweekSkipLast ?? true) ? 1 : 0;
-  const mid = Math.max(0, R - skip - start + 1) * ((cs.midweek ?? 'mixed') === 'single' ? 1 : 2);
-  const top = R * 3 + mid;
-  return `${top - 3}–${top}`;
+  const tw = Math.min(cs.tourneyWeeks ?? DEFAULT_TOURNEY_WEEKS, R);
+  const weeks = Math.max(0, R - skip - start + 1), perSet = (cs.midweek ?? 'mixed') === 'single' ? 1 : 2;
+  const mid = Math.round(weeks * ((cs.midweekFreq ?? 'half') === 'every' ? 1 : 0.6)) * perSet;
+  // A tournament weekend is 4-5 games instead of 3; teams play about 1.5 of them.
+  const top = R * 3 + mid + (tw ? 2 : 0);
+  return `${top - 2}–${top}`;
 }
 
 export function renderSettings() {
@@ -864,9 +867,11 @@ export function renderSettings() {
         <label class="field">Regular-season weeks <input type="number" id="s-weeks" min="8" max="16" value="${cs.regWeeks ?? DEFAULT_REG_WEEKS}"></label>
         <label class="field">Midweek games <select id="s-mid">${Object.entries(MIDWEEK).map(([k, l]) => `<option value="${k}" ${(cs.midweek ?? 'mixed') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Midweek games start in <select id="s-midstart">${Array.from({ length: 6 }, (_, i) => i + 1).map(w => `<option value="${w}" ${(cs.midweekStart ?? 4) === w ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></label>
+        <label class="field">Midweek sets <select id="s-midfreq">${Object.entries(MIDWEEK_FREQ).map(([k, l]) => `<option value="${k}" ${(cs.midweekFreq ?? 'half') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Early-season tournaments <select id="s-tw">${[[0, 'None: weekend series only'], [1, 'Week 1'], [2, 'Weeks 1–2'], [3, 'Weeks 1–3'], [4, 'Weeks 1–4']].map(([v, l]) => `<option value="${v}" ${(cs.tourneyWeeks ?? DEFAULT_TOURNEY_WEEKS) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" id="s-midskip" ${(cs.midweekSkipLast ?? true) ? 'checked' : ''}> No midweek games in the last regular-season week</label>
         <p class="small">About <b>${gamesEstimate(cs)}</b> games per team.</p>
-        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. Weekends are three-game series; midweek sets are two games against one opponent (a Tuesday doubleheader or Tuesday and Wednesday games). Conference play fills the last weeks. A conference's size sets when it starts (one week per round of its round robin, at most 9 weeks; bigger conferences play 9 of their members), and everyone finishes on the final weekend and nobody plays a non-conference weekend series once their conference season starts. A team with a conference bye plays a single Thursday game against another conference instead.</p>
+        <p class="small muted">Used for every new schedule: the next season, or "Rebuild schedule" before any games are played. ${cur.year} runs ${regWeeksOf(cur)} weeks. In the early-season tournament weeks, most teams play a Thursday-to-Sunday round robin (5 or 6 teams, no two from the same conference, 4 or 5 games each) at one of the teams' fields; every team plays one or two of them, and the rest play series. Other weekends are three-game series. Midweek sets are two games against one opponent (a Tuesday doubleheader or Tuesday and Wednesday games), about every other week unless you pick every week; teams that played fewer weekend games get a few more. Conference play fills the last weeks. A conference's size sets when it starts (one week per round of its round robin, at most 9 weeks; bigger conferences play 9 of their members), and everyone finishes on the final weekend and nobody plays a non-conference weekend series once their conference season starts. A team with a conference bye plays a non-conference series (or, if nobody's free, a single Thursday game).</p>
       </div>
       <div class="card stack ncaa-card"><h2>NCAA tournament</h2>
         <label class="field">Men's College World Series <select id="n-ws">${[[4, '4 teams: double elimination to two, then a best-of-three final'], [8, '8 teams: Bracket A and Bracket B, then a best-of-three final']].map(([v, l]) => `<option value="${v}" ${nc.wsSize === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -888,6 +893,8 @@ export function renderSettings() {
   $('#s-weeks').onchange = e => { cs.regWeeks = Math.max(8, Math.min(16, Math.round(Number(e.target.value) || DEFAULT_REG_WEEKS))); changed({ progress: false }); toast(`New schedules will run ${cs.regWeeks} weeks.`); };
   $('#s-mid').onchange = e => { cs.midweek = e.target.value; changed({ progress: false }); };
   $('#s-midstart').onchange = e => { cs.midweekStart = +e.target.value; changed({ progress: false }); };
+  $('#s-midfreq').onchange = e => { cs.midweekFreq = e.target.value; changed({ progress: false }); };
+  $('#s-tw').onchange = e => { cs.tourneyWeeks = +e.target.value; changed({ progress: false }); };
   $('#s-midskip').onchange = e => { cs.midweekSkipLast = e.target.checked; changed({ progress: false }); };
   const draft = () => (ui.ncaaDraft ||= { ...nc });
   $('#n-ws').onchange = e => { const d = draft(); d.wsSize = +e.target.value; if (d.regionals !== d.wsSize && d.regionals !== d.wsSize * 2) d.regionals = d.wsSize === 8 ? 8 : 4; renderSettings(); };
