@@ -591,4 +591,19 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   simGames(sv, undefined, { autoLock: true });
   beginOffseason(Lv); const nv = startNextSeason(Lv);
   assert.ok(votersOf(nv).some(v => v.id === v1.id), 'added voters stay on the panel next season'); }
+// Bigger tournaments: a top 9 with a play-in (8 vs 9, then 8-team double elimination)
+{ const L9 = newLeague(), s9 = L9.seasons[L9.currentYear];
+  s9.settings.confFormat = { 'Horizon': 'playin' }; s9.settings.confTourney = { 'Horizon': 9 };
+  simGames(s9, g => g.type === 'regular' || g.type === 'conf');
+  const ev = s9.post.confT['Horizon'];
+  assert.equal(ev.kind, 'playin'); assert.equal(ev.seeds.length, 9);
+  const gs = s9.games.filter(g => g.event === ev.id);
+  const pre = gs.filter(g => g.node.startsWith('P-'));
+  assert.equal(pre.length, 1, 'top 9: one play-in game');
+  assert.deepEqual([pre[0].home, pre[0].away].sort(), [ev.seeds[7], ev.seeds[8]].sort(), 'seeds 8 and 9 play in');
+  const out = pre[0].homeR > pre[0].awayR ? pre[0].away : pre[0].home;
+  assert.equal(gs.filter(g => g.home === out || g.away === out).length, 1, 'the play-in loser is out');
+  const per = {}; for (const g of gs) for (const t of [g.home, g.away]) per[t + g.day] = (per[t + g.day] || 0) + 1;
+  assert.ok(Math.max(...Object.values(per)) === 1, 'one game per team per day');
+  assert.ok(ev.champion && ev.seeds.includes(ev.champion)); }
 console.log(`ok in ${Date.now() - t0} ms`);
