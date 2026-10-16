@@ -706,3 +706,9 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .tst-head { margin-bottom: 2px; }
 .tst-table td, .tst-table th { padding: 4px 6px; }
 .tst-table tr.tst-champ td { background: color-mix(in srgb, var(--optic) 22%, transparent); }
+
+/* Deep link to a bracket (team history → Postseason) */
+[id^="ev-"] { scroll-margin-top: 140px; }
+.card.flash { animation: ev-flash 1.8s ease-out; }
+@keyframes ev-flash { 0%, 30% { box-shadow: 0 0 0 3px var(--accent, #e8e04a); } 100% { box-shadow: none; } }
+

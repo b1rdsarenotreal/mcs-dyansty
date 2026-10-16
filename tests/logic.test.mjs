@@ -608,4 +608,22 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   const per = {}; for (const g of gs) for (const t of [g.home, g.away]) per[t + g.day] = (per[t + g.day] || 0) + 1;
   assert.ok(Math.max(...Object.values(per)) <= 2, 'at most a doubleheader per team per day');
   assert.ok(ev.champion && ev.seeds.includes(ev.champion)); }
+// Team histories: where the postseason ended, NCAA and conference tournament records
+{ const { postseasonDetail, postseasonRecord } = await import('../js/postseason.js');
+  const Lp = newLeague(), sp = Lp.seasons[Lp.currentYear];
+  simGames(sp, undefined, { autoLock: true });
+  for (const f of sp.post.field) {
+    const d = postseasonDetail(sp, f.team), r = postseasonRecord(sp, f.team);
+    assert.ok(d && d.text && d.tab, `${f.team} has a postseason detail`);
+    const ng = sp.games.filter(g => ['regional', 'super', 'mcws'].includes(g.type) && (g.home === f.team || g.away === f.team));
+    assert.equal(r.ncaa.w + r.ncaa.l, ng.length, `${f.team}: NCAA record counts every NCAA game`);
+    if (d.tab === 'regionals' && !d.text.endsWith('champion')) assert.match(d.text, / · (out in .+|lost series \d-\d)$/);
+  }
+  assert.equal(postseasonDetail(sp, sp.post.champion).text, 'National champion');
+  assert.equal(postseasonRecord(sp, sp.post.champion).ncaa.l <= 3, true);
+  for (const ev of Object.values(sp.post.confT)) for (const t of ev.seeds) {
+    const c = postseasonRecord(sp, t).conf;
+    assert.ok(c && c.ev === ev.id, `${t} conference tournament record`);
+    if (t === ev.champion) assert.ok(c.champ && !c.out); else assert.ok(!c.champ && c.out, `${t}: round it went out (${ev.kind})`);
+  } }
 console.log(`ok in ${Date.now() - t0} ms`);

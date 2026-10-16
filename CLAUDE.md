@@ -22,7 +22,7 @@ These stay different on purpose. Never copy them across:
 | Save and logo-cache keys (`js/store.js`, `js/logos.js`) | `mcs-dynasty`, `mcs-logo-table-v1` | `sacaa-dynasty`, `sacaa-logo-table-v1` |
 | Team and conference names used in `tests/` | MCS teams (Oklahoma, Big Ten, ...) | SACAA teams (UCLA, Pac-10, ...) |
 | README sections "The league" and "Ratings" (how starting ratings were made) | | |
-| Postseason column in team and coach histories | Finish only ("NCAA Regional") | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route). The owner asked for this in SACAA only. |
+| Postseason column in team and coach histories | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route, `evAnchor` ids), plus a second line with the NCAA W-L and conference tournament W-L and round (`postseasonRecord`). The owner asked for the records line in MCS only. | Regional name and round lost, linked to the bracket (`postseasonDetail`). No records line. |
 | Color palette (the `:root` tokens at the top of `css/styles.css`, stat-band label colors, active tabs) | Night-game navy top bar | Lighter sky blue top bar (`--board: #2c71c7`), sky-tinted background. The owner asked for this in SACAA only. |
 | Independent teams (`INDEPENDENT` in `js/standings.js`, the Independents standings card, offseason/conference-page guards) | Supported: teams can be Independent (no conference games, title, tournament or automatic bid) | Not added. The owner asked for independents in MCS only. |
 
