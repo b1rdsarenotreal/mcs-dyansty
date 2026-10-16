@@ -13,8 +13,8 @@
 // settings, so they carry into later seasons), remove added voters, and
 // edit any published poll.
 
-import { rng, normal, hashStr, clamp } from './util.js?v=20261015171924';
-import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261015171924';
+import { rng, normal, hashStr, clamp } from './util.js?v=20261015173113';
+import { records, rpi, isFinal, winnerOf } from './standings.js?v=20261015173113';
 
 export const DEFAULT_POLL_SIZE = 15;
 export const POLL_SIZES = [10, 15, 20, 25];

@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261015171924';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261015171924';
-import { generatePoll } from './polls.js?v=20261015171924';
-import { hashStr } from './util.js?v=20261015171924';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261015173113';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261015173113';
+import { generatePoll } from './polls.js?v=20261015173113';
+import { hashStr } from './util.js?v=20261015173113';
 
 // ---------- tournament format ----------
 
@@ -242,8 +242,45 @@ export const CONF_FORMATS = [['single', 'Single elimination'], ['double', 'Doubl
 export const confFormatName = kind => (CONF_FORMATS.find(([k]) => k === kind) || CONF_FORMATS[0])[1];
 
 function buildConfNodes(kind, size) {
-  if (kind === 'playin') return playInDoubleConf(size);
-  return kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size);
+  const nodes = kind === 'playin' ? playInDoubleConf(size) : kind === 'double' && size >= 3 ? doubleElimConf(size) : singleElim(size);
+  return mergeLoneDays(nodes, size);
+}
+
+// A conference tournament day with only one real game (byes don't count)
+// folds into the next day of play, even if that gives a team a doubleheader
+// (but never three games in a day). The days are then packed together so
+// there are no off days and the final is still on Sunday.
+function mergeLoneDays(nodes, size) {
+  const byKey = Object.fromEntries(nodes.map(n => [n.key, n]));
+  const memo = {};
+  // Does a slot hold a bye? Losers of bye games are byes too; winners aren't.
+  const isBye = ref => ref && ('seed' in ref ? ref.seed >= size : ref.l ? byeNode(byKey[ref.l]) : false);
+  const byeNode = n => (memo[n.key] ??= isBye(n.a) || isBye(n.b));
+  const real = nodes.filter(n => !byeNode(n));
+  const DAYS = WEEKDAYS;
+  const used = () => DAYS.filter(d => real.some(n => n.day === d));
+  // Longest run of games one team could play in a day: a game fed by another
+  // game the same day.
+  const chain = (set) => {
+    const inSet = new Set(set.map(n => n.key)), depth = {};
+    const dep = n => (depth[n.key] ??= 1 + Math.max(0, ...[n.a, n.b].map(r => (r && !('seed' in r) && inSet.has(r.w || r.l) ? dep(byKey[r.w || r.l]) : 0))));
+    return Math.max(0, ...set.map(dep));
+  };
+  for (let guard = 0; guard < 10; guard++) {
+    const days = used();
+    const lone = days.slice(0, -1).find((d, i) => {
+      if (real.filter(n => n.day === d).length !== 1) return false;
+      const next = days[i + 1];
+      return chain(real.filter(n => n.day === d || n.day === next)) <= 2;
+    });
+    if (!lone) break;
+    const next = days[days.indexOf(lone) + 1];
+    for (const n of nodes) if (n.day === lone) n.day = next;
+  }
+  // Pack the days so they run back to back and end on Sunday.
+  const days = used(), shift = Object.fromEntries(days.map((d, i) => [d, DAYS[DAYS.length - days.length + i]]));
+  for (const n of nodes) if (shift[n.day]) n.day = shift[n.day];
+  return nodes;
 }
 
 function doubleElim(final = 'g7') {

@@ -522,7 +522,9 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
       assert.equal(pre.length, size - 4, `${c}: ${size - 4} play-in games`);
       const byes = ev.seeds.slice(0, 8 - size);
       assert.ok(pre.every(g => !byes.includes(g.home) && !byes.includes(g.away)), `${c}: top ${8 - size} seeds have byes`);
-      assert.ok(pre.every(g => g.day === 'Wed') && gs.find(g => g.node === 'CH').day === 'Sun', `${c}: play-in Wednesday, final Sunday`);
+      assert.ok(pre.every(g => g.day === pre[0].day) && gs.find(g => g.node === 'CH').day === 'Sun', `${c}: play-in on the first day, final Sunday`);
+      const used = [...new Set(gs.map(g => g.day))];
+      assert.ok(used.slice(0, -1).every(d => gs.filter(g => g.day === d).length >= 2), `${c}: no day with a lone game before the final`);
       const out = pre.map(g => (g.homeR > g.awayR ? g.away : g.home));
       for (const t of out) assert.equal(gs.filter(g => g.home === t || g.away === t).length, 1, `${t} is out after the play-in`);
       const losses = {}; for (const g of gs) { const l = g.homeR > g.awayR ? g.away : g.home; losses[l] = (losses[l] || 0) + 1; }
@@ -604,6 +606,6 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   const out = pre[0].homeR > pre[0].awayR ? pre[0].away : pre[0].home;
   assert.equal(gs.filter(g => g.home === out || g.away === out).length, 1, 'the play-in loser is out');
   const per = {}; for (const g of gs) for (const t of [g.home, g.away]) per[t + g.day] = (per[t + g.day] || 0) + 1;
-  assert.ok(Math.max(...Object.values(per)) === 1, 'one game per team per day');
+  assert.ok(Math.max(...Object.values(per)) <= 2, 'at most a doubleheader per team per day');
   assert.ok(ev.champion && ev.seeds.includes(ev.champion)); }
 console.log(`ok in ${Date.now() - t0} ms`);
