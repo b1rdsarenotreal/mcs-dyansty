@@ -750,7 +750,7 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
   .ts-row { grid-template-columns: 74px minmax(0, 1fr) 84px; }
   .ts-where { display: none; }
   .ts-match { gap: 8px; padding: 8px 10px; }
-  .ts-logo:first-child, .ts-mine-rank, .ts-match > .ts-vs { display: none; }
+  .ts-match > .ts-logo:first-child, .ts-mine-rank, .ts-match > .ts-vs { display: none; }
   .ts-res { font-size: 14px; }
   .ts-tag { display: none; }
   .ts-opp { overflow-wrap: anywhere; }
@@ -765,3 +765,23 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .members-table th:first-child { width: 26%; }
 .members-table th:nth-child(2) { width: 11%; }
 .ts-mine-rank { font-size: 13px; margin-left: -4px; flex: none; }
+
+/* Poll: a slim row per team, rank on the team's color, logo in a box. */
+.poll-table { border-collapse: separate; border-spacing: 0 6px; margin-top: -6px; }
+.poll-table thead th { border-bottom: 0; padding-bottom: 0; }
+.poll-table tbody td { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-top: 5px; padding-bottom: 5px; }
+.poll-table tbody td:first-child { border-left: 1px solid var(--line); border-radius: 8px 0 0 8px; }
+.poll-table tbody td:last-child { border-right: 1px solid var(--line); border-radius: 0 8px 8px 0; }
+.poll-table tbody tr:hover td { background: var(--panel-2); }
+.poll-table tbody td.pt-rank { width: 46px; text-align: center; font: 700 17px/1 var(--body); font-variant-numeric: tabular-nums; border-color: transparent; }
+.poll-table tbody tr:hover td.pt-rank { filter: brightness(1.08); }
+.pt-team { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+.pt-team .team-link { color: var(--ink); }
+.pt-logo { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+.pt-logo .tbadge { border-radius: 5px; }
+.poll-table .wk-rec { white-space: nowrap; }
+@media (max-width: 760px) {
+  .poll-table tbody td.pt-rank { width: 34px; font-size: 15px; }
+  .pt-team { gap: 8px; }
+  .pt-logo { width: 28px; height: 28px; }
+}

@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg } from './ui.js?v=20261016234303';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261016234303';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261016234303';
-import { ovr } from './sim.js?v=20261016234303';
-import { simGames, addGame, weekName } from './league.js?v=20261016234303';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261016234303';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261016234303';
-import { fmtPct, hashStr } from './util.js?v=20261016234303';
-import { DAY_ORDER } from './schedule.js?v=20261016234303';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261017130210';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261017130210';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261017130210';
+import { ovr } from './sim.js?v=20261017130210';
+import { simGames, addGame, weekName } from './league.js?v=20261017130210';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261017130210';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261017130210';
+import { fmtPct, hashStr } from './util.js?v=20261017130210';
+import { DAY_ORDER } from './schedule.js?v=20261017130210';
 
 // " at Easton Stadium, Los Angeles, Calif." for a host school with a home field.
 const atField = (s, school) => { const t = s.teams[school]; const f = [t?.stadium, t?.city].filter(Boolean).join(', '); return f ? ` at ${esc(f)}` : ''; };
@@ -274,6 +274,13 @@ export function renderRankings() {
   ({ poll: renderPollTab, rpi: renderRpiTab, sos: renderSosTab, power: renderPowerTab, bracket: renderBracketology })[ui.rankTab]($('#rk'));
 }
 
+// A rank number on the team's color (the alt color when the main one is white).
+function rankBlock(name) {
+  const t = teamInfo(name) || {};
+  const bg = /^#[0-9a-f]{6}$/i.test(t.color || '') && t.color.toLowerCase() !== '#ffffff' ? t.color : (t.altColor || '#2c3e50');
+  return `background:${esc(bg)};color:${esc(readableOn(bg))}`;
+}
+
 function renderPollTab(root) {
   const s = S();
   const weeks = pollWeeks(s);
@@ -310,9 +317,9 @@ function renderPollTab(root) {
       <div class="row" style="margin-bottom:10px"><h2 style="margin:0">${key === 'final' ? 'Final poll' : key === 0 ? 'Preseason poll' : key === postWeeks(s).conf ? 'Poll after conference tournaments' : `Week ${key} poll`}</h2>
         ${poll.edited ? '<span class="badge manual">Commissioner edited</span>' : ''}<span class="spacer"></span>
         ${editing ? '<button class="btn" id="p-cancel">Cancel</button><button class="btn primary" id="p-save">Save poll</button>' : '<button class="btn" id="p-edit">Edit poll</button><button class="btn" id="p-regen">Regenerate</button>'}</div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="poll-table">
         <thead><tr><th class="num">#</th><th>Team</th><th class="num">Record</th>${key === 0 ? '' : `<th class="num" title="${key === 'final' ? 'NCAA tournament record' : "Record in this poll's week"}">${key === 'final' ? 'NCAA' : 'This week'}</th>`}${editing ? '<th></th>' : '<th class="num">Points</th><th class="num">Prev</th><th></th>'}</tr></thead>
-        <tbody>${rows.map((x, i) => `<tr><td class="num"><b>${i + 1}</b></td><td>${team(x.team, { rank: false })}${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</td><td class="num muted">${esc(x.record || '')}</td>${key === 0 ? '' : (() => { const wr = weekRec(x.team); if (!wr) return '<td class="num muted">—</td>'; const [w, l] = wr.split('-').map(Number); return `<td class="num"><span class="wk-rec ${w > l ? 'up' : w < l ? 'down' : ''}">${wr}</span></td>`; })()}
+        <tbody>${rows.map((x, i) => `<tr><td class="pt-rank" style="${rankBlock(x.team)}">${i + 1}</td><td><span class="pt-team"><span class="pt-logo">${logoImg(teamInfo(x.team), 24)}</span><a class="team-link" href="${teamHref(x.team)}">${esc(x.team)}</a>${!editing && x.fp ? ` <span class="muted small">(${x.fp})</span>` : ''}</span></td><td class="num muted">${esc(x.record || '')}</td>${key === 0 ? '' : (() => { const wr = weekRec(x.team); if (!wr) return '<td class="num muted">—</td>'; const [w, l] = wr.split('-').map(Number); return `<td class="num"><span class="wk-rec ${w > l ? 'up' : w < l ? 'down' : ''}">${wr}</span></td>`; })()}
           ${editing ? `<td class="num" style="white-space:nowrap"><button class="btn sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button> <button class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'}>▼</button> <button class="btn sm danger" data-rm="${i}">✕</button></td>`
           : `<td class="num">${x.pts ?? ''}</td><td class="num muted">${prevKey !== undefined ? prev[x.team] ?? 'NR' : ''}</td><td class="num">${mv(x.team, i)}</td>`}</tr>`).join('')}</tbody></table></div>
       ${editing ? `<div class="row" style="margin-top:10px"><select id="p-add">${teamOptions('', { blankLabel: 'Add a team…', list: teamNames().filter(t => !rows.some(r => r.team === t)) })}</select><span class="muted small">Added teams go to the bottom; move them up with ▲. The poll keeps ${poll.size || poll.ranks.length} teams.</span></div>`
