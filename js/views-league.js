@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016220938';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016220938';
-import { ovr } from './sim.js?v=20261016220938';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016220938';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016220938';
-import { hotSeat, HEAT } from './hotseat.js?v=20261016220938';
-import { setRating } from './ratings.js?v=20261016220938';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents } from './postseason.js?v=20261016220938';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016220938';
-import { exportLeague, clearLeague } from './store.js?v=20261016220938';
-import { clamp, fmtPct } from './util.js?v=20261016220938';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016220938';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016221833';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016221833';
+import { ovr } from './sim.js?v=20261016221833';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016221833';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016221833';
+import { hotSeat, HEAT } from './hotseat.js?v=20261016221833';
+import { setRating } from './ratings.js?v=20261016221833';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents } from './postseason.js?v=20261016221833';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016221833';
+import { exportLeague, clearLeague } from './store.js?v=20261016221833';
+import { clamp, fmtPct } from './util.js?v=20261016221833';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016221833';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -525,7 +525,7 @@ function teamScheduleRows(s, name, t, games) {
     const where = g.type === 'mcws' ? `${venue.stadium}${venue.city ? `, ${venue.city}` : ''}` : site === name ? 'Home' : site ? site : 'Neutral site';
     const ranks = fin ? cache.ranksAt(g.week) : cache.ranks();
     const oppRank = ranks[opp];
-    const tag = g.confGame ? '<span class="ts-tag">Conference</span>' : g.midweek ? `<span class="ts-tag">${g.midweek === 'doubleheader' ? 'Doubleheader' : 'Midweek'}</span>` : '';
+    const tag = g.confGame ? (c => `<span class="ts-conf" title="${esc(c)} game">${confLogo(c, 20)}</span>`)(s.teams[name]?.conference || t.conference) : g.midweek ? `<span class="ts-tag">${g.midweek === 'doubleheader' ? 'Doubleheader' : 'Midweek'}</span>` : '';
     const result = fin
       ? `<b class="ts-wl ${won ? 'w' : 'l'}">${won ? 'W' : 'L'}</b> <b>${home ? g.homeR : g.awayR}-${home ? g.awayR : g.homeR}</b>${inn !== 7 ? `<div class="ts-inn">(${inn} inn.)</div>` : ''}`
       : '<span class="muted">—</span>';

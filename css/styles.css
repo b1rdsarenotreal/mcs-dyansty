@@ -753,3 +753,6 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
   .ts-opp { overflow-wrap: anywhere; }
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ts-head { background: #050a12; } }
+
+.ts-conf { display: inline-flex; vertical-align: -4px; margin-left: 8px; }
+.ts-conf .conf-badge { border-radius: 5px; }
