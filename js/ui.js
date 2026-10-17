@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261016221833';
-import { logoFor } from './logos.js?v=20261016221833';
-import { LOGO_ALIASES } from './data.js?v=20261016221833';
-import { ovr, winProbability } from './sim.js?v=20261016221833';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261016221833';
-import { latestPoll, pollRankMap } from './polls.js?v=20261016221833';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261016221833';
-import { regWeeksOf, shownSeed, mcwsVenue } from './postseason.js?v=20261016221833';
-import { DAY_ORDER } from './schedule.js?v=20261016221833';
-import { esc } from './util.js?v=20261016221833';
+import { saveLeague } from './store.js?v=20261016224307';
+import { logoFor } from './logos.js?v=20261016224307';
+import { LOGO_ALIASES } from './data.js?v=20261016224307';
+import { ovr, winProbability } from './sim.js?v=20261016224307';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261016224307';
+import { latestPoll, pollRankMap } from './polls.js?v=20261016224307';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261016224307';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261016224307';
+import { DAY_ORDER } from './schedule.js?v=20261016224307';
+import { esc } from './util.js?v=20261016224307';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -296,7 +296,7 @@ export function openGame(id, { isNew = false } = {}) {
   modal.innerHTML = `
     <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week, s)} · ${DAY_NAMES[g.day] || g.day}`)}</h2><button class="btn ghost" data-x>✕</button></div>
     <div class="modal-body stack">
-      ${g.type === 'mcws' ? (v => `<div class="small muted venue-line">${esc(v.stadium)}${v.city ? ` · ${esc(v.city)}` : ''}</div>`)(mcwsVenue(s)) : ''}
+      ${(v => v.stadium || v.city ? `<div class="small muted venue-line">${esc([v.stadium, v.city].filter(Boolean).join(' · '))}</div>` : '')(gameVenue(s, g))}
       ${regular ? `<div class="row">
         <label class="field" style="flex:1;min-width:140px">Away <select id="m-away">${teamOptions(g.away)}</select></label>
         <label class="field" style="flex:1;min-width:140px">Home <select id="m-home">${teamOptions(g.home)}</select></label>

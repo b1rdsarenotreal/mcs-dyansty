@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261016221833';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016221833';
-import { generatePoll } from './polls.js?v=20261016221833';
-import { hashStr } from './util.js?v=20261016221833';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261016224307';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016224307';
+import { generatePoll } from './polls.js?v=20261016224307';
+import { hashStr } from './util.js?v=20261016224307';
 
 // ---------- tournament format ----------
 
@@ -554,6 +554,16 @@ export const DEFAULT_MCWS_VENUE = { stadium: 'Firestone Stadium', city: 'Akron, 
 export function mcwsVenue(season) {
   const st = season?.settings || {};
   return { stadium: st.mcwsVenue || DEFAULT_MCWS_VENUE.stadium, city: st.mcwsCity ?? DEFAULT_MCWS_VENUE.city };
+}
+
+// Where a game is played: { host, stadium, city }. The host is the school whose
+// field it is (null for the MCWS, or a neutral game with no host). A
+// conference tournament game is at the tournament host's field.
+export function gameVenue(season, g) {
+  if (g.type === 'mcws') { const v = mcwsVenue(season); return { host: null, stadium: v.stadium, city: v.city }; }
+  const host = g.site || (g.neutral ? (g.type === 'conf' ? allEvents(season).find(ev => ev.id === g.event)?.host : null) : g.home) || null;
+  const t = host ? season.teams[host] : null;
+  return { host, stadium: t?.stadium || '', city: t?.city || '' };
 }
 
 // ---------- selection ----------

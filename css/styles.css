@@ -583,6 +583,7 @@ th.sortable.sorted { color: var(--accent); }
 .venue-city { font-size: 13px; opacity: .8; }
 .meta .venue { font-weight: 600; }
 .venue-line { margin-top: -4px; }
+.team-hero-field { margin-top: 2px; }
 
 /* Hot seat (suggested firings) */
 .hotseat .hs-row { display: grid; grid-template-columns: minmax(200px, 1.1fr) 2fr 250px; gap: 8px 16px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); }
@@ -739,7 +740,9 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .ts-rank { color: var(--ink); font-weight: 700; }
 .ts-tag { margin-left: 8px; font: 600 10.5px var(--body); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; vertical-align: 1px; }
 .ts-mine { font-weight: 500; margin-top: 2px; }
-.ts-where { color: var(--muted); font-weight: 600; font-size: 13px; padding: 0 10px; }
+.ts-where { color: var(--muted); font-weight: 600; font-size: 13px; padding: 0 10px; line-height: 1.3; min-width: 0; }
+.ts-where b { display: block; color: var(--ink); font-weight: 700; }
+.ts-where span { display: block; font-weight: 500; font-size: 12px; }
 .ts-res { text-align: center; font: 700 16px/1.2 var(--body); padding-right: 12px; }
 .ts-wl.w { color: var(--good); } .ts-wl.l { color: var(--bad); }
 .ts-inn { font: 500 11.5px var(--body); color: var(--muted); }

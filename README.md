@@ -6,7 +6,7 @@ It is a static site with no build step and no server, so it runs on GitHub Pages
 
 ## The league
 
-The dynasty starts in **2016** with 45 teams in six conferences: Big 12, Big Ten, Big West, Horizon, MAC and Sun Belt. Every team uses its school's real colors and has a head coach. Teams, coaches, conferences, colors, logos and ratings can all be changed in the app.
+The dynasty starts in **2016** with 45 teams in six conferences: Big 12, Big Ten, Big West, Horizon, MAC and Sun Belt. Every team uses its school's real colors, has a head coach and a home field with its city (the school's softball stadium, or its baseball park if it has no softball team). Teams, coaches, conferences, colors, logos and ratings can all be changed in the app.
 
 ## Ratings
 
@@ -137,7 +137,7 @@ Everything is worked out from the games, so it updates as you play and includes 
 | Realign conferences | Offseason → Conference menus |
 | Change a head coach | Teams page, team profile, or Offseason (dropdown) |
 | Pick a conference tournament format | Standings → Commissioner, or Postseason before it starts |
-| Rename a team, change colors, logo or conference | Team profile → Commissioner edits |
+| Rename a team, change colors, logo, home field or conference | Team profile → Commissioner edits |
 | Add or rename a conference, set its logo | Conferences |
 | Add a game | Schedule → + Add game |
 | Override a conference champion or tournament size | Standings → Commissioner |

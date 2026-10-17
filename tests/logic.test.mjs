@@ -2,6 +2,8 @@ import { confWeeksFor } from '../js/schedule.js';
 // Logic tests: run with `node tests/logic.test.mjs`
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason, pointsLeft } from '../js/league.js';
+import { migrateLeague } from '../js/league.js';
+import { gameVenue } from '../js/postseason.js';
 import { deleteConference, newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
 import { bracketology, selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
@@ -10,6 +12,22 @@ const t0 = Date.now();
 const league = newLeague();
 const s = currentSeason(league);
 assert.equal(Object.keys(s.teams).length, 45);
+
+// Home fields: every starting team has one; a save from before they existed
+// gets them on load; a game is at the home team's field.
+assert.ok(Object.values(s.teams).every(t => t.stadium && t.city), 'every team has a home field');
+assert.deepEqual([s.teams.Oklahoma.stadium, s.teams.Oklahoma.city], ['Marita Hynes Field', 'Norman, Okla.']);
+{
+  const old = JSON.parse(JSON.stringify(league));
+  for (const t of Object.values(old.seasons[old.currentYear].teams)) { delete t.stadium; delete t.city; }
+  old.seasons[old.currentYear].teams.Texas.stadium = 'My Field';
+  migrateLeague(old);
+  const ot = old.seasons[old.currentYear].teams;
+  assert.equal(ot.UCLA.stadium, 'Easton Stadium');
+  assert.equal(ot.Texas.stadium, 'My Field', 'an edited field is kept');
+  const g = s.games.find(x => x.type === 'regular' && !x.neutral);
+  assert.equal(gameVenue(s, g).stadium, s.teams[g.home].stadium);
+}
 
 // Schedule shape: 12 weeks, early tournaments, weekend series, two-game midweek sets
 assert.equal(s.regWeeks, 12);

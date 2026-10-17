@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam } from './data.js?v=20261016221833';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261016221833';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261016221833';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261016221833';
-import { replayRatings, ensureBase } from './ratings.js?v=20261016221833';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261016221833';
-import { isFinal, records, INDEPENDENT } from './standings.js?v=20261016221833';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261016221833';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261016224307';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261016224307';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261016224307';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261016224307';
+import { replayRatings, ensureBase } from './ratings.js?v=20261016224307';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish } from './postseason.js?v=20261016224307';
+import { isFinal, records, INDEPENDENT } from './standings.js?v=20261016224307';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261016224307';
 
 export const SCHEMA_VERSION = 4;
 
@@ -416,6 +416,8 @@ export function ensureIndependent(league) {
 export function migrateLeague(league) {
   ensureIndependent(league);
   sortConferences(league);
+  // Home fields for teams saved before they existed.
+  for (const teams of [...Object.values(league.seasons || {}).map(se => se.teams), ...(league.draft ? [league.draft.teams] : [])]) for (const t of Object.values(teams || {})) fillSite(t);
   const v = league.schema || 1;
   if (v >= SCHEMA_VERSION) return league;
   if (v < 4) {

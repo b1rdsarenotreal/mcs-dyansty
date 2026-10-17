@@ -61,6 +61,80 @@ const T = [
   ['Texas State', 'Sun Belt', 'TXST', 'Bobcats', '#501214', '#8D734A', 70, 71, 70],
 ];
 
+// Home fields: [stadium, city]. Most are the school's softball stadium; a
+// school without a softball team gets its baseball park. Teams added later
+// pick these up by name, and every field can be edited on the team page.
+export const SITES = {
+  'Arizona': ['Rita Hillenbrand Memorial Stadium', 'Tucson, Ariz.'],
+  'Arizona State': ['Alberta B. Farrington Softball Stadium', 'Tempe, Ariz.'],
+  'Auburn': ['Jane B. Moore Field', 'Auburn, Ala.'],
+  'Bemidji State': ['Chet Anderson Stadium', 'Bemidji, Minn.'],
+  'Boston College': ['Harrington Athletics Village', 'Boston, Mass.'],
+  'Bowling Green': ['Meserve Field', 'Bowling Green, Ohio'],
+  'Cal State Fullerton': ['Anderson Family Field', 'Fullerton, Calif.'],
+  'Central Florida': ['UCF Softball Complex', 'Orlando, Fla.'],
+  'Central Michigan': ['Margo Jonker Stadium', 'Mount Pleasant, Mich.'],
+  'Clemson': ['McWhorter Stadium', 'Clemson, S.C.'],
+  'Coastal Carolina': ['St. John Stadium', 'Conway, S.C.'],
+  'Detroit Mercy': ['Buysse Ballpark', 'Detroit, Mich.'],
+  'Florida': ['Katie Seashole Pressly Stadium', 'Gainesville, Fla.'],
+  'Green Bay': ['King Park', 'Green Bay, Wis.'],
+  'Hawaii': ['Rainbow Wahine Softball Stadium', 'Honolulu, Hawaii'],
+  'Houston': ['Cougar Softball Stadium', 'Houston, Texas'],
+  'Illinois': ['Eichelberger Field', 'Champaign, Ill.'],
+  'Indiana': ['Andy Mohr Field', 'Bloomington, Ind.'],
+  'Indiana State': ['Price Field', 'Terre Haute, Ind.'],
+  'Iowa': ['Bob Pearl Field', 'Iowa City, Iowa'],
+  'James Madison': ['Veterans Memorial Park', 'Harrisonburg, Va.'],
+  'Kent State': ['Devine Diamond', 'Kent, Ohio'],
+  'LSU': ['Tiger Park', 'Baton Rouge, La.'],
+  'Long Beach State': ['LBSU Softball Complex', 'Long Beach, Calif.'],
+  'Louisiana': ['Lamson Park', 'Lafayette, La.'],
+  'Louisville': ['Ulmer Stadium', 'Louisville, Ky.'],
+  'Michigan': ['Alumni Field', 'Ann Arbor, Mich.'],
+  'Michigan State': ['Secchia Stadium', 'East Lansing, Mich.'],
+  'Milwaukee': ['Henry Aaron Field', 'Milwaukee, Wis.'],
+  'Minnesota': ['Jane Sage Cowles Stadium', 'Minneapolis, Minn.'],
+  'Minnesota State': ['MSU Softball Diamond', 'Mankato, Minn.'],
+  'Mississippi State': ['Nusz Park', 'Starkville, Miss.'],
+  'Missouri': ['Mizzou Softball Stadium', 'Columbia, Mo.'],
+  'Montana': ['Grizzly Softball Field', 'Missoula, Mont.'],
+  'NC State': ['Dail Softball Stadium', 'Raleigh, N.C.'],
+  'Nebraska': ['Bowlin Stadium', 'Lincoln, Neb.'],
+  'New Haven': ['New Haven Softball Field', 'West Haven, Conn.'],
+  'North Dakota State': ['Tharaldson Park', 'Fargo, N.D.'],
+  'Northern Colorado': ['Jackson Field', 'Greeley, Colo.'],
+  'Northern Illinois': ['Mary M. Bell Field', 'DeKalb, Ill.'],
+  'Oakland': ['Oakland Softball Field', 'Rochester, Mich.'],
+  'Ohio State': ['Buckeye Field', 'Columbus, Ohio'],
+  'Oklahoma': ['Marita Hynes Field', 'Norman, Okla.'],
+  'Oklahoma State': ['Cowgirl Stadium', 'Stillwater, Okla.'],
+  'Ole Miss': ['Ole Miss Softball Complex', 'Oxford, Miss.'],
+  'Oregon State': ['Kelly Field', 'Corvallis, Ore.'],
+  'Robert Morris': ['NAC Softball Field', 'Moon Township, Pa.'],
+  'Saint Louis': ['Billiken Sports Center', 'St. Louis, Mo.'],
+  'South Alabama': ['Jaguar Field', 'Mobile, Ala.'],
+  'St. Cloud State': ['Selke Field', 'St. Cloud, Minn.'],
+  'St. Thomas': ['South Field', 'St. Paul, Minn.'],
+  'Stanford': ['Smith Family Stadium', 'Stanford, Calif.'],
+  'Tennessee': ['Sherri Parker Lee Stadium', 'Knoxville, Tenn.'],
+  'Texas': ['McCombs Field', 'Austin, Texas'],
+  'Texas A&M': ['Davis Diamond', 'College Station, Texas'],
+  'Texas State': ['Bobcat Softball Stadium', 'San Marcos, Texas'],
+  'Texas Tech': ['Rocky Johnson Field', 'Lubbock, Texas'],
+  'UC Davis': ['La Rue Field', 'Davis, Calif.'],
+  'UC Santa Barbara': ['Caesar Uyesaka Stadium', 'Santa Barbara, Calif.'],
+  'UCLA': ['Easton Stadium', 'Los Angeles, Calif.'],
+  'UMKC': ['MLB Urban Youth Academy', 'Kansas City, Mo.'],
+  'UW–Whitewater': ['van Steenderen Softball Complex', 'Whitewater, Wis.'],
+  'Utah': ['Dumke Family Softball Stadium', 'Salt Lake City, Utah'],
+  'Utah State': ['LaRee and LeGrand Johnson Field', 'Logan, Utah'],
+  'Vanderbilt': ['Hawkins Field', 'Nashville, Tenn.'],
+  'Washington': ['Husky Softball Stadium', 'Seattle, Wash.'],
+  'Western Michigan': ['Ebert Field', 'Kalamazoo, Mich.'],
+  'Wisconsin': ['Goodman Diamond', 'Madison, Wis.'],
+};
+
 // Names the logo list may know a school by.
 export const LOGO_ALIASES = { 'Central Florida': 'UCF', 'UMKC': 'Kansas City', 'UW–Whitewater': 'Wisconsin-Whitewater' };
 
@@ -113,11 +187,21 @@ export const COACHES = {
   'Texas State': 'Douglas Allin',
 };
 
-export function makeTeam({ school, conference, abbr, mascot = '', coach = '', coachId = null, color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65 }) {
+export function makeTeam({ school, conference, abbr, mascot = '', coach = '', coachId = null, color = '#555555', altColor = '#dddddd', off = 65, pit = 65, def = 65, stadium, city }) {
+  const known = SITES[school] || [];
   return {
     school, conference, abbr: abbr || school.replace(/[^A-Za-z ]/g, '').split(/\s+/).map(w => w[0]).join('').slice(0, 4).toUpperCase(),
     mascot, coach, coachId, color, altColor, off, pit, def, base: { off, pit, def }, logoOverride: null,
+    stadium: stadium || known[0] || '', city: city || known[1] || '',
   };
+}
+
+// Gives a team its home field from SITES if it has none yet (older saves).
+export function fillSite(t) {
+  if (t.stadium !== undefined && t.city !== undefined) return;
+  const known = SITES[t.school] || [];
+  t.stadium ??= known[0] || '';
+  t.city ??= known[1] || '';
 }
 
 export function seedTeams() {

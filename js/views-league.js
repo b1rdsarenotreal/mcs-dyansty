@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016221833';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016221833';
-import { ovr } from './sim.js?v=20261016221833';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016221833';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016221833';
-import { hotSeat, HEAT } from './hotseat.js?v=20261016221833';
-import { setRating } from './ratings.js?v=20261016221833';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents } from './postseason.js?v=20261016221833';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016221833';
-import { exportLeague, clearLeague } from './store.js?v=20261016221833';
-import { clamp, fmtPct } from './util.js?v=20261016221833';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016221833';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016224307';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016224307';
+import { ovr } from './sim.js?v=20261016224307';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016224307';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016224307';
+import { hotSeat, HEAT } from './hotseat.js?v=20261016224307';
+import { setRating } from './ratings.js?v=20261016224307';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261016224307';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016224307';
+import { exportLeague, clearLeague } from './store.js?v=20261016224307';
+import { clamp, fmtPct } from './util.js?v=20261016224307';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016224307';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -136,6 +136,8 @@ function teamForm(teams, { note = null, after = () => {}, conference = null } = 
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="f-school" placeholder="e.g. Oregon State"></label>
         <label class="field" style="flex:1;min-width:110px">Mascot <input type="text" id="f-mascot" placeholder="Beavers"></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="f-abbr" maxlength="5" placeholder="ORST"></label></div>
+      <div class="row"><label class="field" style="flex:2;min-width:160px">Home field <input type="text" id="f-stadium" placeholder="e.g. Kelly Field"></label>
+        <label class="field" style="flex:1;min-width:140px">City <input type="text" id="f-city" placeholder="e.g. Corvallis, Ore."></label></div>
       <div class="row"><label class="field" style="flex:1;min-width:160px">Head coach <select id="f-coachsel"><option value="__new">New coach (type the name)</option>${availableCoaches(ctx.league, teams).map(c => `<option value="${c.id}">${esc(c.name)} (available)</option>`).join('')}</select></label>
         <label class="field" style="flex:1;min-width:160px" id="f-coachname-wrap">New coach's name <input type="text" id="f-coach" placeholder="Coach's name"></label></div>
       <div class="row">
@@ -153,7 +155,7 @@ function teamForm(teams, { note = null, after = () => {}, conference = null } = 
     const v = id => $(id, modal).value.trim();
     try {
       const pick = v('#f-coachsel');
-      addTeam(ctx.league, teams, { school: v('#f-school'), mascot: v('#f-mascot'), coachId: pick === '__new' ? null : pick, coachName: pick === '__new' ? v('#f-coach') : '', abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
+      addTeam(ctx.league, teams, { school: v('#f-school'), mascot: v('#f-mascot'), stadium: v('#f-stadium'), city: v('#f-city'), coachId: pick === '__new' ? null : pick, coachName: pick === '__new' ? v('#f-coach') : '', abbr: v('#f-abbr').toUpperCase() || undefined, conference: v('#f-conf'), color: v('#f-color'), altColor: v('#f-alt'), off: rate(v('#f-off')), pit: rate(v('#f-pit')), def: rate(v('#f-def')) });
       after({ rebuild: !!$('#f-rebuild', modal)?.checked });
     } catch (e) { return toast(e.message, true); }
     modal.close(); changed({ progress: false }); toast('Team added.');
@@ -519,17 +521,19 @@ function teamScheduleRows(s, name, t, games) {
     const fin = isFinal(g), won = fin && winnerOf(g) === name;
     const inn = Math.max(g.homeLine.length, g.awayLine.length);
     // Where it's played: the host's field (a conference tournament's host when
-    // neither team is the host), or the MCWS stadium.
-    const site = g.site || (g.neutral ? (g.type === 'conf' ? evName[g.event]?.host : null) : g.home);
+    // neither team is the host), or the MCWS stadium. City on top, field below.
+    const v = gameVenue(s, g), site = v.host;
     const away = site === opp;
-    const where = g.type === 'mcws' ? `${venue.stadium}${venue.city ? `, ${venue.city}` : ''}` : site === name ? 'Home' : site ? site : 'Neutral site';
+    const where = v.city || v.stadium
+      ? `<b>${esc(v.city || v.stadium)}</b>${v.city && v.stadium ? `<span>${esc(v.stadium)}</span>` : ''}`
+      : esc(g.type === 'mcws' ? venue.stadium : site === name ? 'Home' : site || 'Neutral site');
     const ranks = fin ? cache.ranksAt(g.week) : cache.ranks();
     const oppRank = ranks[opp];
     const tag = g.confGame ? (c => `<span class="ts-conf" title="${esc(c)} game">${confLogo(c, 20)}</span>`)(s.teams[name]?.conference || t.conference) : g.midweek ? `<span class="ts-tag">${g.midweek === 'doubleheader' ? 'Doubleheader' : 'Midweek'}</span>` : '';
     const result = fin
       ? `<b class="ts-wl ${won ? 'w' : 'l'}">${won ? 'W' : 'L'}</b> <b>${home ? g.homeR : g.awayR}-${home ? g.awayR : g.homeR}</b>${inn !== 7 ? `<div class="ts-inn">(${inn} inn.)</div>` : ''}`
       : '<span class="muted">—</span>';
-    out.push(`<div class="ts-row clickable" data-g="${g.id}" tabindex="0" role="button" aria-label="${esc(`${g.day} ${gameDate(s, g)}: ${away ? 'at' : 'vs.'} ${opp}${fin ? `, ${won ? 'won' : 'lost'}` : ''}`)}">
+    out.push(`<div class="ts-row clickable" data-g="${g.id}" tabindex="0" role="button" aria-label="${esc(`${g.day} ${gameDate(s, g)}: ${away ? 'at' : 'vs.'} ${opp}${v.city ? ` in ${v.city}` : ''}${fin ? `, ${won ? 'won' : 'lost'}` : ''}`)}">
       <div class="ts-date" style="background:${esc(dateBg)};color:${esc(dateFg)}"><span>${esc(g.day)}</span><b>${gameDate(s, g)}</b></div>
       <div class="ts-match">
         <span class="ts-logo" title="${esc(name)}">${logoImg(t, 30)}</span>
@@ -537,7 +541,7 @@ function teamScheduleRows(s, name, t, games) {
         <span class="ts-logo">${logoImg(teamInfo(opp), 30)}</span>
         <span class="ts-opp">${oppRank ? `<span class="ts-rank">#${oppRank}</span> ` : ''}<a class="team-link" href="${teamHref(opp)}">${esc(opp)}</a>${tag}</span>
       </div>
-      <div class="ts-where">${esc(where)}</div>
+      <div class="ts-where">${where}</div>
       <div class="ts-res">${result}</div>
     </div>`);
   }
@@ -562,6 +566,7 @@ export function renderTeamPage(name) {
       <div style="flex:1;min-width:200px">
         <div class="team-hero-name">${pr[name] ? `<span class="team-hero-rank">#${pr[name]}</span> ` : ''}${esc(name)}</div>
         <div class="team-hero-sub">${t.coachId ? `Head coach ${coachLink(t.coachId, 'color:inherit;text-decoration:underline')} · ` : 'Head coach job open · '}${esc(t.mascot || '')} · <a href="${confHref(t.conference)}" style="color:inherit">${esc(t.conference)}</a> · ${rec.w}-${rec.l} ${isIndependent(t.conference) ? '' : `(${rec.cw}-${rec.cl} conf)`} · OVR ${ovr(t)}</div>
+        ${t.stadium || t.city ? `<div class="team-hero-sub team-hero-field">${esc([t.stadium, t.city].filter(Boolean).join(' · '))}</div>` : ''}
       </div>
       <a class="btn" href="#/teams">All teams</a>
     </div>
@@ -594,6 +599,8 @@ export function renderTeamPage(name) {
         <label class="field" style="width:90px">Abbr. <input type="text" id="e-abbr" maxlength="5" value="${esc(t.abbr || '')}"></label>
         <label class="field" style="flex:1;min-width:140px">Conference <select id="e-conf">${confs.map(c => `<option ${c === t.conference ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
         <label class="field">Color <input type="color" id="e-color" value="${esc(t.color)}"></label><label class="field">Alt color <input type="color" id="e-alt" value="${esc(t.altColor)}"></label></div>
+      <div class="row" style="margin-top:10px"><label class="field" style="flex:2;min-width:200px">Home field <input type="text" id="e-stadium" placeholder="e.g. Marita Hynes Field" value="${esc(t.stadium || '')}"></label>
+        <label class="field" style="flex:1;min-width:160px">City <input type="text" id="e-city" placeholder="e.g. Norman, Okla." value="${esc(t.city || '')}"></label></div>
       <div class="row" style="margin-top:10px"><label class="field" style="flex:1;min-width:220px">Logo image link <input type="text" id="e-logo" placeholder="https://…" value="${esc(t.logoOverride && !t.logoOverride.startsWith('data:') ? t.logoOverride : '')}"></label>
         <label class="btn" style="align-self:flex-end">Upload logo <input type="file" id="e-file" accept="image/*" hidden></label>
         ${t.logoOverride ? '<button class="btn" id="e-clearlogo" style="align-self:flex-end">Use default logo</button>' : ''}</div>
@@ -617,7 +624,7 @@ export function renderTeamPage(name) {
   if ($('#e-clearlogo')) $('#e-clearlogo').onclick = () => { applyLogo(null); changed({ progress: false }); };
   $('#e-save').onclick = () => {
     const v = id => $(id).value.trim();
-    Object.assign(t, { mascot: v('#e-mascot'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt') });
+    Object.assign(t, { mascot: v('#e-mascot'), abbr: v('#e-abbr').toUpperCase() || t.abbr, conference: v('#e-conf'), color: v('#e-color'), altColor: v('#e-alt'), stadium: v('#e-stadium'), city: v('#e-city') });
     if (v('#e-logo')) applyLogo(v('#e-logo'));
     const newName = v('#e-school');
     try { if (newName !== name) { renameTeam(ctx.league, s, name, newName); location.hash = teamHref(newName); } } catch (e) { return toast(e.message, true); }
