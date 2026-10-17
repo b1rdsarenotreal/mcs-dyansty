@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261016224307';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016224307';
-import { generatePoll } from './polls.js?v=20261016224307';
-import { hashStr } from './util.js?v=20261016224307';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261016225350';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016225350';
+import { generatePoll } from './polls.js?v=20261016225350';
+import { hashStr } from './util.js?v=20261016225350';
 
 // ---------- tournament format ----------
 
@@ -703,6 +703,28 @@ export function confirmField(season) {
 }
 export function unconfirmField(season) { season.post.fieldConfirmed = false; }
 
+// What an NCAA site is called: the host's city ("East Lansing" for Michigan
+// State), or the school when it has no city set.
+export function siteName(season, school) {
+  const city = (season.teams[school]?.city || '').split(',')[0].trim();
+  return city || school;
+}
+
+// Older saves named regionals and super regionals after the host school.
+// Renames those (and their games) after the host's city. Names that don't
+// follow the old pattern are left alone.
+export function citySiteNames(season) {
+  const p = season.post || {};
+  for (const [list, kind] of [[p.regionals, 'Regional'], [p.supers, 'Super Regional']]) {
+    for (const ev of list || []) {
+      const old = `${ev.host} ${kind}`, now = `${siteName(season, ev.host)} ${kind}`;
+      if (ev.name !== old || now === old) continue;
+      ev.name = now;
+      for (const g of season.games) if (g.event === ev.id && g.label?.startsWith(`${old} · `)) g.label = now + g.label.slice(old.length);
+    }
+  }
+}
+
 // Serpentine pods: with 4 regionals, regional 1 gets seeds 1, 8, 9, 16,
 // regional 2 gets 2, 7, 10, 15, and so on. Regional k is hosted by seed k+1.
 export function pods(field, regionals = 4) {
@@ -717,7 +739,7 @@ export function lockField(season) {
   const field = [...p.field].sort((a, b) => a.seed - b.seed);
   p.regionals = pods(field, p.cfg.regionals).map((teams, i) => ({
     id: `reg-${i + 1}`, kind: regionalKind(teams.length), seeds: teams, host: teams[0], nodes: regionalNodes(teams.length), champion: null,
-    name: `${teams[0]} Regional`, path: i,
+    name: `${siteName(season, teams[0])} Regional`, path: i,
   }));
   season.phase = 'regionals';
 }
@@ -730,7 +752,7 @@ function buildSupers(season) {
   const regs = season.post.regionals, n = regs.length;
   return Array.from({ length: n / 2 }, (_, i) => {
     const pair = [regs[i].champion, regs[n - 1 - i].champion].sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b));
-    return { id: `sup-${i + 1}`, kind: 'series', seeds: pair, host: pair[0], nodes: seriesNodes(), champion: null, name: `${pair[0]} Super Regional`, path: i };
+    return { id: `sup-${i + 1}`, kind: 'series', seeds: pair, host: pair[0], nodes: seriesNodes(), champion: null, name: `${siteName(season, pair[0])} Super Regional`, path: i };
   });
 }
 

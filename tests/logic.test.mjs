@@ -3,7 +3,7 @@ import { confWeeksFor } from '../js/schedule.js';
 import assert from 'node:assert/strict';
 import { estimateHE, backfillHitsErrors, applyResult, afterChange, newSeason, pointsLeft } from '../js/league.js';
 import { migrateLeague } from '../js/league.js';
-import { gameVenue } from '../js/postseason.js';
+import { gameVenue, citySiteNames } from '../js/postseason.js';
 import { deleteConference, newLeague, currentSeason, simGames, startNextSeason, addTeam, addConference, renameTeam, beginOffseason, draftRemoveTeam, draftWarnings, coachName, weekName, hireCoach, newCoach, availableCoaches } from '../js/league.js';
 import { bracketology, selectionBoard, setAtLarge, confirmField, mcwsPlaces, mcwsHistory, setConfHost, shownSeed, setConfFormat, postWeeks, wsTeams, ncaaProblems, fieldSize } from '../js/postseason.js';
 import { records, rpi, confStandings, isFinal, regSeasonChamps, regSeasonChamp, quadrants } from '../js/standings.js';
@@ -218,6 +218,19 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
 simGames(s, undefined, { autoLock: true });
 // Regionals keep their if-necessary Game 7 structure
 for (const ev of s.post.regionals) assert.ok(ev.nodes.some(n => n.key === 'G7'), 'regional still has Game 7');
+// Regionals are named after the host's city; older saves named after the
+// school are renamed on load, games included.
+for (const ev of s.post.regionals) assert.equal(ev.name, `${s.teams[ev.host].city.split(',')[0]} Regional`);
+{
+  const se = JSON.parse(JSON.stringify(s)), ev = se.post.regionals[0], city = ev.name;
+  ev.name = `${ev.host} Regional`;
+  for (const g of se.games) if (g.event === ev.id) g.label = g.label.replace(city, ev.name);
+  se.post.regionals[1].name = 'My Regional';
+  citySiteNames(se);
+  assert.equal(ev.name, city);
+  assert.ok(se.games.filter(g => g.event === ev.id).every(g => g.label.startsWith(`${city} · `)), 'game labels renamed');
+  assert.equal(se.post.regionals[1].name, 'My Regional', 'a custom name is kept');
+}
 // "If necessary" games flip home and away from the final they follow (any season so far).
 {
   let checked = 0;
