@@ -25,6 +25,7 @@ These stay different on purpose. Never copy them across:
 | Postseason column in team and coach histories | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route, `evAnchor` ids), plus a second line with the NCAA W-L and conference tournament W-L and round (`postseasonRecord`). The owner asked for the records line in MCS only. | Regional name and round lost, linked to the bracket (`postseasonDetail`). No records line. |
 | Color palette (the `:root` tokens at the top of `css/styles.css`, stat-band label colors, active tabs) | Night-game navy top bar | Lighter sky blue top bar (`--board: #2c71c7`), sky-tinted background. The owner asked for this in SACAA only. |
 | Independent teams (`INDEPENDENT` in `js/standings.js`, the Independents standings card, offseason/conference-page guards) | Supported: teams can be Independent (no conference games, title, tournament or automatic bid) | Not added. The owner asked for independents in MCS only. |
+| Team page, season tab layout (`renderTeamPage`, `.team-season` / `.team-ratings` CSS) | Full-width season card, then full-width Ratings, then Schedule & results, then Poll history. The owner asked for this in MCS only. | Ratings and season cards side by side, Poll history above the schedule |
 
 Internal identifiers such as `mcws`, `mcwsVenue` and `mcwsName` are shared by both apps. Keep them the same so code ports cleanly. Only text the user sees differs.
 

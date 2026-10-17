@@ -7,9 +7,9 @@
 // season cool it. These are suggestions only: nothing changes until the
 // commissioner fires someone.
 
-import { records, rpi, confStandings, regSeasonChamps, isIndependent } from './standings.js?v=20261015222311';
-import { wsTeams } from './postseason.js?v=20261015222311';
-import { ovr } from './sim.js?v=20261015222311';
+import { records, rpi, confStandings, regSeasonChamps, isIndependent } from './standings.js?v=20261016214007';
+import { wsTeams } from './postseason.js?v=20261016214007';
+import { ovr } from './sim.js?v=20261016214007';
 
 export const HEAT = {
   fire: { label: 'Fire suggested', min: 2.6 },
@@ -112,7 +112,9 @@ export function hotSeat(league, year = league.currentYear) {
     if (now.f.regTitle.has(t.school)) { score -= 0.8; cool.push('Won the regular-season title'); }
     if (!reasons.length && !cool.length) reasons.push(gap > 0 ? `Went ${now.w}-${now.l}, a little under the roster's expected ${Math.round(now.exp * 100)}%` : `Went ${now.w}-${now.l}`);
     score = Math.round(score * 10) / 10;
-    const level = score >= HEAT.fire.min ? 'fire' : score >= HEAT.hot.min ? 'hot' : score >= HEAT.warm.min ? 'warm' : null;
+    let level = score >= HEAT.fire.min ? 'fire' : score >= HEAT.hot.min ? 'hot' : score >= HEAT.warm.min ? 'warm' : null;
+    // A coach's first season at the school never gets a firing suggestion.
+    if (level === 'fire' && run.length === 1) level = 'hot';
     if (!level) continue;
     const tot = run.reduce((a, s) => ({ w: a.w + s.w, l: a.l + s.l }), { w: 0, l: 0 });
     out.push({ school: t.school, coachId: id, score, level, seasons: run.length, w: tot.w, l: tot.l, reasons: reasons.slice(0, 3), cool: cool.slice(0, 2) });

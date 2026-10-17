@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261015222311';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261015222311';
-import { ovr } from './sim.js?v=20261015222311';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261015222311';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261015222311';
-import { hotSeat, HEAT } from './hotseat.js?v=20261015222311';
-import { setRating } from './ratings.js?v=20261015222311';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261015222311';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261015222311';
-import { exportLeague, clearLeague } from './store.js?v=20261015222311';
-import { clamp, fmtPct } from './util.js?v=20261015222311';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261015222311';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016214007';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016214007';
+import { ovr } from './sim.js?v=20261016214007';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016214007';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016214007';
+import { hotSeat, HEAT } from './hotseat.js?v=20261016214007';
+import { setRating } from './ratings.js?v=20261016214007';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA } from './postseason.js?v=20261016214007';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016214007';
+import { exportLeague, clearLeague } from './store.js?v=20261016214007';
+import { clamp, fmtPct } from './util.js?v=20261016214007';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016214007';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
 
@@ -503,13 +503,7 @@ export function renderTeamPage(name) {
     <div class="steps">${Object.entries({ season: `${s.year} season`, history: 'Program history', h2h: 'Head-to-head' }).map(([k, l]) => `<a href="${teamHref(name)}" data-ttab="${k}" class="${tab === k ? 'active' : ''}">${l}</a>`).join('')}</div>
     ${tab === 'history' ? teamHistoryTab(name, t, history) : tab === 'h2h' ? teamH2HTab(name) : `
     ${inSeason ? '' : `<div class="hint" style="margin-bottom:14px">${esc(name)} isn't in the ${s.year} season. See Program history for its dynasty record.</div>`}
-    <div class="grid">
-      <div class="card"><h2>Ratings</h2>
-        ${ratingBar('OFF', t.off, t.color, t.base?.off)}${ratingBar('PIT', t.pit, t.color, t.base?.pit)}${ratingBar('DEF', t.def, t.color, t.base?.def)}${ratingBar('OVR', ovr(t), t.color, t.base ? ovrOf(t.base) : null)}
-        <p class="small muted" style="margin:6px 0 0">Change since the preseason, from results so far. Ratings rise with wins over better teams and fall with losses to weaker ones.</p>
-        ${inSeason ? `<div class="row" style="margin-top:10px">${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" data-r="${k}" value="${t[k]}"></label>`).join('')}</div>` : ''}
-      </div>
-      <div class="card"><h2>${s.year} season</h2>
+      <div class="card team-season"><h2>${s.year} season</h2>
         <div class="kpis kpis-sm">
           <div class="kpi"><div class="v">${rec.w}-${rec.l}</div><div class="l">Overall</div></div>
           <div class="kpi"><div class="v">${rec.cw}-${rec.cl}</div><div class="l">Conference</div></div>
@@ -521,8 +515,11 @@ export function renderTeamPage(name) {
         </div>
         ${(() => { const d = postseasonDetail(s, name); return d ? `<p><a class="badge gold" href="${postseasonHref(s.year, d)}">${esc(d.text)}</a></p>` : ''; })()}
       </div>
-    </div>
-    ${pollPts.length ? `<div class="card" style="margin-top:16px"><h2>Poll history</h2>${pollChart(pollPts, t.color === '#000000' || t.color === '#FFFFFF' ? t.altColor : t.color)}</div>` : ''}
+      <div class="card team-ratings" style="margin-top:16px"><h2>Ratings</h2>
+        ${ratingBar('OFF', t.off, t.color, t.base?.off)}${ratingBar('PIT', t.pit, t.color, t.base?.pit)}${ratingBar('DEF', t.def, t.color, t.base?.def)}${ratingBar('OVR', ovr(t), t.color, t.base ? ovrOf(t.base) : null)}
+        <p class="small muted" style="margin:6px 0 0">Change since the preseason, from results so far. Ratings rise with wins over better teams and fall with losses to weaker ones.</p>
+        ${inSeason ? `<div class="row" style="margin-top:10px">${['off', 'pit', 'def'].map(k => `<label class="field" style="width:80px">${k.toUpperCase()} <input type="number" min="40" max="99" data-r="${k}" value="${t[k]}"></label>`).join('')}</div>` : ''}
+      </div>
     <div class="card" style="margin-top:16px"><h2>Schedule & results</h2><div class="table-wrap"><table><thead><tr><th>Wk</th><th>Day</th><th class="num" title="${esc(name)}'s rank going into the game">Rank</th><th>Opponent</th><th>Result</th></tr></thead><tbody>
         ${games.map(g => {
           const home = g.home === name, opp = home ? g.away : g.home;
@@ -531,8 +528,9 @@ export function renderTeamPage(name) {
           const res = fin ? `<b class="${won ? 'good' : 'bad'}">${won ? 'W' : 'L'}</b> ${home ? g.homeR : g.awayR}-${home ? g.awayR : g.homeR}${inn !== 7 ? ` <span class="muted small">(${inn})</span>` : ''}` : '<span class="muted">—</span>';
           return `<tr class="clickable" data-g="${g.id}"><td class="small">${g.week > regWeeksOf(s) ? esc(weekName(g.week, s).replace('Conf. Tournaments', 'Conf T')) : g.week}</td><td class="small">${esc(g.day)}</td>
             <td class="num muted small">${fin && cache.ranksAt(g.week)[name] ? '#' + cache.ranksAt(g.week)[name] : ''}</td>
-            <td>${g.site ? (g.site === name ? '' : '@') : g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
+            <td>${g.site ? (g.site === name ? '' : g.site === opp ? '@' : 'vs') : g.neutral ? 'vs' : home ? '' : '@'} ${team(opp, { ranks: fin ? cache.ranksAt(g.week) : null })}${g.label ? ` <span class="muted small">${esc(g.label.split(' · ')[0])}</span>` : g.confGame ? ' <span class="muted small">*</span>' : ''}</td><td>${res}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div><p class="small muted">* conference game. Ranks on played games are from the poll in effect when the game was played.</p></div>
+    ${pollPts.length ? `<div class="card" style="margin-top:16px"><h2>Poll history</h2>${pollChart(pollPts, t.color === '#000000' || t.color === '#FFFFFF' ? t.altColor : t.color)}</div>` : ''}
     ${inSeason ? `<div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:2;min-width:160px">School <input type="text" id="e-school" value="${esc(name)}"></label>
         <label class="field" style="flex:1;min-width:120px">Mascot <input type="text" id="e-mascot" value="${esc(t.mascot || '')}"></label>
