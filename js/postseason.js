@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261016232827';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016232827';
-import { generatePoll } from './polls.js?v=20261016232827';
-import { hashStr } from './util.js?v=20261016232827';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261016234303';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261016234303';
+import { generatePoll } from './polls.js?v=20261016234303';
+import { hashStr } from './util.js?v=20261016234303';
 
 // ---------- tournament format ----------
 
@@ -558,10 +558,11 @@ export function mcwsVenue(season) {
 
 // Where a game is played: { host, stadium, city }. The host is the school whose
 // field it is (null for the MCWS, or a neutral game with no host). A
-// conference tournament game is at the tournament host's field.
+// conference tournament, regional or super regional game is at the event
+// host's field, even when the host isn't playing in it.
 export function gameVenue(season, g) {
   if (g.type === 'mcws') { const v = mcwsVenue(season); return { host: null, stadium: v.stadium, city: v.city }; }
-  const host = g.site || (g.neutral ? (g.type === 'conf' ? allEvents(season).find(ev => ev.id === g.event)?.host : null) : g.home) || null;
+  const host = g.site || (g.neutral ? (['conf', 'regional', 'super'].includes(g.type) ? allEvents(season).find(ev => ev.id === g.event)?.host : null) : g.home) || null;
   const t = host ? season.teams[host] : null;
   return { host, stadium: t?.stadium || '', city: t?.city || '' };
 }

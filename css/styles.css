@@ -750,7 +750,7 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
   .ts-row { grid-template-columns: 74px minmax(0, 1fr) 84px; }
   .ts-where { display: none; }
   .ts-match { gap: 8px; padding: 8px 10px; }
-  .ts-logo:first-child, .ts-logo:first-child + .ts-vs { display: none; }
+  .ts-logo:first-child, .ts-mine-rank, .ts-match > .ts-vs { display: none; }
   .ts-res { font-size: 14px; }
   .ts-tag { display: none; }
   .ts-opp { overflow-wrap: anywhere; }
@@ -764,3 +764,4 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .members-table { table-layout: fixed; min-width: 760px; }
 .members-table th:first-child { width: 26%; }
 .members-table th:nth-child(2) { width: 11%; }
+.ts-mine-rank { font-size: 13px; margin-left: -4px; flex: none; }

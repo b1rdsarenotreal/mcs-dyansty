@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016232827';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016232827';
-import { ovr } from './sim.js?v=20261016232827';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016232827';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016232827';
-import { hotSeat, HEAT } from './hotseat.js?v=20261016232827';
-import { setRating } from './ratings.js?v=20261016232827';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261016232827';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016232827';
-import { exportLeague, clearLeague } from './store.js?v=20261016232827';
-import { clamp, fmtPct } from './util.js?v=20261016232827';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016232827';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016234303';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016234303';
+import { ovr } from './sim.js?v=20261016234303';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016234303';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016234303';
+import { hotSeat, HEAT } from './hotseat.js?v=20261016234303';
+import { setRating } from './ratings.js?v=20261016234303';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261016234303';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016234303';
+import { exportLeague, clearLeague } from './store.js?v=20261016234303';
+import { clamp, fmtPct } from './util.js?v=20261016234303';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016234303';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all', memberSort: { k: 'titles', dir: -1 } };
 
@@ -537,6 +537,7 @@ function teamScheduleRows(s, name, t, games) {
       <div class="ts-date" style="background:${esc(dateBg)};color:${esc(dateFg)}"><span>${esc(g.day)}</span><b>${gameDate(s, g)}</b></div>
       <div class="ts-match">
         <span class="ts-logo" title="${esc(name)}">${logoImg(t, 30)}</span>
+        ${ranks[name] ? `<span class="ts-rank ts-mine-rank" title="${esc(name)}'s rank that week">#${ranks[name]}</span>` : ''}
         <span class="ts-vs">${away ? 'at' : 'vs.'}</span>
         <span class="ts-logo">${logoImg(teamInfo(opp), 30)}</span>
         <span class="ts-opp">${oppRank ? `<span class="ts-rank">#${oppRank}</span> ` : ''}<a class="team-link" href="${teamHref(opp)}">${esc(opp)}</a>${tag}</span>
@@ -545,7 +546,7 @@ function teamScheduleRows(s, name, t, games) {
       <div class="ts-res">${result}</div>
     </div>`);
   }
-  return `<div class="ts-list">${out.join('')}</div><p class="small muted" style="margin-top:10px">Click a game for its box score. Ranks are from the poll in effect when the game was played (the latest poll for games not yet played).</p>`;
+  return `<div class="ts-list">${out.join('')}</div><p class="small muted" style="margin-top:10px">Click a game for its box score. Both teams' ranks are from the poll in effect when the game was played (the latest poll for games not yet played).</p>`;
 }
 
 export function renderTeamPage(name) {
