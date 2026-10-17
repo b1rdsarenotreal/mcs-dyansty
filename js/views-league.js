@@ -1,19 +1,19 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016225350';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016225350';
-import { ovr } from './sim.js?v=20261016225350';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016225350';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016225350';
-import { hotSeat, HEAT } from './hotseat.js?v=20261016225350';
-import { setRating } from './ratings.js?v=20261016225350';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261016225350';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016225350';
-import { exportLeague, clearLeague } from './store.js?v=20261016225350';
-import { clamp, fmtPct } from './util.js?v=20261016225350';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016225350';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261016232827';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261016232827';
+import { ovr } from './sim.js?v=20261016232827';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261016232827';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261016232827';
+import { hotSeat, HEAT } from './hotseat.js?v=20261016232827';
+import { setRating } from './ratings.js?v=20261016232827';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261016232827';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261016232827';
+import { exportLeague, clearLeague } from './store.js?v=20261016232827';
+import { clamp, fmtPct } from './util.js?v=20261016232827';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261016232827';
 
-const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all' };
+const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all', memberSort: { k: 'titles', dir: -1 } };
 
 // Click-to-sort table headers. `state` is { k, dir }; clicking the sorted
 // column flips the direction, clicking another starts high-to-low (A-Z for text).
@@ -814,8 +814,8 @@ export function renderConferencePage(c) {
     const regDone = se.games.some(g => g.type === 'regular') && se.games.filter(g => g.type === 'regular').every(isFinal);
     const tChamp = se.post?.confT?.[c]?.champion;
     for (const t of inC) {
-      const m = (members[t] ||= { team: t, seasons: 0, cw: 0, cl: 0, w: 0, l: 0, reg: 0, tour: 0, ncaa: 0, mcws: 0 });
-      m.seasons++; m.cw += rg[t]?.cw || 0; m.cl += rg[t]?.cl || 0; m.w += all[t]?.w || 0; m.l += all[t]?.l || 0;
+      const m = (members[t] ||= { team: t, seasons: 0, cw: 0, cl: 0, w: 0, l: 0, reg: 0, tour: 0, ncaa: 0, mcws: 0, first: y, last: y });
+      m.seasons++; m.first = Math.min(m.first, y); m.last = Math.max(m.last, y); m.cw += rg[t]?.cw || 0; m.cl += rg[t]?.cl || 0; m.w += all[t]?.w || 0; m.l += all[t]?.l || 0;
       if (regDone && regChamps.includes(t)) m.reg++;
       if (tChamp === t) m.tour++;
       if (bids.some(f => f.team === t) && se.post?.regionals) m.ncaa++;
@@ -825,7 +825,15 @@ export function renderConferencePage(c) {
       w, l, nw, nl, bids: bids.length, best: finishes[0], size: inC.size, inProgress: se.phase !== 'complete' };
   }).filter(Boolean);
   const wl = (w, l) => `${w}-${l}${w + l ? ` <span class="muted small">${fmtPct(w / (w + l))}</span>` : ''}`;
-  const memberRows = Object.values(members).sort((x, z) => (z.reg + z.tour) - (x.reg + x.tour) || (z.cw / ((z.cw + z.cl) || 1)) - (x.cw / ((x.cw + x.cl) || 1)) || x.team.localeCompare(z.team));
+  // Members, current and former, in two sortable tables (one sort for both).
+  const ms = ui.memberSort;
+  const cpct = m => (m.cw + m.cl ? m.cw / (m.cw + m.cl) : 0), opct = m => (m.w + m.l ? m.w / (m.w + m.l) : 0);
+  const mval = (m, k) => ({ team: m.team, years: m.first, seasons: m.seasons, conf: cpct(m), overall: opct(m), reg: m.reg, tour: m.tour, ncaa: m.ncaa, mcws: m.mcws, titles: m.reg + m.tour + cpct(m) / 10 })[k];
+  const ordered = sortBy(Object.values(members), ms, mval);
+  const memberRows = ordered.filter(m => s.teams[m.team]?.conference === c), formerRows = ordered.filter(m => s.teams[m.team]?.conference !== c);
+  const yearsOf = m => (m.first === m.last ? `${m.first}` : `${m.first}–${m.last}`);
+  const memberTable = rows => `<div class="table-wrap"><table class="members-table"><thead><tr>${sortTh(ms, 'team', 'Team', { num: false, text: true })}${sortTh(ms, 'years', 'Years', { num: false, title: 'Sort by first season in the conference' })}${sortTh(ms, 'seasons', 'Seasons')}${sortTh(ms, 'conf', 'Conf W-L', { title: 'Sort by conference winning percentage' })}${sortTh(ms, 'overall', 'Overall', { title: 'Sort by winning percentage' })}${sortTh(ms, 'reg', 'Reg. titles')}${sortTh(ms, 'tour', 'Tourn. titles')}${sortTh(ms, 'ncaa', 'NCAA')}${sortTh(ms, 'mcws', 'MCWS')}</tr></thead><tbody>
+      ${rows.map(m => `<tr><td>${team(m.team, { rank: false })}</td><td class="small">${yearsOf(m)}</td><td class="num">${m.seasons}</td><td class="num"><b>${m.cw}-${m.cl}</b> <span class="muted small">${m.cw + m.cl ? fmtPct(m.cw / (m.cw + m.cl)) : ''}</span></td><td class="num">${m.w}-${m.l}</td><td class="num">${m.reg || ''}</td><td class="num">${m.tour || ''}</td><td class="num">${m.ncaa || ''}</td><td class="num">${m.mcws || ''}</td></tr>`).join('')}</tbody></table></div>`;
   const vsRows = Object.entries(vsConf).sort((x, z) => (z[1].w + z[1].l) - (x[1].w + x[1].l));
   app.innerHTML = `
     <div class="conf-hero" style="border-bottom-color:${esc(info.color)}"><div class="conf-hero-logo">${confLogo(c, 76)}</div><div style="flex:1"><div class="team-hero-name">${esc(c)}</div><div class="team-hero-sub">${st.length} teams</div></div><a class="btn" href="#/conferences">All conferences</a></div>
@@ -849,9 +857,9 @@ export function renderConferencePage(c) {
         <td class="small">${h.host ? esc(h.host) : '<span class="muted">—</span>'}</td>
         <td class="num">${wl(h.w, h.l)}</td><td class="num">${h.bids || '<span class="muted">0</span>'}</td><td class="num">${h.nw + h.nl ? `${h.nw}-${h.nl}` : '<span class="muted">—</span>'}</td>
         <td>${h.best ? `${team(h.best.team, { rank: false, size: 16 })}<div class="small muted">${esc(h.best.finish)}</div>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>
-    <div class="card" style="margin-top:16px"><h2>Members, all-time</h2><div class="table-wrap"><table><thead><tr><th>Team</th><th class="num">Seasons</th><th class="num">Conf W-L</th><th class="num">Overall</th><th class="num">Reg. titles</th><th class="num">Tourn. titles</th><th class="num">NCAA</th><th class="num">MCWS</th></tr></thead><tbody>
-      ${memberRows.map(m => `<tr><td>${team(m.team, { rank: false })}${s.teams[m.team]?.conference !== c ? ' <span class="muted small">(former)</span>' : ''}</td><td class="num">${m.seasons}</td><td class="num"><b>${m.cw}-${m.cl}</b> <span class="muted small">${m.cw + m.cl ? fmtPct(m.cw / (m.cw + m.cl)) : ''}</span></td><td class="num">${m.w}-${m.l}</td><td class="num">${m.reg || ''}</td><td class="num">${m.tour || ''}</td><td class="num">${m.ncaa || ''}</td><td class="num">${m.mcws || ''}</td></tr>`).join('')}</tbody></table></div>
-      <p class="small muted">Counts only the seasons each team spent in the ${esc(c)}. Shared regular-season titles count for each co-champion.</p></div>
+    <div class="card" style="margin-top:16px"><h2>Members, all-time</h2>${memberRows.length ? memberTable(memberRows) : `<p class="muted">No current members.</p>`}
+      ${formerRows.length ? `<h2 class="former-head">Former members</h2>${memberTable(formerRows)}` : ''}
+      <p class="small muted">Counts only the seasons each team spent in the ${esc(c)}. Shared regular-season titles count for each co-champion. Click a column header to sort both lists (click again to flip it).</p></div>
     <div class="card" style="margin-top:16px"><h2>Commissioner edits</h2>
       <div class="row"><label class="field" style="flex:1;min-width:160px">Name <input type="text" id="ce-name" value="${esc(c)}" ${isIndependent(c) ? 'disabled title="Reserved for teams without a conference"' : ''}></label>
         <label class="field" style="width:90px">Abbr. <input type="text" id="ce-abbr" maxlength="5" value="${esc(info.abbr || '')}"></label>
@@ -860,6 +868,7 @@ export function renderConferencePage(c) {
         <label class="btn" style="align-self:flex-end">Upload logo <input type="file" id="ce-file" accept="image/*" hidden></label>
         ${info.logo ? '<button class="btn" id="ce-clear" style="align-self:flex-end">Remove logo</button>' : ''}</div>
       <div class="row" style="margin-top:12px"><button class="btn primary" id="ce-save">Save changes</button><span class="spacer"></span>${isIndependent(c) ? '' : '<button class="btn danger" id="ce-del">Delete conference</button>'}</div></div>`;
+  bindSort(ui.memberSort, () => renderConferencePage(c));
   $('#ce-file').onchange = async e => { try { info.logo = await imageFileToDataUrl(e.target.files[0]); changed({ progress: false }); toast('Logo updated.'); } catch (err) { toast(err.message, true); } };
   if ($('#ce-clear')) $('#ce-clear').onclick = () => { delete info.logo; changed({ progress: false }); };
   $('#ce-save').onclick = () => {

@@ -759,3 +759,8 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 
 .ts-conf { display: inline-flex; vertical-align: -4px; margin-left: 8px; }
 .ts-conf .conf-badge { border-radius: 5px; }
+
+.former-head { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.members-table { table-layout: fixed; min-width: 760px; }
+.members-table th:first-child { width: 26%; }
+.members-table th:nth-child(2) { width: 11%; }
