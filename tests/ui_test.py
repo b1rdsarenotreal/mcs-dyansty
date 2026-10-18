@@ -30,6 +30,13 @@ try:
         pg.click("#w-sim"); pg.wait_for_timeout(300)
         pg.screenshot(path=f"{OUT}/02-schedule.png", full_page=False)
         # open a game and simulate in the editor, then save
+        # Conference games: the whole card border is the conference's color.
+        pg.click(".chip[data-week='10']"); pg.wait_for_selector(".game.conf-game")
+        bd = pg.evaluate("""(() => { const g = document.querySelector('.game.conf-game'), cs = getComputedStyle(g);
+          const probe = document.createElement('i'); probe.style.color = cs.getPropertyValue('--cc'); document.body.append(probe);
+          const want = getComputedStyle(probe).color; probe.remove();
+          return { w: cs.borderLeftWidth, l: cs.borderLeftColor, t: cs.borderTopColor, b: cs.borderBottomColor, want }; })()""")
+        assert bd["w"] == "2px" and bd["l"] == bd["t"] == bd["b"] == bd["want"], f"conference border color: {bd}"
         pg.goto(url + "#/schedule"); pg.click(".chip[data-week='2']"); pg.wait_for_timeout(200)
         order_js = "[...document.querySelectorAll('.game[data-game]')].map(e => e.dataset.game).join(',')"
         before = pg.evaluate(order_js)

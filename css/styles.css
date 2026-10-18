@@ -806,6 +806,9 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .game.ga { padding: 0; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(15,27,45,.05); transition: border-color .12s, box-shadow .12s; }
 .game.ga:hover { border-color: color-mix(in srgb, var(--muted) 55%, var(--line)); box-shadow: 0 6px 18px rgba(15,27,45,.09); }
 .game.ga:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Conference games (league and tournament): the whole border in the conference's color. */
+.game.ga.conf-game { border: 2px solid var(--cc); }
+.game.ga.conf-game:hover { border-color: var(--cc); box-shadow: 0 0 0 1px var(--cc), 0 6px 18px rgba(15,27,45,.09); }
 .ga-top { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); min-height: 34px; }
 .ga-conf { display: inline-flex; flex: none; }
 .ga-tag { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

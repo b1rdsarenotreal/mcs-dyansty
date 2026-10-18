@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261017213133';
-import { logoFor } from './logos.js?v=20261017213133';
-import { LOGO_ALIASES } from './data.js?v=20261017213133';
-import { ovr, winProbability } from './sim.js?v=20261017213133';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017213133';
-import { latestPoll, pollRankMap } from './polls.js?v=20261017213133';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017213133';
-import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017213133';
-import { DAY_ORDER } from './schedule.js?v=20261017213133';
-import { esc } from './util.js?v=20261017213133';
+import { saveLeague } from './store.js?v=20261018003430';
+import { logoFor } from './logos.js?v=20261018003430';
+import { LOGO_ALIASES } from './data.js?v=20261018003430';
+import { ovr, winProbability } from './sim.js?v=20261018003430';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261018003430';
+import { latestPoll, pollRankMap } from './polls.js?v=20261018003430';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261018003430';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261018003430';
+import { DAY_ORDER } from './schedule.js?v=20261018003430';
+import { esc } from './util.js?v=20261018003430';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -246,7 +246,8 @@ export function gameCard(g) {
     const fav = favorite(s, g);
     right = `${fav ? `<span class="ga-fav" title="Win probability">${fav}</span>` : ''}${s.teams[g.home] && s.teams[g.away] ? `<button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>` : ''}`;
   }
-  return `<div class="game ga ${fin ? 'final' : 'upcoming'}" data-game="${g.id}" tabindex="0">${gameTop(s, g)}
+  const conf = gameConf(s, g);
+  return `<div class="game ga ${fin ? 'final' : 'upcoming'}${conf ? ' conf-game' : ''}"${conf ? ` style="--cc:${esc(confColor(conf))}"` : ''} data-game="${g.id}" tabindex="0">${gameTop(s, g)}
     ${teamRow(g, g.away, g.awayR, { record: !fin })}${teamRow(g, g.home, g.homeR, { record: !fin })}
     <div class="ga-foot"><span class="ga-where">${esc(where)}</span>${right}</div></div>`;
 }
