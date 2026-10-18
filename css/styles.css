@@ -869,3 +869,11 @@ button.bx-sg:hover { border-color: var(--muted); }
   .bx-info { grid-template-columns: 1fr; }
   .bx-teams .ga-score { font-size: 28px; }
 }
+
+/* Game cards: no rank block; the rank sits by the name, and the winner's row
+   takes a faint wash of its color. */
+.ga-line { padding-left: 10px; }
+.ga-line.win { background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--wc, transparent) 7%, transparent) 45%, color-mix(in srgb, var(--wc, transparent) 18%, transparent) 100%); }
+.ga-rk { font-weight: 800; font-size: .86em; color: var(--muted); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.ga-line.win .ga-rk { color: var(--ink); }
+.bx-teams .ga-line { padding-left: 16px; }

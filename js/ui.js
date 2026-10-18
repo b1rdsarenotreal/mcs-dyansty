@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261017175104';
-import { logoFor } from './logos.js?v=20261017175104';
-import { LOGO_ALIASES } from './data.js?v=20261017175104';
-import { ovr, winProbability } from './sim.js?v=20261017175104';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017175104';
-import { latestPoll, pollRankMap } from './polls.js?v=20261017175104';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017175104';
-import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017175104';
-import { DAY_ORDER } from './schedule.js?v=20261017175104';
-import { esc } from './util.js?v=20261017175104';
+import { saveLeague } from './store.js?v=20261017180750';
+import { logoFor } from './logos.js?v=20261017180750';
+import { LOGO_ALIASES } from './data.js?v=20261017180750';
+import { ovr, winProbability } from './sim.js?v=20261017180750';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017180750';
+import { latestPoll, pollRankMap } from './polls.js?v=20261017180750';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017180750';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017180750';
+import { DAY_ORDER } from './schedule.js?v=20261017180750';
+import { esc } from './util.js?v=20261017180750';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -168,19 +168,21 @@ export function teamBlock(name) {
 }
 
 // A team's record as of a game: through it once it's final, going into it
-// before that.
+// before that. Conference games add the conference record: 30-5 (7-0).
 export function recordAt(t, g) {
   const s = S();
   cache._tg ||= {};
   const list = (cache._tg[t] ||= s.games.filter(x => isFinal(x) && (x.home === t || x.away === t)).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id));
   const key = x => [x.week, x.order, x.id];
   const before = (a, b) => { const A = key(a), B = key(b); for (let k = 0; k < 3; k++) if (A[k] !== B[k]) return A[k] < B[k]; return false; };
-  let w = 0, l = 0;
+  let w = 0, l = 0, cw = 0, cl = 0;
   for (const x of list) {
     if (x !== g && !before(x, g)) continue;
-    winnerOf(x) === t ? w++ : l++;
+    const won = winnerOf(x) === t;
+    won ? w++ : l++;
+    if (x.type === 'regular' && x.confGame) won ? cw++ : cl++;
   }
-  return `${w}-${l}`;
+  return `${w}-${l}${g.type === 'regular' && g.confGame ? ` (${cw}-${cl})` : ''}`;
 }
 
 // What a game is: the event, the label and where a series stands.
@@ -209,21 +211,21 @@ function favorite(s, g) {
   return `${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%`;
 }
 
-// One team's row on a game card or box score: the poll rank on the team's
-// color (the seed in NCAA games), the logo in a box, the name and the score.
+// One team's row on a game card or box score: the logo in a box, the poll
+// rank and name (the seed in parentheses in the postseason) and the score.
+// The winner's row takes a faint wash of its color, strongest at the score.
 function teamRow(g, t, R, { big = false, record = false } = {}) {
   const fin = isFinal(g), w = fin ? winnerOf(g) : null;
   const ranks = fin ? cache.ranksAt(g.week) : cache.ranks();
   const seed = seedOf(g, t), poll = showsRank(g.type) ? ranks[t] : null;
-  const block = poll || (g.type !== 'conf' ? seed : null);
   const info = teamInfo(t);
   const cls = fin ? (w === t ? 'win' : 'loss') : '';
+  const wc = w === t && /^#[0-9a-f]{6}$/i.test(info?.color || '') && info.color.toLowerCase() !== '#ffffff' ? info.color : w === t ? info?.altColor : null;
   const sub = big ? `<span class="ga-sub">${esc(info?.mascot || '')}${info?.mascot ? ' · ' : ''}${recordAt(t, g)}</span>` : '';
   const rec = record && !big ? `<span class="ga-rec">${recordAt(t, g)}</span>` : '';
-  return `<div class="ga-line ${cls}">
-    <span class="ga-rank" style="${t ? teamBlock(t) : ''}" title="${poll ? 'Poll ranking' : block ? 'Seed' : ''}">${block || ''}</span>
+  return `<div class="ga-line ${cls}"${wc ? ` style="--wc:${esc(wc)}"` : ''}>
     <a class="ga-logo" href="${t ? teamHref(t) : '#'}" title="${esc(t || '')}">${logoImg(info, big ? 30 : 24)}</a>
-    <span class="ga-name"><a class="team-link" href="${t ? teamHref(t) : '#'}">${seed && g.type === 'conf' ? `<span class="ga-seed">(${seed})</span> ` : ''}${esc(t || 'TBD')}</a>${sub}</span>${rec}
+    <span class="ga-name">${poll ? `<span class="ga-rk" title="Poll ranking">${poll}</span>` : ''}<a class="team-link" href="${t ? teamHref(t) : '#'}">${seed ? `<span class="ga-seed" title="Seed">(${seed})</span> ` : ''}${esc(t || 'TBD')}</a>${sub}</span>${rec}
     <span class="ga-score">${fin ? R : ''}</span><span class="ga-caret">${w === t ? '◀' : ''}</span></div>`;
 }
 function gameTop(s, g, close = false, short = !close) {
@@ -531,7 +533,10 @@ function editGame(id, { isNew = false } = {}) {
     if (regular) {
       g.home = t.home; g.away = t.away; g.neutral = t.neutral; g.confGame = $('#m-conf', modal).checked;
       g.week = Math.max(1, Math.min(regWeeksOf(s), Number($('#m-week', modal).value) || g.week));
-      g.day = $('#m-day', modal).value; g.order = DAY_ORDER[g.day];
+      // Keep the game's place in the day (a doubleheader's or tournament's
+      // game order) unless it moved to another day.
+      const day = $('#m-day', modal).value;
+      if (day !== g.day) { g.day = day; g.order = DAY_ORDER[day]; }
     }
     applyResult(g, {
       homeLine, awayLine,

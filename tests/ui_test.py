@@ -31,10 +31,13 @@ try:
         pg.screenshot(path=f"{OUT}/02-schedule.png", full_page=False)
         # open a game and simulate in the editor, then save
         pg.goto(url + "#/schedule"); pg.click(".chip[data-week='2']"); pg.wait_for_timeout(200)
-        pg.locator(".game:not(.placeholder)").first.click(); pg.wait_for_selector("dialog[open]")
+        order_js = "[...document.querySelectorAll('.game[data-game]')].map(e => e.dataset.game).join(',')"
+        before = pg.evaluate(order_js)
+        pg.locator(".game:not(.placeholder)").nth(2).click(); pg.wait_for_selector("dialog[open]")
         pg.click("#m-sim"); pg.wait_for_timeout(100)
         pg.screenshot(path=f"{OUT}/03-editor.png")
         pg.click("#m-save"); pg.wait_for_timeout(200)
+        assert pg.evaluate(order_js) == before, "saving a score keeps every game in its place"
         # manual entry with extra inning
         pg.locator(".game:not(.placeholder)").nth(3).click(); pg.wait_for_selector("dialog[open]")
         pg.click("#m-addinn")
