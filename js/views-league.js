@@ -1,17 +1,17 @@
 // League pages: teams, team profiles, conferences, history, settings.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261017132954';
-import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261017132954';
-import { ovr } from './sim.js?v=20261017132954';
-import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261017132954';
-import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261017132954';
-import { hotSeat, HEAT } from './hotseat.js?v=20261017132954';
-import { setRating } from './ratings.js?v=20261017132954';
-import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261017132954';
-import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261017132954';
-import { exportLeague, clearLeague } from './store.js?v=20261017132954';
-import { clamp, fmtPct } from './util.js?v=20261017132954';
-import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261017132954';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, flushSave, cache, team, teamInfo, logoImg, teamOptions, teamHref, confLogo, confHref, confInfo, confColor, imageFileToDataUrl, readableOn, openGame, resultText } from './ui.js?v=20261017170736';
+import { isFinal, winnerOf, records, rpi, confStandings, regSeasonChamp, regSeasonChamps, isIndependent } from './standings.js?v=20261017170736';
+import { ovr } from './sim.js?v=20261017170736';
+import { latestPoll, pollRankMap, pollSizeOf, POLL_SIZES, DEFAULT_POLL_SIZE } from './polls.js?v=20261017170736';
+import { addTeam, removeTeam, renameTeam, addConference, renameConference, deleteConference, rebuildSchedule, startNextSeason, weekName, newLeague, beginOffseason, draftRemoveTeam, draftRestoreTeam, draftWarnings, coachName, coachSchool, hireCoach, newCoach, availableCoaches, backfillHitsErrors, placeRemaining, clearPoints, pointsLeft, migrateLeague } from './league.js?v=20261017170736';
+import { hotSeat, HEAT } from './hotseat.js?v=20261017170736';
+import { setRating } from './ratings.js?v=20261017170736';
+import { confFormatName, postseasonFinish, postseasonDetail, postseasonRecord, wsTeams, postWeeks, regWeeksOf, ncaaConfig, ncaaProblems, fieldSize, hasSupers, formatSummary, proposeField, DEFAULT_NCAA, mcwsVenue, allEvents, gameVenue } from './postseason.js?v=20261017170736';
+import { MIDWEEK, MIDWEEK_FREQ, DEFAULT_TOURNEY_WEEKS, DEFAULT_REG_WEEKS } from './schedule.js?v=20261017170736';
+import { exportLeague, clearLeague } from './store.js?v=20261017170736';
+import { clamp, fmtPct } from './util.js?v=20261017170736';
+import { recordBook, teamPollHistory, headToHead } from './records.js?v=20261017170736';
 
 const ui = { confFilter: '', ncaaDraft: null, teamSort: { k: 'ovr', dir: -1 }, coachSort: { k: 'now', dir: -1 }, teamTab: 'season', h2hSort: { k: 'g', dir: -1 }, h2hFilter: 'all', memberSort: { k: 'titles', dir: -1 } };
 
@@ -484,12 +484,14 @@ function teamH2HTab(name) {
 // ---------- team schedule (rows like a college athletics site) ----------
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-// A calendar date for a game: week 1 is the week of February 12, and each
+// A calendar date for a game: week 1 is the first week of May (the week of
+// May's first Thursday, when the early-season tournaments start), and each
 // week after is seven days later. NCAA games played Monday to Wednesday
 // after a weekend belong to the following days.
 export function gameDate(s, g) {
-  const feb12 = new Date(Date.UTC(s.year, 1, 12));
-  const mon = new Date(feb12); mon.setUTCDate(12 - ((feb12.getUTCDay() + 6) % 7));
+  const may1 = new Date(Date.UTC(s.year, 4, 1));
+  const thu = 1 + ((4 - may1.getUTCDay() + 7) % 7); // first Thursday of May
+  const mon = new Date(Date.UTC(s.year, 4, thu - 3));
   let d = (g.week - 1) * 7 + Math.max(0, DOW.indexOf(g.day));
   if (['regional', 'super', 'mcws'].includes(g.type) && ['Mon', 'Tue', 'Wed'].includes(g.day)) d += 7;
   const date = new Date(mon); date.setUTCDate(mon.getUTCDate() + d);
