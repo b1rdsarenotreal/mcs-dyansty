@@ -801,3 +801,70 @@ tbody tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, 
 .wkp-opp { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wkp-res { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .wkp-res .w { color: var(--good); } .wkp-res .l { color: var(--bad); }
+
+/* ---------- Game cards (poll-row style) and the box score ---------- */
+.game.ga { padding: 0; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(15,27,45,.05); transition: border-color .12s, box-shadow .12s; }
+.game.ga:hover { border-color: color-mix(in srgb, var(--muted) 55%, var(--line)); box-shadow: 0 6px 18px rgba(15,27,45,.09); }
+.game.ga:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ga-top { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); min-height: 34px; }
+.ga-conf { display: inline-flex; flex: none; }
+.ga-tag { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ga-tag .tn-full { display: none; } .ga-tag .tn-abbr { display: inline; }
+.bx .ga-tag .tn-full { display: inline; } .bx .ga-tag .tn-abbr { display: none; }
+.ga-status { flex: none; color: var(--ink); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+.ga-status.up { color: var(--accent); }
+.ga-line { display: flex; align-items: center; gap: 10px; padding: 5px 10px 5px 0; min-height: 44px; }
+.ga-line + .ga-line { border-top: 1px dashed var(--line); }
+.ga-rank { align-self: stretch; flex: none; width: 34px; display: grid; place-items: center; font: 700 15px/1 var(--body); font-variant-numeric: tabular-nums; margin: -5px 0; }
+.ga-logo { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+.ga-logo .tbadge { border-radius: 5px; }
+.ga-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ga-name .team-link { color: var(--ink); }
+.ga-seed { color: var(--muted); font-weight: 600; font-size: 12px; }
+.ga-sub { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.ga-rec { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ga-score { font: 800 24px/1 var(--body); font-variant-numeric: tabular-nums; min-width: 28px; text-align: right; }
+.ga-caret { width: 10px; font-size: 9px; color: var(--ink); }
+.ga-line.win .ga-name { font-weight: 800; }
+.ga-line.loss .ga-name .team-link, .ga-line.loss .ga-score { color: var(--muted); }
+.ga-line.loss .ga-score { font-weight: 600; }
+.ga-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 6px 12px; min-height: 36px; border-top: 1px solid var(--line); background: var(--panel-2); font-size: 12px; color: var(--muted); }
+.ga-where { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ga-link { color: var(--accent); font-weight: 700; white-space: nowrap; }
+.ga-fav { font-weight: 700; color: var(--ink); white-space: nowrap; }
+.ga-foot .btn.sm { padding: 3px 9px; }
+
+dialog.bx-modal { width: min(620px, calc(100vw - 24px)); overflow: hidden; }
+.bx .ga-top { padding: 0 0 0 16px; font-size: 13px; min-height: 46px; }
+.bx .ga-status { font-size: 12px; }
+.ga-x { align-self: stretch; border: 0; border-left: 1px solid var(--line); background: none; color: var(--muted); font-size: 16px; padding: 0 16px; cursor: pointer; }
+.ga-x:hover { color: var(--ink); background: var(--panel-2); }
+.bx-teams .ga-line { min-height: 62px; padding: 8px 16px 8px 0; gap: 12px; }
+.bx-teams .ga-rank { width: 44px; font-size: 18px; margin: -8px 0; }
+.bx-teams .ga-logo { width: 40px; height: 40px; border-radius: 8px; }
+.bx-teams .ga-name .team-link { font-size: 17px; }
+.bx-teams .ga-score { font-size: 34px; min-width: 40px; }
+.bx-sec { padding: 12px 16px; border-top: 1px solid var(--line); }
+.bx-ls { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.bx-ls th, .bx-ls td { text-align: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.bx-ls thead th { font-size: 11px; color: var(--muted); font-weight: 700; }
+.bx-ls tbody th { text-align: left; width: 64px; }
+.bx-ls tr.win td { font-weight: 700; }
+.bx-ls .bx-r { background: var(--panel-2); font-weight: 800; font-size: 15px; border-left: 1px solid var(--line); }
+.bx-chip { display: inline-block; padding: 3px 7px; border-radius: 5px; font: 800 11.5px var(--body); white-space: nowrap; }
+.bx-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; background: var(--panel-2); font-size: 13px; }
+.bx-info > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bx-info span { color: var(--muted); }
+.bx-wide { grid-column: 1 / -1; }
+.bx-lbl { font: 700 10.5px var(--body); text-transform: uppercase; letter-spacing: .06em; }
+.bx-series { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.bx-sg { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+button.bx-sg:hover { border-color: var(--muted); }
+.bx-sg b { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.bx-info .bx-sg span { color: var(--ink); font-weight: 700; }
+.bx-sg.cur { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); cursor: default; }
+.bx-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--line); }
+@media (max-width: 560px) {
+  .bx-info { grid-template-columns: 1fr; }
+  .bx-teams .ga-score { font-size: 28px; }
+}

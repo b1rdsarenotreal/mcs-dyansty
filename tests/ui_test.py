@@ -57,7 +57,11 @@ try:
         pg.fill("input[data-side=home][data-inn='6']", "3")  # changing runs clears the estimate
         assert pg.input_value("#m-awayH") == "", "changing runs clears estimated hits"
         pg.click("#m-save"); pg.wait_for_timeout(200)
-        pg.locator(".game:not(.placeholder)").nth(4).click(); pg.wait_for_selector("dialog[open]")
+        pg.locator(".game:not(.placeholder)").nth(4).click(); pg.wait_for_selector("dialog[open] .bx")
+        # a played game opens as a box score; Edit score opens the editor
+        box = pg.locator("dialog[open]").inner_text().lower()
+        assert "edit score" in box and "where" in box and pg.locator("dialog[open] .bx-ls").count() == 1, "box score view"
+        pg.click("#bx-edit"); pg.wait_for_selector("#m-grid input")
         saved = [pg.input_value(f"#m-{k}") for k in ("awayH", "homeH", "awayE", "homeE")]
         print("estimated H/E on save:", saved)
         assert int(saved[0]) > 0 and int(saved[1]) > 0, "blank hits estimated on save"

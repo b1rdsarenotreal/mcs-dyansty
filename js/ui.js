@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261017170736';
-import { logoFor } from './logos.js?v=20261017170736';
-import { LOGO_ALIASES } from './data.js?v=20261017170736';
-import { ovr, winProbability } from './sim.js?v=20261017170736';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017170736';
-import { latestPoll, pollRankMap } from './polls.js?v=20261017170736';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017170736';
-import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017170736';
-import { DAY_ORDER } from './schedule.js?v=20261017170736';
-import { esc } from './util.js?v=20261017170736';
+import { saveLeague } from './store.js?v=20261017173655';
+import { logoFor } from './logos.js?v=20261017173655';
+import { LOGO_ALIASES } from './data.js?v=20261017173655';
+import { ovr, winProbability } from './sim.js?v=20261017173655';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017173655';
+import { latestPoll, pollRankMap } from './polls.js?v=20261017173655';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017173655';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017173655';
+import { DAY_ORDER } from './schedule.js?v=20261017173655';
+import { esc } from './util.js?v=20261017173655';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -44,7 +44,7 @@ export function toast(msg, error = false) {
 // Per-render caches.
 export const cache = {
   _recs: null, _ranks: null,
-  reset() { this._recs = null; this._ranks = null; this._at = {}; this._series = null; },
+  reset() { this._recs = null; this._ranks = null; this._at = {}; this._series = null; this._tg = null; },
   recs() { return (this._recs ||= records(S())); },
   ranks() { return (this._ranks ||= pollRankMap(latestPoll(S()))); },
   // Ranks as they stood when a game in `week` was played: the most recent
@@ -159,69 +159,121 @@ export function resultText(g) {
   return `${w} ${Math.max(g.homeR, g.awayR)}, ${l} ${Math.min(g.homeR, g.awayR)}${extra}`;
 }
 
-// A scoreboard tile: away team on the left, home team on the right, each
-// with its logo, abbreviation and rank; the score in the middle. A played
-// game takes a light wash of the winner's color, strongest on its side, and
-// keeps the inning-by-inning line score in a quiet strip underneath.
-export function gameCard(g) {
+// A team's color for a solid block (the rank on poll rows and game cards):
+// its main color, or the alternate when the main one is white.
+export function teamBlock(name) {
+  const t = teamInfo(name) || {};
+  const bg = /^#[0-9a-f]{6}$/i.test(t.color || '') && t.color.toLowerCase() !== '#ffffff' ? t.color : (t.altColor || '#2c3e50');
+  return `background:${esc(bg)};color:${esc(readableOn(bg))}`;
+}
+
+// A team's record as of a game: through it once it's final, going into it
+// before that.
+export function recordAt(t, g) {
   const s = S();
-  const n = Math.max(7, g.homeLine.length, g.awayLine.length);
-  const fin = isFinal(g);
-  const w = fin ? winnerOf(g) : null;
-  const confGame = g.type === 'regular' && g.confGame;
-  const conf = confGame ? s.teams[g.home]?.conference : g.type === 'conf' ? g.event.replace(/^ct-/, '') : null;
-  const recs = cache.recs();
-  const ranks = showsRank(g.type) ? (fin ? cache.ranksAt(g.week) : cache.ranks()) : {};
-  const inn = Math.max(g.homeLine.length, g.awayLine.length);
-  const side = (t, R, where) => {
-    const info = teamInfo(t);
-    const seed = seedOf(g, t), rk = ranks[t];
-    const rec = recs[t] && !fin ? `${recs[t].w}-${recs[t].l}${confGame ? ` <span class="gc-conf">(${recs[t].cw}-${recs[t].cl})</span>` : ''}` : '';
-    const label = `${seed ? `<span class="gc-seed" title="Seed">(${seed})</span>` : ''}${rk ? `<span class="gc-rank" title="Poll ranking">${rk}</span>` : ''}<span class="gc-abbr">${esc(info?.abbr || t || 'TBD')}</span>`;
-    return `<div class="gc-side gc-${where} ${fin ? (w === t ? 'is-win' : 'is-loss') : ''}">
-      ${t ? `<a class="gc-logo" href="${teamHref(t)}" title="${esc(t)}">${logoImg(info, 44)}</a>` : '<span class="gc-logo"></span>'}
-      <a class="gc-name" href="${t ? teamHref(t) : '#'}" title="${esc(t || '')}">${label}</a>
-      ${rec ? `<span class="gc-rec">${rec}</span>` : ''}</div>`;
-  };
-  let center;
-  if (fin) {
-    const a = `<span class="gc-r ${w === g.away ? 'is-win' : ''}">${g.awayR}</span>`, h = `<span class="gc-r ${w === g.home ? 'is-win' : ''}">${g.homeR}</span>`;
-    center = `<div class="gc-mid"><div class="gc-score">${a}<span class="gc-dash">–</span>${h}</div><div class="gc-status">Final${inn !== 7 ? `/${inn}` : ''}</div></div>`;
-  } else {
-    let sub = '';
-    if (g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
-      const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
-      const fav = wp >= 0.5 ? g.home : g.away;
-      sub = `${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%`;
-    }
-    center = `<div class="gc-mid"><div class="gc-at">${g.neutral ? 'vs' : 'at'}</div>${sub ? `<div class="gc-status" title="Win probability">${sub}</div>` : ''}</div>`;
+  cache._tg ||= {};
+  const list = (cache._tg[t] ||= s.games.filter(x => isFinal(x) && (x.home === t || x.away === t)).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id));
+  const key = x => [x.week, x.order, x.id];
+  const before = (a, b) => { const A = key(a), B = key(b); for (let k = 0; k < 3; k++) if (A[k] !== B[k]) return A[k] < B[k]; return false; };
+  let w = 0, l = 0;
+  for (const x of list) {
+    if (x !== g && !before(x, g)) continue;
+    winnerOf(x) === t ? w++ : l++;
   }
-  // Line score strip.
+  return `${w}-${l}`;
+}
+
+// What a game is: the event, the label and where a series stands.
+function gameTag(g) {
+  const parts = [];
+  if (g.tourney) parts.push(esc(g.label));
+  else if (g.label) parts.push(esc(g.midweek ? g.label.replace(' · ', ' ') : g.label));
+  else if (g.midweek) parts.push('Midweek');
+  else if (g.type === 'regular' && !g.confGame) parts.push('Non-conference');
+  const ser = seriesStatus(g, 30);
+  if (ser) parts.push(ser);
+  return parts.join(' · ');
+}
+function gameConf(s, g) {
+  if (g.type === 'regular' && g.confGame) return s.teams[g.home]?.conference || null;
+  if (g.type === 'conf') return g.event.replace(/^ct-/, '');
+  return null;
+}
+const gameStatus = g => (isFinal(g) ? `Final${(n => (n !== 7 ? `/${n}` : ''))(Math.max(g.homeLine.length, g.awayLine.length))}` : DAY_NAMES[g.day] || g.day);
+const venueText = (s, g) => { const v = gameVenue(s, g); return v.stadium || v.city ? [v.stadium, (v.city || '').split(',')[0]].filter(Boolean).join(', ') : ''; };
+function favorite(s, g) {
+  if (!(g.home && g.away && s.teams[g.home] && s.teams[g.away])) return '';
+  const wp = winProbability(s.teams[g.home], s.teams[g.away], g, { volatility: s.settings.volatility });
+  const fav = wp >= 0.5 ? g.home : g.away;
+  return `${esc(s.teams[fav].abbr)} ${Math.round(Math.max(wp, 1 - wp) * 100)}%`;
+}
+
+// One team's row on a game card or box score: the poll rank on the team's
+// color (the seed in NCAA games), the logo in a box, the name and the score.
+function teamRow(g, t, R, { big = false, record = false } = {}) {
+  const fin = isFinal(g), w = fin ? winnerOf(g) : null;
+  const ranks = fin ? cache.ranksAt(g.week) : cache.ranks();
+  const seed = seedOf(g, t), poll = showsRank(g.type) ? ranks[t] : null;
+  const block = poll || (g.type !== 'conf' ? seed : null);
+  const info = teamInfo(t);
+  const cls = fin ? (w === t ? 'win' : 'loss') : '';
+  const sub = big ? `<span class="ga-sub">${esc(info?.mascot || '')}${info?.mascot ? ' · ' : ''}${recordAt(t, g)}</span>` : '';
+  const rec = record && !big ? `<span class="ga-rec">${recordAt(t, g)}</span>` : '';
+  return `<div class="ga-line ${cls}">
+    <span class="ga-rank" style="${t ? teamBlock(t) : ''}" title="${poll ? 'Poll ranking' : block ? 'Seed' : ''}">${block || ''}</span>
+    <a class="ga-logo" href="${t ? teamHref(t) : '#'}" title="${esc(t || '')}">${logoImg(info, big ? 30 : 24)}</a>
+    <span class="ga-name"><a class="team-link" href="${t ? teamHref(t) : '#'}">${seed && g.type === 'conf' ? `<span class="ga-seed">(${seed})</span> ` : ''}${esc(t || 'TBD')}</a>${sub}</span>${rec}
+    <span class="ga-score">${fin ? R : ''}</span><span class="ga-caret">${w === t ? '◀' : ''}</span></div>`;
+}
+function gameTop(s, g, close = false) {
+  const conf = gameConf(s, g);
+  return `<div class="ga-top">${conf ? `<a class="ga-conf" href="${confHref(conf)}" title="${esc(conf)}${g.type === 'conf' ? ' Tournament' : ' game'}">${confLogo(conf, 18)}</a>` : ''}<span class="ga-tag">${gameTag(g)}</span>
+    <b class="ga-status ${isFinal(g) ? '' : 'up'}">${gameStatus(g)}</b>${close ? '<button class="ga-x" data-x aria-label="Close">✕</button>' : ''}</div>`;
+}
+
+// A game card: the event and status on top, a slim row per team (like the
+// poll), and the field with a box score link (or the favorite and a sim
+// button before the game) underneath.
+export function gameCard(g) {
+  const s = S(), fin = isFinal(g);
+  const where = venueText(s, g);
+  let right;
+  if (fin) right = '<span class="ga-link">Box score ›</span>';
+  else {
+    const fav = favorite(s, g);
+    right = `${fav ? `<span class="ga-fav" title="Win probability">${fav}</span>` : ''}${s.teams[g.home] && s.teams[g.away] ? `<button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>` : ''}`;
+  }
+  return `<div class="game ga ${fin ? 'final' : 'upcoming'}" data-game="${g.id}" tabindex="0">${gameTop(s, g)}
+    ${teamRow(g, g.away, g.awayR, { record: !fin })}${teamRow(g, g.home, g.homeR, { record: !fin })}
+    <div class="ga-foot"><span class="ga-where">${esc(where)}</span>${right}</div></div>`;
+}
+
+// The read-only box score for a played game; "Edit score" opens the editor.
+function boxScore(g) {
+  const s = S();
+  const n = Math.max(g.homeLine.length, g.awayLine.length), w = winnerOf(g);
   const cell = (arr, i) => (i < arr.length ? (arr[i] === null ? 'X' : arr[i]) : '');
-  const lrow = (t, arr, R, H, E) => `<div class="gc-lrow ${w === t ? 'is-win' : ''}"><span class="gc-lt">${esc(teamInfo(t)?.abbr || t)}</span>${Array.from({ length: n }, (_, i) => `<span>${cell(arr, i)}</span>`).join('')}<b>${R}</b><span>${H}</span><span>${E}</span></div>`;
-  const lines = fin ? `<div class="gc-lines" style="--q:${n}"><div class="gc-lrow gc-lhead"><span></span>${Array.from({ length: n }, (_, i) => `<span>${i + 1}</span>`).join('')}<b>R</b><span>H</span><span>E</span></div>${lrow(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${lrow(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}</div>` : '';
-  // Top: conference logo and series standing; bottom: label, venue, sim.
-  const series = g.tourney ? `<span title="Early-season tournament">${esc(g.label)}</span>` : seriesStatus(g, 34);
-  const top = `<div class="gc-top">${conf ? `<a class="gc-conflogo" href="${confHref(conf)}" title="${esc(conf)}${confGame ? ' game' : ' Tournament'}">${confLogo(conf, 18)}</a>` : ''}<span class="series-tag">${series}</span></div>`;
-  let meta = '';
-  if (g.label && !g.tourney) meta += `<span class="badge gold">${esc(g.midweek ? g.label.replace(' · ', ' ') : g.label.split(' · ').slice(-1)[0])}</span>`;
-  const venue = g.type === 'mcws' ? mcwsVenue(s) : null;
-  if (venue) meta += `<span class="venue" title="${esc(venue.city)}">${esc(venue.stadium)}</span>`;
-  if (!fin && g.home && g.away && s.teams[g.home] && s.teams[g.away]) {
-    if (g.site && g.site !== g.home) meta += `<span>at ${esc(teamInfo(g.site)?.abbr || g.site)}</span>`;
-    else if (g.type === 'conf' && g.event) {
-      const host = Object.values(s.post?.confT || {}).find(e => e.id === g.event)?.host;
-      if (host && g.neutral) meta += `<span>at ${esc(teamInfo(host)?.abbr || host)}</span>`;
-      else if (g.neutral) meta += '<span>Neutral site</span>';
-    } else if (g.neutral && !venue) meta += '<span>Neutral site</span>';
-    meta += `<button class="btn sm" data-simgame="${g.id}" title="Simulate this game and save the result">🎲 Sim</button>`;
-  }
-  const wc = fin ? teamInfo(w)?.color : null;
-  const style = [conf ? `--cc:${esc(confColor(conf))}` : '', /^#[0-9a-f]{6}$/i.test(wc || '') ? `--wc:${esc(wc)}` : ''].filter(Boolean).join(';');
-  const cls = ['game', 'gc', conf ? 'conf-game' : '', fin ? `won-${w === g.home ? 'home' : 'away'}` : 'upcoming'].filter(Boolean).join(' ');
-  return `<div class="${cls}"${style ? ` style="${style}"` : ''} data-game="${g.id}" tabindex="0">${top}
-    <div class="gc-match">${side(g.away, g.awayR, 'away')}${center}${side(g.home, g.homeR, 'home')}</div>
-    ${lines}${meta ? `<div class="meta gc-meta">${meta}</div>` : ''}</div>`;
+  const row = (t, arr, R, H, E) => `<tr class="${w === t ? 'win' : ''}"><th><span class="bx-chip" style="${teamBlock(t)}">${esc(teamInfo(t)?.abbr || t)}</span></th>${Array.from({ length: n }, (_, i) => `<td>${cell(arr, i)}</td>`).join('')}<td class="bx-r">${R}</td><td>${H ?? ''}</td><td>${E ?? ''}</td></tr>`;
+  const v = gameVenue(s, g);
+  const kind = g.tourney ? g.label : g.type === 'regular' ? (g.confGame ? `${s.teams[g.home]?.conference || 'Conference'} game` : g.midweek ? 'Midweek game' : 'Non-conference game') : (g.label || '').split(' · ')[0];
+  const key = g.series || (g.type === 'mcws' && /^F\d/.test(g.node || '') ? `${g.event}-finals` : null);
+  const set = key ? s.games.filter(x => (x.series || (x.type === 'mcws' && /^F\d/.test(x.node || '') ? `${x.event}-finals` : null)) === key).sort((a, b) => a.week - b.week || a.order - b.order || a.id - b.id) : [];
+  const chip = x => {
+    const cur = x === g ? ' cur' : '';
+    if (!isFinal(x)) return `<span class="bx-sg${cur}"><b>${esc(x.day)}</b><span>Not played</span></span>`;
+    const xw = winnerOf(x), xi = Math.max(x.homeLine.length, x.awayLine.length);
+    return `<button class="bx-sg${cur}" data-sg="${x.id}"><b>${esc(x.day)}</b><span>${esc(teamInfo(xw)?.abbr || xw)} ${Math.max(x.homeR, x.awayR)}-${Math.min(x.homeR, x.awayR)}${xi !== 7 ? ` (${xi})` : ''}</span></button>`;
+  };
+  return `<div class="bx">${gameTop(s, g, true)}
+    <div class="bx-teams">${teamRow(g, g.away, g.awayR, { big: true })}${teamRow(g, g.home, g.homeR, { big: true })}</div>
+    <div class="bx-sec"><div class="table-wrap"><table class="bx-ls"><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th class="bx-r">R</th><th>H</th><th>E</th></tr></thead>
+      <tbody>${row(g.away, g.awayLine, g.awayR, g.awayH, g.awayE)}${row(g.home, g.homeLine, g.homeR, g.homeH, g.homeE)}</tbody></table></div></div>
+    <div class="bx-sec bx-info">
+      <div><span class="bx-lbl">Where</span><b>${esc(v.stadium || v.host || 'Neutral site')}</b>${v.city ? `<span>${esc(v.city)}</span>` : ''}</div>
+      <div><span class="bx-lbl">When</span><b>${esc(DAY_NAMES[g.day] || g.day)} · ${esc(weekName(g.week, s))}</b>${kind ? `<span>${esc(kind)}</span>` : ''}</div>
+      ${set.length > 1 ? `<div class="bx-wide"><span class="bx-lbl">Series</span><div class="bx-series">${set.map(chip).join('')}</div></div>` : ''}
+    </div>
+    <div class="bx-foot"><button class="btn" id="bx-sim" title="Simulate this game again and save the new result">🎲 Re-simulate</button><button class="btn" id="bx-clear">Clear result</button><span class="spacer"></span><button class="btn primary" id="bx-edit">Edit score</button></div></div>`;
 }
 
 // ---------- series tally ----------
@@ -282,7 +334,29 @@ export function bindGameCards(root = app) {
 
 // ---------- game editor ----------
 
-export function openGame(id, { isNew = false } = {}) {
+// A played game opens as a box score; an unplayed one (or a new one) opens
+// the editor.
+export function openGame(id, { isNew = false, edit = false } = {}) {
+  const s = S(), g = s.games.find(x => x.id === id);
+  if (!g) return;
+  if (isNew || edit || !isFinal(g)) return editGame(id, { isNew });
+  modal.innerHTML = boxScore(g);
+  modal.classList.add('bx-modal');
+  $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+  modal.onclose = () => { modal.classList.remove('bx-modal'); ctx.render(); };
+  $('#bx-edit', modal).onclick = () => { modal.classList.remove('bx-modal'); editGame(id); };
+  $$('[data-sg]', modal).forEach(b => (b.onclick = () => openGame(Number(b.dataset.sg))));
+  $('#bx-sim', modal).onclick = () => {
+    if (!confirm('Simulate this game again? The new result replaces this one.')) return;
+    applyResult(g, simResult(s, g)); toast(resultText(g)); changed();
+    openGame(id);
+  };
+  $('#bx-clear', modal).onclick = () => { clearResult(g); modal.close(); changed(); toast('Result cleared.'); };
+  if (!modal.open) modal.showModal();
+  $('#bx-edit', modal).focus();
+}
+
+function editGame(id, { isNew = false } = {}) {
   const s = S(), g = s.games.find(x => x.id === id);
   if (!g) return;
   let source = g.source;
@@ -294,7 +368,7 @@ export function openGame(id, { isNew = false } = {}) {
   const cellVal = (arr, i) => (isFinal(g) && i < arr.length ? (arr[i] === null ? '' : arr[i]) : '');
 
   modal.innerHTML = `
-    <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week, s)} · ${DAY_NAMES[g.day] || g.day}`)}</h2><button class="btn ghost" data-x>✕</button></div>
+    <div class="modal-head"><h2>${esc(g.label || `${weekName(g.week, s)} · ${DAY_NAMES[g.day] || g.day}`)}</h2>${isFinal(g) ? '<button class="btn sm ghost" id="m-back">‹ Box score</button>' : ''}<button class="btn ghost" data-x>✕</button></div>
     <div class="modal-body stack">
       ${(v => v.stadium || v.city ? `<div class="small muted venue-line">${esc([v.stadium, v.city].filter(Boolean).join(' · '))}</div>` : '')(gameVenue(s, g))}
       ${regular ? `<div class="row">
@@ -393,6 +467,7 @@ export function openGame(id, { isNew = false } = {}) {
   $('#m-addinn', modal).onclick = () => { readGrid(); n++; drawGrid(); };
   $('#m-delinn', modal).onclick = () => { readGrid(); if (n > 1) { n--; values.home.length = Math.min(values.home.length, n); values.away.length = Math.min(values.away.length, n); } drawGrid(); };
   $$('[data-x]', modal).forEach(b => (b.onclick = () => modal.close()));
+  if ($('#m-back', modal)) $('#m-back', modal).onclick = () => openGame(g.id);
   modal.onclose = () => {
     if (isNew && !isFinal(g) && (!g.home || !g.away)) deleteGame(s, g.id);
     ctx.render();
@@ -466,7 +541,7 @@ export function openGame(id, { isNew = false } = {}) {
     if (nEst === 4 || (autoHE && source !== 'sim')) g.heEstimated = true; else delete g.heEstimated;
     isNew = false; modal.close(); changed(); toast(estimated ? 'Result saved. Blank hits and errors were estimated from the ratings.' : 'Result saved.');
   };
-  modal.showModal();
+  if (!modal.open) modal.showModal();
 }
 
 // ---------- compact bracket cards (team, R, H, E) ----------
