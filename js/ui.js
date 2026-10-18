@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261017174651';
-import { logoFor } from './logos.js?v=20261017174651';
-import { LOGO_ALIASES } from './data.js?v=20261017174651';
-import { ovr, winProbability } from './sim.js?v=20261017174651';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017174651';
-import { latestPoll, pollRankMap } from './polls.js?v=20261017174651';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017174651';
-import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017174651';
-import { DAY_ORDER } from './schedule.js?v=20261017174651';
-import { esc } from './util.js?v=20261017174651';
+import { saveLeague } from './store.js?v=20261017175104';
+import { logoFor } from './logos.js?v=20261017175104';
+import { LOGO_ALIASES } from './data.js?v=20261017175104';
+import { ovr, winProbability } from './sim.js?v=20261017175104';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261017175104';
+import { latestPoll, pollRankMap } from './polls.js?v=20261017175104';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261017175104';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261017175104';
+import { DAY_ORDER } from './schedule.js?v=20261017175104';
+import { esc } from './util.js?v=20261017175104';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -184,10 +184,11 @@ export function recordAt(t, g) {
 }
 
 // What a game is: the event, the label and where a series stands.
-function gameTag(g) {
+// `short`: the schedule card's version, with Doubleheader shortened to DH.
+function gameTag(g, short = false) {
   const parts = [];
   if (g.tourney) parts.push(esc(g.label));
-  else if (g.label) parts.push(esc(g.midweek ? g.label.replace(' · ', ' ') : g.label));
+  else if (g.label) { const l = g.midweek ? g.label.replace(' · ', ' ') : g.label; parts.push(esc(short ? l.replace(/Doubleheader/g, 'DH') : l)); }
   else if (g.midweek) parts.push('Midweek');
   else if (g.type === 'regular' && !g.confGame) parts.push('Non-conference');
   const ser = seriesStatus(g, 30);
@@ -199,7 +200,7 @@ function gameConf(s, g) {
   if (g.type === 'conf') return g.event.replace(/^ct-/, '');
   return null;
 }
-const gameStatus = g => (isFinal(g) ? `Final${(n => (n !== 7 ? `/${n}` : ''))(Math.max(g.homeLine.length, g.awayLine.length))}` : DAY_NAMES[g.day] || g.day);
+const gameStatus = g => (isFinal(g) ? `Final${(n => (n !== 7 ? `/${n}` : ''))(Math.max(g.homeLine.length, g.awayLine.length))}` : g.day);
 const venueText = (s, g) => { const v = gameVenue(s, g); return v.stadium || v.city ? [v.stadium, (v.city || '').split(',')[0]].filter(Boolean).join(', ') : ''; };
 function favorite(s, g) {
   if (!(g.home && g.away && s.teams[g.home] && s.teams[g.away])) return '';
@@ -225,9 +226,9 @@ function teamRow(g, t, R, { big = false, record = false } = {}) {
     <span class="ga-name"><a class="team-link" href="${t ? teamHref(t) : '#'}">${seed && g.type === 'conf' ? `<span class="ga-seed">(${seed})</span> ` : ''}${esc(t || 'TBD')}</a>${sub}</span>${rec}
     <span class="ga-score">${fin ? R : ''}</span><span class="ga-caret">${w === t ? '◀' : ''}</span></div>`;
 }
-function gameTop(s, g, close = false) {
+function gameTop(s, g, close = false, short = !close) {
   const conf = gameConf(s, g);
-  return `<div class="ga-top">${conf ? `<a class="ga-conf" href="${confHref(conf)}" title="${esc(conf)}${g.type === 'conf' ? ' Tournament' : ' game'}">${confLogo(conf, 18)}</a>` : ''}<span class="ga-tag">${gameTag(g)}</span>
+  return `<div class="ga-top">${conf ? `<a class="ga-conf" href="${confHref(conf)}" title="${esc(conf)}${g.type === 'conf' ? ' Tournament' : ' game'}">${confLogo(conf, 18)}</a>` : ''}<span class="ga-tag">${gameTag(g, short)}</span>
     <b class="ga-status ${isFinal(g) ? '' : 'up'}">${gameStatus(g)}</b>${close ? '<button class="ga-x" data-x aria-label="Close">✕</button>' : ''}</div>`;
 }
 

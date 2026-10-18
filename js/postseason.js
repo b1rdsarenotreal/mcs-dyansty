@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261017174651';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261017174651';
-import { generatePoll } from './polls.js?v=20261017174651';
-import { hashStr } from './util.js?v=20261017174651';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261017175104';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261017175104';
+import { generatePoll } from './polls.js?v=20261017175104';
+import { hashStr } from './util.js?v=20261017175104';
 
 // ---------- tournament format ----------
 
