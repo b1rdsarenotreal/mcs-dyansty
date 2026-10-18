@@ -19,8 +19,8 @@
 // teams that played fewer weekend games getting a few more so season totals
 // stay close together.
 
-import { isIndependent } from './standings.js?v=20261017180750';
-import { rng, shuffle, hashStr } from './util.js?v=20261017180750';
+import { isIndependent } from './standings.js?v=20261017213133';
+import { rng, shuffle, hashStr } from './util.js?v=20261017213133';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -46,6 +46,62 @@ export function blankGame(season, fields) {
     final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null,
     pitching: null, source: null, ...fields,
   };
+}
+
+// Count each team's conference series in a set of rounds.
+export function confSeriesCounts(rounds, list) {
+  const n = Object.fromEntries(list.map(t => [t, 0]));
+  for (const pairs of rounds) for (const [a, b] of pairs) if (a && b) { n[a]++; n[b]++; }
+  return n;
+}
+
+// Pick series to drop so every team ends with exactly `k` series: team t
+// must lose `need[t]` series, each shared with another team that has
+// series to lose. Small conferences, so a backtracking search is quick.
+function pickDrops(edges, need, r) {
+  const left = { ...need }, chosen = [], used = new Set();
+  const solve = () => {
+    const todo = Object.keys(left).filter(t => left[t] > 0);
+    if (!todo.length) return true;
+    // Most constrained team first: the one with the fewest usable series.
+    const opts = t => edges.filter((e, i) => !used.has(i) && (e.a === t ? left[e.b] > 0 : e.b === t && left[e.a] > 0));
+    const t = todo.reduce((x, y) => (opts(y).length - left[y] < opts(x).length - left[x] ? y : x));
+    for (const e of shuffle(opts(t), r)) {
+      const i = edges.indexOf(e);
+      used.add(i); left[e.a]--; left[e.b]--; chosen.push(i);
+      if (solve()) return true;
+      used.delete(i); left[e.a]++; left[e.b]++; chosen.pop();
+    }
+    return false;
+  };
+  return solve() ? chosen : null;
+}
+
+// A conference's rounds for the season, capped at `maxWeeks`. Fail-safe:
+// every member plays the same number of conference series. With an odd
+// number of teams one team sits out each round, and when the round robin is
+// cut short some teams would get an extra series; those extra series are
+// dropped (the teams get a non-conference series or Thursday game that
+// weekend instead). If no clean set of drops exists, the round robin is
+// redrawn and tried again.
+export function confRounds(list, maxWeeks, r) {
+  if (list.length < 2) return [];
+  for (let attempt = 0; attempt < 40; attempt++) {
+    let rounds = roundRobin(list, r);
+    if (rounds.length > maxWeeks) rounds = rounds.slice(0, maxWeeks);
+    const counts = confSeriesCounts(rounds, list);
+    let k = Math.min(...Object.values(counts));
+    if (Object.values(counts).every(c => c === k)) return rounds;
+    // Every team playing k series needs list.length * k to be even.
+    if ((list.length * k) % 2) k--;
+    const edges = rounds.flatMap((pairs, ri) => pairs.filter(([a, b]) => a && b).map(([a, b]) => ({ a, b, ri })));
+    const need = Object.fromEntries(list.map(t => [t, counts[t] - k]));
+    const drops = pickDrops(edges, need, r);
+    if (!drops) continue;
+    const gone = new Set(drops.map(i => edges[i]));
+    return rounds.map((pairs, ri) => pairs.filter(([a, b]) => !(a && b) || !edges.some(e => gone.has(e) && e.ri === ri && e.a === a && e.b === b)));
+  }
+  throw new Error(`Couldn't give every team in a ${list.length}-team conference the same number of conference series.`);
 }
 
 // Circle-method round robin. Returns rounds of [a, b] pairs (null = bye).
@@ -145,8 +201,7 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   // conference starts it plays every weekend until the end of the season.
   for (const [conf, list] of Object.entries(byConf).sort((a, b) => a[0].localeCompare(b[0]))) {
     if (list.length < 2) continue;
-    let rounds = roundRobin(list, r);
-    if (rounds.length > confWeeks) rounds = rounds.slice(0, confWeeks);
+    const rounds = confRounds(list, confWeeks, r);
     const first = REG - rounds.length + 1;
     rounds.forEach((pairs, i) => { (weekPairs[first + i] ||= []).push(...pairs.filter(([a, b]) => a && b).map(p => [...p, conf])); });
   }

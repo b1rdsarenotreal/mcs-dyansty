@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261017180750';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor } from './schedule.js?v=20261017180750';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261017180750';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261017180750';
-import { replayRatings, ensureBase } from './ratings.js?v=20261017180750';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames } from './postseason.js?v=20261017180750';
-import { isFinal, records, INDEPENDENT } from './standings.js?v=20261017180750';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261017180750';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261017213133';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor, confRounds, confSeriesCounts } from './schedule.js?v=20261017213133';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261017213133';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261017213133';
+import { replayRatings, ensureBase } from './ratings.js?v=20261017213133';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames } from './postseason.js?v=20261017213133';
+import { isFinal, records, INDEPENDENT } from './standings.js?v=20261017213133';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261017213133';
 
 export const SCHEMA_VERSION = 4;
 
@@ -359,7 +359,7 @@ export function draftWarnings(league) {
     if (n === 1) out.push(`${c} has only one team, so it has no conference games. It still gets an automatic bid.`);
     const R = currentSeason(league).settings.regWeeks ?? DEFAULT_REG_WEEKS;
     const rounds = n % 2 ? n : n - 1, fits = confWeeksFor(R, rounds);
-    if (rounds > fits) out.push(`${c} has ${n} teams. Conference play is capped at ${fits} weeks, so each team plays about ${fits} of its ${n - 1} conference opponents (which ones changes every season).`);
+    if (rounds > fits) out.push(`${c} has ${n} teams. Conference play is capped at ${fits} weeks, so each team plays ${(() => { const names = Array.from({ length: n }, (_, i) => `t${i}`); return confSeriesCounts(confRounds(names, fits, rng(n)), names).t0; })()} of its ${n - 1} conference opponents (which ones changes every season). Every member plays the same number of conference series.`);
   }
   if (Object.keys(league.draft.teams).length < 16) out.push('The NCAA field needs at least 16 teams.');
   const open = Object.values(league.draft.teams).filter(t => !t.coachId).map(t => t.school).sort();

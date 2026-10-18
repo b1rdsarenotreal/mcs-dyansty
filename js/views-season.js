@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261017180750';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261017180750';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261017180750';
-import { ovr } from './sim.js?v=20261017180750';
-import { simGames, addGame, weekName } from './league.js?v=20261017180750';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261017180750';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261017180750';
-import { fmtPct, hashStr } from './util.js?v=20261017180750';
-import { DAY_ORDER } from './schedule.js?v=20261017180750';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261017213133';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261017213133';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261017213133';
+import { ovr } from './sim.js?v=20261017213133';
+import { simGames, addGame, weekName } from './league.js?v=20261017213133';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261017213133';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261017213133';
+import { fmtPct, hashStr } from './util.js?v=20261017213133';
+import { DAY_ORDER } from './schedule.js?v=20261017213133';
 
 // " at Easton Stadium, Los Angeles, Calif." for a host school with a home field.
 const atField = (s, school) => { const t = s.teams[school]; const f = [t?.stadium, t?.city].filter(Boolean).join(', '); return f ? ` at ${esc(f)}` : ''; };
@@ -224,7 +224,11 @@ export function renderStandings() {
     const champ = regSeasonChamp(s, c, regRecs, r);
     const tchamp = s.post?.confT?.[c]?.champion;
     const canSize = s.phase === 'regular';
-    return `<div class="card">
+    // Fail-safe check: scheduled conference games should be equal (manual edits can change that).
+    const sched = Object.fromEntries(st.map(x => [x.team, 0]));
+    for (const g of s.games) if (g.type === 'regular' && g.confGame && g.home in sched && g.away in sched) { sched[g.home]++; sched[g.away]++; }
+    const uneven = new Set(Object.values(sched)).size > 1;
+    return `<div class="card">${uneven ? `<div class="hint warn small" style="margin-bottom:8px">Conference schedules are uneven: ${Object.entries(sched).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${esc(t)} ${n}`).join(', ')} conference games. This usually comes from editing games by hand; fix the games or rebuild the schedule in Settings.</div>` : ''}
       <div class="row" style="margin-bottom:8px"><a href="${confHref(c)}">${confLogo(c, 30)}</a><h2 style="margin:0"><a class="team-link" href="${confHref(c)}">${esc(c)}</a></h2><span class="spacer"></span>
         ${tchamp ? `<span class="badge gold">Tournament: ${esc(tchamp)}</span>` : ''}</div>
       <div class="table-wrap"><table>
