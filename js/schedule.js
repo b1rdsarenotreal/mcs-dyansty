@@ -19,9 +19,9 @@
 // teams that played fewer weekend games getting a few more so season totals
 // stay close together.
 
-import { isIndependent } from './standings.js?v=20261018232530';
-import { cityPoint, miles } from './geo.js?v=20261018232530';
-import { rng, shuffle, hashStr } from './util.js?v=20261018232530';
+import { isIndependent } from './standings.js?v=20261018234703';
+import { cityPoint, miles } from './geo.js?v=20261018234703';
+import { rng, shuffle, hashStr } from './util.js?v=20261018234703';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -47,6 +47,41 @@ export function blankGame(season, fields) {
     final: false, homeLine: [], awayLine: [], homeR: null, homeH: null, homeE: null, awayR: null, awayH: null, awayE: null,
     pitching: null, source: null, ...fields,
   };
+}
+
+// How a conference plays its weekend series: one game a day, or a Saturday
+// doubleheader with the other game on Friday or Sunday. Set per conference
+// (Standings → Commissioner); non-conference series are always Fri–Sat–Sun.
+export const CONF_WEEKENDS = [
+  ['fss', 'Friday, Saturday, Sunday'],
+  ['dh-fri', 'Friday, then a Saturday doubleheader'],
+  ['dh-sun', 'Saturday doubleheader, then Sunday'],
+  ['dh-mix', 'Saturday doubleheader, plus Friday or Sunday (varies)'],
+];
+// The three games' days for a series: [{ day, order, dh }]. `dh` is 1 or 2
+// for the games of a Saturday doubleheader.
+export function seriesDays(fmt, sid = '') {
+  const one = day => ({ day, order: DAY_ORDER[day], dh: 0 });
+  const dh = [{ day: 'Sat', order: DAY_ORDER.Sat, dh: 1 }, { day: 'Sat', order: DAY_ORDER.Sat + 0.5, dh: 2 }];
+  if (fmt === 'dh-mix') fmt = hashStr(String(sid)) % 2 ? 'dh-fri' : 'dh-sun';
+  if (fmt === 'dh-fri') return [one('Fri'), ...dh];
+  if (fmt === 'dh-sun') return [...dh, one('Sun')];
+  return [one('Fri'), one('Sat'), one('Sun')];
+}
+// Re-lay a conference's unplayed weekend series in the current season after
+// its format changes. Series with a game already played keep their days.
+export function applyConfWeekend(season, conf) {
+  const fmt = season.settings?.confWeekend?.[conf];
+  const bySeries = {};
+  for (const g of season.games) if (g.type === 'regular' && g.confGame && g.series && season.teams[g.home]?.conference === conf) (bySeries[g.series] ||= []).push(g);
+  let n = 0;
+  for (const [sid, gs] of Object.entries(bySeries)) {
+    if (gs.length !== 3 || gs.some(g => g.final || g.homeR != null)) continue;
+    gs.sort((a, b) => a.order - b.order || a.id - b.id);
+    seriesDays(fmt, sid).forEach((slot, i) => Object.assign(gs[i], slot));
+    n++;
+  }
+  return n;
 }
 
 // Count each team's conference series in a set of rounds.
@@ -223,8 +258,9 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
   };
   const addSeries = (week, home, away, conf) => {
     const sid = `${season.year}-${seriesNo++}`;
-    for (const day of ['Fri', 'Sat', 'Sun']) {
-      games.push(blankGame(season, { week, day, order: DAY_ORDER[day], home, away, confGame: conf, series: sid }));
+    const fmt = conf ? season.settings?.confWeekend?.[teams[home].conference] : null;
+    for (const slot of seriesDays(fmt, sid)) {
+      games.push(blankGame(season, { week, ...slot, home, away, confGame: conf, series: sid }));
     }
     homeCount[home] += 3; played[home] += 3; played[away] += 3;
     metSeries.add(key(home, away));

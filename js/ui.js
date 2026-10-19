@@ -1,16 +1,16 @@
 // Shared UI state and pieces used by every page: the league, saving,
 // team labels and logos, game cards, and the game editor.
 
-import { saveLeague } from './store.js?v=20261018232530';
-import { logoFor } from './logos.js?v=20261018232530';
-import { LOGO_ALIASES } from './data.js?v=20261018232530';
-import { ovr, winProbability } from './sim.js?v=20261018232530';
-import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261018232530';
-import { latestPoll, pollRankMap } from './polls.js?v=20261018232530';
-import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261018232530';
-import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261018232530';
-import { DAY_ORDER } from './schedule.js?v=20261018232530';
-import { esc } from './util.js?v=20261018232530';
+import { saveLeague } from './store.js?v=20261018234703';
+import { logoFor } from './logos.js?v=20261018234703';
+import { LOGO_ALIASES } from './data.js?v=20261018234703';
+import { ovr, winProbability } from './sim.js?v=20261018234703';
+import { records, isFinal, winnerOf, sameConf } from './standings.js?v=20261018234703';
+import { latestPoll, pollRankMap } from './polls.js?v=20261018234703';
+import { afterChange, applyResult, clearResult, simResult, deleteGame, weekName, estimateHE } from './league.js?v=20261018234703';
+import { regWeeksOf, shownSeed, mcwsVenue, gameVenue } from './postseason.js?v=20261018234703';
+import { DAY_ORDER } from './schedule.js?v=20261018234703';
+import { esc } from './util.js?v=20261018234703';
 
 export { esc };
 export const ctx = { league: null, render: () => {} };
@@ -192,6 +192,7 @@ function gameTag(g, short = false) {
   if (g.tourney) parts.push(esc(g.label));
   else if (g.label) { const l = g.midweek ? g.label.replace(' · ', ' ') : g.label; parts.push(esc(short ? l.replace(/Doubleheader/g, 'DH') : l)); }
   else if (g.midweek) parts.push('Midweek');
+  else if (g.dh) parts.push(short ? 'DH' : 'Doubleheader');
   else if (g.type === 'regular' && !g.confGame) parts.push('Non-conference');
   const ser = seriesStatus(g, 30);
   if (ser) parts.push(ser);

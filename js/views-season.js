@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261018232530';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261018232530';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261018232530';
-import { ovr } from './sim.js?v=20261018232530';
-import { simGames, addGame, weekName } from './league.js?v=20261018232530';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261018232530';
-import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261018232530';
-import { fmtPct, hashStr } from './util.js?v=20261018232530';
-import { DAY_ORDER } from './schedule.js?v=20261018232530';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261018234703';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261018234703';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261018234703';
+import { ovr } from './sim.js?v=20261018234703';
+import { simGames, addGame, weekName } from './league.js?v=20261018234703';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261018234703';
+import { quadRanks, COMMITTEE_WEIGHTS, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261018234703';
+import { fmtPct, hashStr } from './util.js?v=20261018234703';
+import { DAY_ORDER, CONF_WEEKENDS, applyConfWeekend } from './schedule.js?v=20261018234703';
 
 // " at Easton Stadium, Los Angeles, Calif." for a host school with a home field.
 const atField = (s, school) => { const t = s.teams[school]; const f = [t?.stadium, t?.city].filter(Boolean).join(', '); return f ? ` at ${esc(f)}` : ''; };
@@ -240,6 +240,7 @@ export function renderStandings() {
           <td class="num">${x.streak || ''}</td></tr>`).join('')}</tbody></table></div>
       <details class="small" style="margin-top:8px"><summary class="muted">Commissioner</summary><div class="row" style="margin-top:8px">
         <label class="field">Regular-season champion <select data-champ="${esc(c)}"><option value="">Automatic (${esc(regSeasonChamps({ ...s, overrides: {} }, c, regRecs, r).join(' & ') || '—')})</option>${teamOptions(s.overrides.regChamps?.[c], { blank: false, list: st.map(x => x.team) })}</select></label>
+        <label class="field">Weekend series <select data-weekend="${esc(c)}">${CONF_WEEKENDS.map(([k, l]) => `<option value="${k}" ${(s.settings.confWeekend?.[c] || 'fss') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Tournament format <select data-format="${esc(c)}" ${canSize ? '' : 'disabled'}>${CONF_FORMATS.map(([k, l]) => `<option value="${k}" ${(s.settings.confFormat?.[c] || 'single') === k ? 'selected' : ''}>${l}${k === 'playin' && size < 5 ? ' (top 5 or more; double elimination for now)' : ''}</option>`).join('')}</select></label>
         <label class="field">Tournament teams <select data-size="${esc(c)}" ${canSize ? '' : 'disabled'}>${[0, ...Array.from({ length: Math.max(0, Math.min(n, 16) - 1) }, (_, i) => i + 2)].map(k => `<option value="${k}" ${k === size ? 'selected' : ''}>${k ? `Top ${k}` : 'No tournament'}</option>`).join('')}</select></label>
       </div>${canSize ? '' : `<p class="muted">Tournament size and format are locked once the tournaments are set. You can still switch a tournament's format on the Postseason page until its first game.</p>`}</details>
@@ -254,6 +255,13 @@ export function renderStandings() {
     s.overrides.regChamps ||= {};
     if (sel.value) s.overrides.regChamps[sel.dataset.champ] = sel.value; else delete s.overrides.regChamps[sel.dataset.champ];
     changed({ progress: false });
+  }));
+  $$('[data-weekend]').forEach(sel => (sel.onchange = () => {
+    const c = sel.dataset.weekend;
+    s.settings.confWeekend ||= {}; s.settings.confWeekend[c] = sel.value;
+    const n = applyConfWeekend(s, c);
+    changed({ progress: false });
+    toast(`${c} conference series: ${CONF_WEEKENDS.find(([k]) => k === sel.value)[1].toLowerCase()}.${n ? ` ${n} unplayed series updated.` : ''}`);
   }));
   $$('[data-format]').forEach(sel => (sel.onchange = () => { s.settings.confFormat ||= {}; s.settings.confFormat[sel.dataset.format] = sel.value; changed({ progress: false }); }));
   $$('[data-size]').forEach(sel => (sel.onchange = () => { s.settings.confTourney ||= {}; s.settings.confTourney[sel.dataset.size] = Number(sel.value); changed({ progress: false }); }));
