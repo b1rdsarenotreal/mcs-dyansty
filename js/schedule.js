@@ -19,8 +19,9 @@
 // teams that played fewer weekend games getting a few more so season totals
 // stay close together.
 
-import { isIndependent } from './standings.js?v=20261018003430';
-import { rng, shuffle, hashStr } from './util.js?v=20261018003430';
+import { isIndependent } from './standings.js?v=20261018232530';
+import { cityPoint, miles } from './geo.js?v=20261018232530';
+import { rng, shuffle, hashStr } from './util.js?v=20261018232530';
 
 export const DEFAULT_REG_WEEKS = 12;
 export const DEFAULT_MIDWEEK_START = 4;
@@ -149,6 +150,49 @@ function crossPairs(pool, teams, met, r, played = null, sat = null) {
   }
   return { pairs: [], idle: [...idle, ...pool] };
 }
+// Midweek pairs that make geographic sense when they can: like crossPairs,
+// but each team is matched with the cheapest partner by `cost` (miles, plus
+// a little randomness so it isn't always the nearest school), then pairs
+// are swapped around while that lowers the total. Teams not met yet come first.
+const NEAR_JITTER = 350, NEAR_REPEAT = 3000;
+function nearPairs(pool, teams, met, r, played, sat, cost) {
+  let idle = [];
+  if (pool.length % 2 && played) {
+    const most = Math.max(...pool.map(t => played[t]));
+    const top = pool.filter(t => played[t] === most);
+    const fewest = Math.min(...top.map(t => sat?.[t] || 0));
+    const cands = top.filter(t => (sat?.[t] || 0) === fewest);
+    idle = [cands[Math.floor(r() * cands.length)]];
+    pool = pool.filter(t => t !== idle[0]);
+    if (sat) sat[idle[0]] = (sat[idle[0]] || 0) + 1;
+  }
+  const jit = new Map();
+  const c = (a, b) => {
+    if (rival(teams, a, b)) return Infinity;
+    const k = key(a, b);
+    if (!jit.has(k)) jit.set(k, r() * NEAR_JITTER);
+    return cost(a, b) + jit.get(k) + (met.has(k) ? NEAR_REPEAT : 0);
+  };
+  const left = shuffle(pool, r), pairs = [], out = [];
+  while (left.length > 1) {
+    const a = left.shift();
+    let best = -1, bc = Infinity;
+    left.forEach((b, j) => { const x = c(a, b); if (x < bc) { bc = x; best = j; } });
+    if (best < 0) { out.push(a); continue; }
+    pairs.push([a, left.splice(best, 1)[0]]);
+  }
+  // Swap partners between two pairs when that lowers their combined cost.
+  for (let pass = 0, better = true; better && pass < 6; pass++) {
+    better = false;
+    for (let i = 0; i < pairs.length; i++) for (let j = i + 1; j < pairs.length; j++) {
+      const [a, b] = pairs[i], [x, y] = pairs[j], now = c(a, b) + c(x, y);
+      if (c(a, x) + c(b, y) < now - 1) { pairs[i] = [a, x]; pairs[j] = [b, y]; better = true; }
+      else if (c(a, y) + c(b, x) < now - 1) { pairs[i] = [a, y]; pairs[j] = [b, x]; better = true; }
+    }
+  }
+  return { pairs, idle: [...idle, ...out, ...left] };
+}
+
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 // Conference rivals; independents are nobody's rivals.
 const rival = (teams, a, b) => teams[a].conference === teams[b].conference && !isIndependent(teams[a].conference);
@@ -317,12 +361,42 @@ export function generateSchedule(season, seed = hashStr(String(season.year)), pr
     : Math.max(0, Math.min(midWeeks.length, Math.round(midWeeks.length * 0.6 + (avgWeekend - played[n]) / perSet)))]));
   let midNo = 1;
   const satMid = {};
+  // Where each team is around a midweek: its home, where it played last
+  // weekend, and where it plays this weekend. A midweek game is at one of
+  // the two schools, so the trip is from wherever the visitor is nearest.
+  const home = Object.fromEntries(names.map(n => [n, cityPoint(teams[n].city)]));
+  const weekendAt = {}, weekendVs = new Set();
+  for (const g of games) {
+    if (g.day === 'Tue' || g.day === 'Wed') continue;
+    const at = g.site || g.home;
+    for (const t of [g.home, g.away]) ((weekendAt[t] ||= {})[g.week] ||= at);
+    weekendVs.add(`${g.week}|${key(g.home, g.away)}`);
+  }
+  const near = week => {
+    const spots = t => [home[t], home[weekendAt[t]?.[week - 1]], home[weekendAt[t]?.[week]]].filter(Boolean);
+    const trip = (from, to) => (to ? Math.min(...spots(from).map(p => miles(p, to))) : Infinity);
+    const cost = (a, b) => {
+      const d = Math.min(trip(a, home[b]), trip(b, home[a]));
+      // Not the team it just played or is about to play on the weekend.
+      const again = weekendVs.has(`${week - 1}|${key(a, b)}`) || weekendVs.has(`${week}|${key(a, b)}`) ? 1500 : 0;
+      return (Number.isFinite(d) ? d : 600) + again; // no location: neither near nor far
+    };
+    // Host: the school the visitor can reach more easily, unless that would
+    // tip home games too far one way; otherwise the usual home balance.
+    cost.host = (a, b) => {
+      const atA = trip(b, home[a]), atB = trip(a, home[b]);
+      if (Number.isFinite(atA) && Number.isFinite(atB) && Math.abs(atA - atB) > 150 && Math.abs(homeCount[a] - homeCount[b]) <= 4) return atA < atB ? [a, b] : [b, a];
+      return orient(a, b);
+    };
+    return cost;
+  };
   midWeeks.forEach((week, i) => {
     const weeksLeft = midWeeks.length - i;
     const pool = freq === 'every' ? names : names.filter(n => need[n] > 0 && (need[n] >= weeksLeft || r() < need[n] / weeksLeft));
-    const { pairs: mids } = crossPairs(pool, teams, metMid, r, played, satMid);
+    const cost = near(week);
+    const { pairs: mids } = nearPairs(pool, teams, metMid, r, played, satMid, cost);
     for (const [a, b] of mids) {
-      const [h, aw] = orient(a, b);
+      const [h, aw] = cost.host(a, b);
       const fmt = midweek === 'mixed' ? (r() < 0.5 ? 'doubleheader' : 'split') : midweek;
       if (fmt === 'single') {
         games.push(blankGame(season, { week, day: 'Tue', order: DAY_ORDER.Tue, home: h, away: aw }));

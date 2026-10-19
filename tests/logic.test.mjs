@@ -673,4 +673,19 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
     for (const [c, v] of Object.entries(byConf)) assert.equal(v.size, 1, `${se.year} ${c}: every team plays the same number of conference games (${[...v]})`);
   }
 }
+// Midweek games lean regional: most visitors travel a short way from home or a weekend site
+{
+  const { cityPoint, miles } = await import('../js/geo.js');
+  assert.deepEqual(cityPoint('Durham, NC'), cityPoint('Durham, N.C.'));
+  assert.ok(miles(cityPoint('Austin, Texas'), cityPoint('Norman, Okla.')) < 400 && miles(cityPoint('Austin, Texas'), cityPoint('Seattle, Wash.')) > 1500);
+  const se = league.seasons[league.currentYear], at = {};
+  for (const x of se.games) if (x.type === 'regular' && x.day !== 'Tue' && x.day !== 'Wed') for (const t of [x.home, x.away]) ((at[t] ||= {})[x.week] ||= (x.site || x.home));
+  const trips = se.games.filter(x => x.type === 'regular' && x.day === 'Tue' && !/Game 2/.test(x.label || '')).map(m => {
+    const H = cityPoint(se.teams[m.home].city), v = m.away;
+    return Math.min(...[v, at[v]?.[m.week - 1], at[v]?.[m.week]].filter(t => t && se.teams[t]).map(t => miles(cityPoint(se.teams[t].city), H)));
+  }).filter(Number.isFinite);
+  const share = trips.filter(t => t < 400).length / trips.length;
+  console.log(`midweek: ${trips.length} sets, ${(share * 100).toFixed(0)}% within 400 miles of the visitor's home or weekend site`);
+  assert.ok(share > 0.45, 'midweek games lean regional');
+}
 console.log(`ok in ${Date.now() - t0} ms`);
