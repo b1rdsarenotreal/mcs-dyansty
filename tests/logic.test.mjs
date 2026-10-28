@@ -212,7 +212,7 @@ assert.throws(() => setConfFormat(s, 'Big 12', 'double'), /already started/);
     const ord = committeeOrder(s), r = rpi(s);
     const avgGap = ord.slice(0, 16).reduce((a, t, i) => a + Math.abs(r[t].rank - (i + 1)), 0) / 16;
     console.log('committee order vs RPI rank, top 16: average gap', avgGap.toFixed(1));
-    assert.ok(avgGap < 4, 'committee order stays close to the RPI'); }
+    assert.ok(avgGap < 6, 'committee order stays close to the RPI'); }
   for (const t of Object.keys(s.teams)) { const g = Q[t].rec.reduce((n, x) => n + x.w + x.l, 0); assert.equal(g, s.games.filter(x => isFinal(x) && (x.home === t || x.away === t)).length, 'quadrant records cover every game'); }
 }
 simGames(s, undefined, { autoLock: true });
@@ -710,5 +710,34 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   assert.ok(applyConfWeekend(s2, 'MAC') > 0);
   assert.ok(daysOf('MAC').every(d => d === 'Sat1 Sat2 Sun'), 'MAC re-laid');
   assert.deepEqual(seriesDays(undefined).map(x => x.day), ['Fri', 'Sat', 'Sun']);
+}
+// Selection committee: tiered team-vs-team comparisons and insertion ranking
+{
+  const { compareTeams, committeeRank, committeeSheet, committeeSeeds, COMMITTEE_TIERS } = await import('../js/postseason.js');
+  const base = { rpiRank: 10, rpi: 0.55, sos: 10, q1w: 2, q2w: 2, q3l: 1, q4l: 0, q1p: 0.5, q2p: 0.5, q12p: 0.5, aq: false, reg: false };
+  const mk = (stats, h2h = {}) => ({ stat: Object.fromEntries(Object.entries(stats).map(([t, x]) => [t, { ...base, ...x }])), h2h });
+  // Tier 1 wins outright: better RPI and more Q1 wins beats a cleaner Q4 record.
+  let c = compareTeams(mk({ A: { rpiRank: 5, q1w: 4, q4l: 1 }, B: { rpiRank: 8, q1w: 2, q4l: 0 } }), 'A', 'B');
+  assert.deepEqual([c.better, c.tier, c.won, c.lost], ['A', 1, ['rpi', 'q1w'], ['q4l']]);
+  // Tier 1 even (1-1, one tie) -> Tier 2 decides on head-to-head and SOS.
+  c = compareTeams(mk({ A: { rpiRank: 5, q4l: 1 }, B: { rpiRank: 8, sos: 3 } }, { 'B|A': 2, 'A|B': 1 }), 'A', 'B');
+  assert.deepEqual([c.better, c.tier], ['B', 2]);
+  // Tiers 1 and 2 even -> Tier 3 (automatic bid).
+  c = compareTeams(mk({ A: { aq: true }, B: {} }), 'A', 'B');
+  assert.deepEqual([c.better, c.tier, c.won], ['A', 3, ['aq']]);
+  // Everything even -> raw RPI.
+  c = compareTeams(mk({ A: { rpi: 0.5 }, B: { rpi: 0.6 } }), 'A', 'B');
+  assert.deepEqual([c.better, c.tier], ['B', 0]);
+  // The owner's example: A over B, C over B, then C over A -> C, A, B.
+  const ex = mk({ A: { rpiRank: 1, q1w: 3 }, B: { rpiRank: 2, q1w: 2 }, C: { rpiRank: 3, q1w: 5, q4l: -1 } });
+  ex.stat.C.q4l = 0; ex.stat.A.q4l = 1; ex.stat.B.q4l = 1;
+  assert.deepEqual(committeeRank(null, ['A', 'B', 'C'], ex), ['C', 'A', 'B']);
+  assert.equal(COMMITTEE_TIERS.length, 3);
+  // In a real season, every seed beats the seed right below it.
+  for (const se of Object.values(league.seasons).filter(x => x.post?.field)) {
+    const sh = committeeSheet(se), teams = se.post.field.map(f => f.team);
+    const seeds = committeeSeeds(se, teams, sh);
+    for (let i = 0; i + 1 < seeds.length; i++) assert.equal(compareTeams(sh, seeds[i], seeds[i + 1]).better, seeds[i], `${se.year}: seed ${i + 1} beats seed ${i + 2}`);
+  }
 }
 console.log(`ok in ${Date.now() - t0} ms`);

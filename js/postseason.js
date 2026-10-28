@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261018234703';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, quadrants, quadScore } from './standings.js?v=20261018234703';
-import { generatePoll } from './polls.js?v=20261018234703';
-import { hashStr } from './util.js?v=20261018234703';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261028160518';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, regSeasonChamps, quadrants } from './standings.js?v=20261028160518';
+import { generatePoll } from './polls.js?v=20261028160518';
+import { hashStr } from './util.js?v=20261028160518';
 
 // ---------- tournament format ----------
 
@@ -569,24 +569,93 @@ export function gameVenue(season, g) {
 
 // ---------- selection ----------
 
-// The committee's order, used to pick at-large teams and seed the field:
-// RPI rank 60%, quadrant rank 25% (wins against Quadrant 1 and 2 teams count
-// most, Quadrant 3 and 4 losses hurt most; see quadScore) and
-// strength-of-schedule rank 15%. The poll isn't used.
-export const COMMITTEE_WEIGHTS = { rpi: 0.6, quad: 0.25, sos: 0.15 };
-export function quadRanks(season, r = rpi(season), Q = quadrants(season, r)) {
-  const teams = Object.keys(season.teams);
-  const sc = Object.fromEntries(teams.map(t => [t, quadScore(Q[t])]));
-  const sorted = [...teams].sort((a, b) => sc[b] - sc[a] || (r[a].rank ?? 999) - (r[b].rank ?? 999));
-  return Object.fromEntries(sorted.map((t, i) => [t, { rank: i + 1, score: sc[t] }]));
+// ---------- the committee: team-vs-team comparisons ----------
+//
+// The committee compares two teams at a time, tier by tier. Within a tier
+// each criterion goes to the better team (or to neither on a tie); the team
+// that wins more of a tier's criteria wins the comparison. Only if a tier is
+// even does the next tier decide. Tier 1 decides most comparisons.
+export const COMMITTEE_TIERS = [
+  { name: 'Tier 1', items: [['rpi', 'RPI'], ['q1w', 'Q1 wins'], ['q4l', 'Q4 losses']] },
+  { name: 'Tier 2', items: [['sos', 'Strength of schedule'], ['h2h', 'Head-to-head'], ['q2w', 'Q2 wins']] },
+  { name: 'Tier 3', items: [['aq', 'Automatic bid'], ['reg', 'Regular-season conference title'], ['q3l', 'Q3 losses'], ['q1p', 'Q1 win %'], ['q2p', 'Q2 win %'], ['q12p', 'Q1 + Q2 win %']] },
+];
+export const COMMITTEE_SHORT = { rpi: 'RPI', q1w: 'Q1 W', q4l: 'Q4 L', sos: 'SOS', h2h: 'H2H', q2w: 'Q2 W', aq: 'AQ', reg: 'Reg. title', q3l: 'Q3 L', q1p: 'Q1 %', q2p: 'Q2 %', q12p: 'Q1+Q2 %' };
+
+// Everything the committee looks at, gathered once for a season.
+export function committeeSheet(season) {
+  const r = rpi(season), Q = quadrants(season, r);
+  const autos = new Set(Object.values(autoBids(season)).filter(Boolean));
+  const regDone = season.games.some(g => g.type === 'regular') && season.games.filter(g => g.type === 'regular').every(isFinal);
+  const reg = new Set(regDone ? conferences(season).flatMap(c => regSeasonChamps(season, c)) : []);
+  const h2h = {};
+  for (const g of season.games) if (isFinal(g)) { const k = `${winnerOf(g)}|${loserOf(g)}`; h2h[k] = (h2h[k] || 0) + 1; }
+  const pct = (w, l) => (w + l ? w / (w + l) : null);
+  const stat = {};
+  for (const t of Object.keys(season.teams)) {
+    const q = Q[t].rec;
+    stat[t] = {
+      rpiRank: r[t]?.rank ?? 999, rpi: r[t]?.rpi ?? 0, sos: r[t]?.sosRank ?? 999,
+      q1w: q[0].w, q2w: q[1].w, q3l: q[2].l, q4l: q[3].l,
+      q1p: pct(q[0].w, q[0].l), q2p: pct(q[1].w, q[1].l), q12p: pct(q[0].w + q[1].w, q[0].l + q[1].l),
+      aq: autos.has(t), reg: reg.has(t),
+    };
+  }
+  return { stat, h2h, r, Q };
 }
-export function committeeOrder(season) {
-  const r = rpi(season);
-  const qr = quadRanks(season, r);
-  const teams = Object.keys(season.teams);
-  const W = COMMITTEE_WEIGHTS;
-  const score = t => W.rpi * (r[t].rank ?? 999) + W.quad * qr[t].rank + W.sos * (r[t].sosRank ?? 999);
-  return teams.sort((a, b) => score(a) - score(b) || r[b].rpi - r[a].rpi);
+
+// One criterion: 1 if A is better, -1 if B is, 0 if even.
+function criterion(sheet, k, a, b) {
+  const A = sheet.stat[a], B = sheet.stat[b], sgn = x => (x > 0 ? 1 : x < 0 ? -1 : 0);
+  switch (k) {
+    case 'rpi': return sgn(B.rpiRank - A.rpiRank);
+    case 'sos': return sgn(B.sos - A.sos);
+    case 'q1w': case 'q2w': return sgn(A[k] - B[k]);
+    case 'q3l': case 'q4l': return sgn(B[k] - A[k]);
+    case 'h2h': return sgn((sheet.h2h[`${a}|${b}`] || 0) - (sheet.h2h[`${b}|${a}`] || 0));
+    case 'aq': case 'reg': return sgn(+A[k] - +B[k]);
+    default: return A[k] == null || B[k] == null ? 0 : sgn(A[k] - B[k]); // win percentages, when both have games
+  }
+}
+
+// Compare two teams. Returns { better, worse, tier (1-3, or 0 if every tier
+// was even and the raw RPI decided), won: criteria the better team won in the
+// deciding tier, lost: criteria it lost there }.
+export function compareTeams(sheet, a, b) {
+  for (let i = 0; i < COMMITTEE_TIERS.length; i++) {
+    const res = COMMITTEE_TIERS[i].items.map(([k]) => [k, criterion(sheet, k, a, b)]);
+    const sum = res.reduce((n, [, v]) => n + v, 0);
+    if (sum) {
+      const [better, worse] = sum > 0 ? [a, b] : [b, a], sign = sum > 0 ? 1 : -1;
+      return { better, worse, tier: i + 1, won: res.filter(([, v]) => v === sign).map(([k]) => k), lost: res.filter(([, v]) => v === -sign).map(([k]) => k) };
+    }
+  }
+  const A = sheet.stat[a].rpi, B = sheet.stat[b].rpi;
+  const aFirst = A !== B ? A > B : a.localeCompare(b) < 0;
+  return { better: aFirst ? a : b, worse: aFirst ? b : a, tier: 0, won: ['rpi'], lost: [] };
+}
+
+// Rank a set of teams one comparison at a time. Teams start in RPI order;
+// each team in turn starts at the bottom and moves up past every team it
+// beats head to head in the comparison, stopping at the first team that
+// beats it. (Team A over B; then C vs. B, and if C wins, C vs. A; and so on.)
+export function committeeRank(season, teams, sheet = committeeSheet(season)) {
+  const start = [...teams].sort((a, b) => sheet.stat[a].rpiRank - sheet.stat[b].rpiRank || a.localeCompare(b));
+  const out = [];
+  for (const t of start) {
+    let i = out.length;
+    out.push(t);
+    while (i > 0 && compareTeams(sheet, t, out[i - 1]).better === t) { [out[i - 1], out[i]] = [out[i], out[i - 1]]; i--; }
+  }
+  return out;
+}
+// The whole league in committee order (used to pick the at-large teams).
+export function committeeOrder(season, sheet = committeeSheet(season)) {
+  return committeeRank(season, Object.keys(season.teams), sheet);
+}
+// Seeds for a chosen field: the same comparisons, among the field's teams only.
+export function committeeSeeds(season, teams, sheet = committeeSheet(season)) {
+  return committeeRank(season, teams, sheet);
 }
 
 // At-large teams need a winning or .500 record (every game so far counts).
@@ -629,7 +698,7 @@ export function proposeField(season, size = Math.min(fieldSize(ncaaConfig(season
   const { pool } = atLargePool(season, order, autoSet);
   const field = [...autoSet];
   for (const t of pool) { if (field.length >= size) break; if (!field.includes(t)) field.push(t); }
-  const seeded = order.filter(t => field.includes(t));
+  const seeded = committeeSeeds(season, field);
   season.post.field = seeded.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
   season.post.firstOut = order.filter(t => !field.includes(t) && atLargeEligible(season, t, recs)).slice(0, 4);
@@ -655,7 +724,7 @@ export function bracketology(season) {
   const { pool, fill } = atLargePool(season, order, autoSet);
   const chosen = [...autoSet];
   for (const t of pool) { if (chosen.length >= size) break; if (!chosen.includes(t)) chosen.push(t); }
-  const field = order.filter(t => chosen.includes(t)).map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
+  const field = committeeSeeds(season, chosen).map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   const atLarge = order.filter(t => chosen.includes(t) && !autoSet.has(t));
   const out = order.filter(t => !chosen.includes(t) && !autoSet.has(t) && atLargeEligible(season, t, recs));
   return { cfg, field, autos, fill, regionals: pods(field, cfg.regionals), lastIn: atLarge.slice(-4), firstOut: out.slice(0, 4), nextOut: out.slice(4, 8) };
@@ -677,7 +746,7 @@ export function selectionBoard(season, extra = 10) {
 function reseedByCommittee(season, teams) {
   const order = committeeOrder(season);
   const autoSet = new Set(Object.values(autoBids(season)).filter(Boolean));
-  const field = order.filter(t => teams.includes(t));
+  const field = committeeSeeds(season, teams);
   season.post.field = field.map((t, i) => ({ team: t, seed: i + 1, bid: autoSet.has(t) ? 'auto' : 'at-large', conf: season.teams[t].conference }));
   season.post.lastIn = order.filter(t => field.includes(t) && !autoSet.has(t)).slice(-4);
   const recs = records(season);
