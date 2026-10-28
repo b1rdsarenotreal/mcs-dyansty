@@ -722,6 +722,9 @@ runFormat({ regionals: 16, perRegional: 2, wsSize: 8 }, se => {
   // Tier 1 even (1-1, one tie) -> Tier 2 decides on head-to-head and SOS.
   c = compareTeams(mk({ A: { rpiRank: 5, q4l: 1 }, B: { rpiRank: 8, sos: 3 } }, { 'B|A': 2, 'A|B': 1 }), 'A', 'B');
   assert.deepEqual([c.better, c.tier], ['B', 2]);
+  // Tier 1 even -> a better overall record helps in Tier 2.
+  c = compareTeams(mk({ A: { rpiRank: 5, q4l: 1, wl: 0.6 }, B: { rpiRank: 8, wl: 0.7 } }), 'A', 'B');
+  assert.deepEqual([c.better, c.tier, c.won], ['B', 2, ['wl']]);
   // Tiers 1 and 2 even -> Tier 3 (automatic bid).
   c = compareTeams(mk({ A: { aq: true }, B: {} }), 'A', 'B');
   assert.deepEqual([c.better, c.tier, c.won], ['A', 3, ['aq']]);

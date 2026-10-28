@@ -1,14 +1,14 @@
 // Season pages: home, schedule, standings, rankings and postseason.
 
-import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261028160518';
-import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261028160518';
-import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261028160518';
-import { ovr } from './sim.js?v=20261028160518';
-import { simGames, addGame, weekName } from './league.js?v=20261028160518';
-import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261028160518';
-import { COMMITTEE_TIERS, COMMITTEE_SHORT, committeeSheet, compareTeams, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261028160518';
-import { fmtPct, hashStr } from './util.js?v=20261028160518';
-import { DAY_ORDER, CONF_WEEKENDS, applyConfWeekend } from './schedule.js?v=20261028160518';
+import { ctx, S, app, modal, $, $$, esc, toast, changed, persist, cache, team, teamOptions, teamNames, confLogo, confHref, confColor, confInfo, gameCard, compactCard, placeholderCard, bindGameCards, openGame, resultText, DAY_NAMES, readableOn, teamInfo, logoImg, teamHref } from './ui.js?v=20261028161105';
+import { isFinal, winnerOf, records, rpi, confStandings, conferences, regSeasonChamp, regSeasonChamps, TIEBREAKERS, quadrants, quadCuts, isIndependent, INDEPENDENT } from './standings.js?v=20261028161105';
+import { latestPoll, generatePoll, pollRankMap, pollSizeOf, VOTER_PANEL, voterStyle, votersOf, addRandomVoter, removeVoter } from './polls.js?v=20261028161105';
+import { ovr } from './sim.js?v=20261028161105';
+import { simGames, addGame, weekName } from './league.js?v=20261028161105';
+import { CONF_FORMATS, confFormatName, confKind } from './postseason.js?v=20261028161105';
+import { COMMITTEE_TIERS, COMMITTEE_SHORT, committeeSheet, compareTeams, mcwsVenue, postWeeks, regWeeksOf, ncaaConfig, hasSupers, fieldSize, wsTeams, formatSummary, shownSeed, postseasonBonus, defaultConfTourneySize, confTourneySeeds, reseedConfTourney, proposeField, lockField, pods, nodeTeams, nodeNeeded, runnerUp, committeeOrder, autoBids, refLabel, setConfFormat, ensureLayout, confHost, setConfHost, mcwsHistory, selectionBoard, setAtLarge, confirmField, unconfirmField, bracketology, BRACKETOLOGY_FROM_WEEK } from './postseason.js?v=20261028161105';
+import { fmtPct, hashStr } from './util.js?v=20261028161105';
+import { DAY_ORDER, CONF_WEEKENDS, applyConfWeekend } from './schedule.js?v=20261028161105';
 
 // " at Easton Stadium, Los Angeles, Calif." for a host school with a home field.
 const atField = (s, school) => { const t = s.teams[school]; const f = [t?.stadium, t?.city].filter(Boolean).join(', '); return f ? ` at ${esc(f)}` : ''; };
@@ -512,7 +512,7 @@ function renderSosTab(root) {
     <thead><tr><th class="num">SOS</th><th>Team</th><th>Conf</th><th class="num">Record</th><th class="num">Opponents' record</th><th class="num">Opp. win %</th><th class="num">Opp. opp. win %</th><th class="num">Rating</th><th class="num">RPI</th><th class="num">Poll</th></tr></thead>
     <tbody>${teams.map(t => `<tr><td class="num"><b>${r[t].sosRank}</b></td><td>${team(t, { rank: false })}</td><td>${confLogo(s.teams[t].conference, 18)}</td><td class="num">${recs[t].w}-${recs[t].l}</td>
       <td class="num">${r[t].oppW}-${r[t].oppL}</td><td class="num">${fmtPct(r[t].owp)}</td><td class="num">${fmtPct(r[t].oowp)}</td><td class="num"><b>${r[t].sos.toFixed(4).replace(/^0/, '')}</b></td><td class="num muted">${r[t].rank ?? ''}</td><td class="num muted">${pr[t] ?? ''}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">Strength of schedule starts once games are played.</td></tr>'}</tbody></table></div>
-    <p class="small muted">Strength of schedule = ⅔ opponents' winning percentage (not counting games against this team) + ⅓ opponents' opponents' winning percentage. Opponents' record counts every game a team's opponents played, once per meeting. Strength of schedule is in the selection committee's second tier, with head-to-head and Q2 wins.</p></div>`;
+    <p class="small muted">Strength of schedule = ⅔ opponents' winning percentage (not counting games against this team) + ⅓ opponents' opponents' winning percentage. Opponents' record counts every game a team's opponents played, once per meeting. Strength of schedule is in the selection committee's second tier, with head-to-head, Q2 wins and overall record.</p></div>`;
 }
 
 function renderPowerTab(root) {
@@ -816,7 +816,7 @@ function renderField(root) {
   const s = S(), p = s.post || {};
   if (!p.field) {
     const cfg = ncaaConfig(s);
-    root.innerHTML = `<div class="empty">The ${fieldSize(cfg)}-team NCAA field is chosen once every conference tournament is finished. It has ${Object.keys(ctx.league.conferences).length ? 'one automatic bid per conference (the tournament champion, or the regular-season champion where there is no tournament)' : 'automatic bids'}, and the rest are at-large picks. The committee compares teams two at a time (Tier 1: RPI, Q1 wins, Q4 losses; Tier 2: strength of schedule, head-to-head, Q2 wins; Tier 3: automatic bid, regular-season title, Q3 losses, Q1 and Q2 win percentages) as a starting point; you pick the at-large teams and set the seeds.<br><br>${formatSummary(cfg)} <a href="#/settings">Change the format in Settings.</a></div>`;
+    root.innerHTML = `<div class="empty">The ${fieldSize(cfg)}-team NCAA field is chosen once every conference tournament is finished. It has ${Object.keys(ctx.league.conferences).length ? 'one automatic bid per conference (the tournament champion, or the regular-season champion where there is no tournament)' : 'automatic bids'}, and the rest are at-large picks. The committee compares teams two at a time (Tier 1: RPI, Q1 wins, Q4 losses; Tier 2: strength of schedule, head-to-head, Q2 wins, overall W-L; Tier 3: automatic bid, regular-season title, Q3 losses, Q1 and Q2 win percentages) as a starting point; you pick the at-large teams and set the seeds.<br><br>${formatSummary(cfg)} <a href="#/settings">Change the format in Settings.</a></div>`;
     return;
   }
   const r = rpi(s), pr = cache.ranks(), recs = cache.recs(), Q = quadrants(s, r), sheet = committeeSheet(s);

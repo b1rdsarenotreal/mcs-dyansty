@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261028160518';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, regSeasonChamps, quadrants } from './standings.js?v=20261028160518';
-import { generatePoll } from './polls.js?v=20261028160518';
-import { hashStr } from './util.js?v=20261028160518';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261028161105';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, regSeasonChamps, quadrants } from './standings.js?v=20261028161105';
+import { generatePoll } from './polls.js?v=20261028161105';
+import { hashStr } from './util.js?v=20261028161105';
 
 // ---------- tournament format ----------
 
@@ -577,14 +577,14 @@ export function gameVenue(season, g) {
 // even does the next tier decide. Tier 1 decides most comparisons.
 export const COMMITTEE_TIERS = [
   { name: 'Tier 1', items: [['rpi', 'RPI'], ['q1w', 'Q1 wins'], ['q4l', 'Q4 losses']] },
-  { name: 'Tier 2', items: [['sos', 'Strength of schedule'], ['h2h', 'Head-to-head'], ['q2w', 'Q2 wins']] },
+  { name: 'Tier 2', items: [['sos', 'Strength of schedule'], ['h2h', 'Head-to-head'], ['q2w', 'Q2 wins'], ['wl', 'Overall W-L']] },
   { name: 'Tier 3', items: [['aq', 'Automatic bid'], ['reg', 'Regular-season conference title'], ['q3l', 'Q3 losses'], ['q1p', 'Q1 win %'], ['q2p', 'Q2 win %'], ['q12p', 'Q1 + Q2 win %']] },
 ];
-export const COMMITTEE_SHORT = { rpi: 'RPI', q1w: 'Q1 W', q4l: 'Q4 L', sos: 'SOS', h2h: 'H2H', q2w: 'Q2 W', aq: 'AQ', reg: 'Reg. title', q3l: 'Q3 L', q1p: 'Q1 %', q2p: 'Q2 %', q12p: 'Q1+Q2 %' };
+export const COMMITTEE_SHORT = { rpi: 'RPI', q1w: 'Q1 W', q4l: 'Q4 L', sos: 'SOS', h2h: 'H2H', q2w: 'Q2 W', wl: 'W-L', aq: 'AQ', reg: 'Reg. title', q3l: 'Q3 L', q1p: 'Q1 %', q2p: 'Q2 %', q12p: 'Q1+Q2 %' };
 
 // Everything the committee looks at, gathered once for a season.
 export function committeeSheet(season) {
-  const r = rpi(season), Q = quadrants(season, r);
+  const r = rpi(season), Q = quadrants(season, r), recs = records(season);
   const autos = new Set(Object.values(autoBids(season)).filter(Boolean));
   const regDone = season.games.some(g => g.type === 'regular') && season.games.filter(g => g.type === 'regular').every(isFinal);
   const reg = new Set(regDone ? conferences(season).flatMap(c => regSeasonChamps(season, c)) : []);
@@ -598,7 +598,7 @@ export function committeeSheet(season) {
       rpiRank: r[t]?.rank ?? 999, rpi: r[t]?.rpi ?? 0, sos: r[t]?.sosRank ?? 999,
       q1w: q[0].w, q2w: q[1].w, q3l: q[2].l, q4l: q[3].l,
       q1p: pct(q[0].w, q[0].l), q2p: pct(q[1].w, q[1].l), q12p: pct(q[0].w + q[1].w, q[0].l + q[1].l),
-      aq: autos.has(t), reg: reg.has(t),
+      wl: pct(recs[t]?.w || 0, recs[t]?.l || 0), aq: autos.has(t), reg: reg.has(t),
     };
   }
   return { stat, h2h, r, Q };
@@ -614,7 +614,7 @@ function criterion(sheet, k, a, b) {
     case 'q3l': case 'q4l': return sgn(B[k] - A[k]);
     case 'h2h': return sgn((sheet.h2h[`${a}|${b}`] || 0) - (sheet.h2h[`${b}|${a}`] || 0));
     case 'aq': case 'reg': return sgn(+A[k] - +B[k]);
-    default: return A[k] == null || B[k] == null ? 0 : sgn(A[k] - B[k]); // win percentages, when both have games
+    default: return A[k] == null || B[k] == null ? 0 : sgn(A[k] - B[k]); // win percentages (overall, Q1, Q2, Q1+Q2), when both have games
   }
 }
 
