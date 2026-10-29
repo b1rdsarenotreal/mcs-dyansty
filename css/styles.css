@@ -898,3 +898,7 @@ button.bx-sg:hover { border-color: var(--muted); }
 .badge.fit-good { background: color-mix(in srgb, var(--good) 10%, transparent); color: var(--good); }
 .badge.fit-slow { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); }
 .badge.fit-rough { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+/* Coach cell: name and buttons on one line, prestige and new-hire badges wrap below, so the table fits */
+.off-table td:has(> .coach-cell), .off-table td:first-child { white-space: normal; }
+.off-table .coach-cell { flex-wrap: wrap; row-gap: 3px; max-width: 290px; }
+.off-table .coach-cell .prestige, .off-table .coach-cell .badge.fit { margin-left: 0; order: 3; }
