@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261028212240';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor, confRounds, confSeriesCounts } from './schedule.js?v=20261028212240';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261028212240';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261028212240';
-import { replayRatings, ensureBase } from './ratings.js?v=20261028212240';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames, wsTeams } from './postseason.js?v=20261028212240';
-import { isFinal, records, INDEPENDENT } from './standings.js?v=20261028212240';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261028212240';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261028213119';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor, confRounds, confSeriesCounts } from './schedule.js?v=20261028213119';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261028213119';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261028213119';
+import { replayRatings, ensureBase } from './ratings.js?v=20261028213119';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames, wsTeams } from './postseason.js?v=20261028213119';
+import { isFinal, records, INDEPENDENT } from './standings.js?v=20261028213119';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261028213119';
 
 export const SCHEMA_VERSION = 4;
 
@@ -312,24 +312,80 @@ export const COACH_NEW = 1.5, COACH_STAY = 0.75;
 export function coachBonus(prestige, isNew) {
   return Math.round(((prestige - 50) / 10) * (isNew ? COACH_NEW : COACH_STAY));
 }
+
+// Program prestige, 0-100 (50 = an average program): how good a school has
+// been lately. Each past season counts its winning percentage, NCAA bid,
+// MCWS trip, national title and final poll rank, and older seasons fade
+// (each year back counts 75% as much). A school with little history leans
+// on its current talent, so a powerhouse starts out looking like one.
+export const PRESTIGE_FADE = 0.75;
+export function programPrestiges(league, teams) {
+  const years = Object.keys(league.seasons).map(Number).sort((a, b) => b - a);
+  const out = {};
+  const per = years.map(y => {
+    const se = league.seasons[y];
+    if (se.phase !== 'complete') return null;
+    const recs = records(se), ws = new Set(wsTeams(se)), field = new Set((se.post?.field || []).map(f => f.team));
+    const fin = Object.fromEntries((se.polls?.final?.ranks || []).map((x, i) => [x.team, i + 1]));
+    const size = se.polls?.final?.ranks?.length || 25;
+    return { recs, ws, field, fin, size, champ: se.post?.champion };
+  }).filter(Boolean);
+  for (const t of Object.values(teams)) {
+    let sum = 0, wsum = 0, w = 1;
+    for (const x of per) {
+      const r = x.recs[t.school];
+      if (r && r.w + r.l) {
+        const wp = r.w / (r.w + r.l), rk = x.fin[t.school];
+        const v = (wp - 0.5) * 80 + (x.field.has(t.school) ? 8 : -3) + (x.ws.has(t.school) ? 10 : 0) + (x.champ === t.school ? 12 : 0) + (rk ? 10 * (x.size + 1 - rk) / x.size : 0);
+        sum += v * w; wsum += w;
+      }
+      w *= PRESTIGE_FADE;
+    }
+    // Talent stands in for missing history (worth about 1.5 seasons).
+    const prior = (0.4 * t.off + 0.4 * t.pit + 0.2 * t.def - 70) * 1.6;
+    out[t.school] = clamp(Math.round(50 + (sum + prior * 1.5) / (wsum + 1.5)), 0, 100);
+  }
+  return out;
+}
+export const programLabel = p => (p >= 80 ? 'Blue blood' : p >= 65 ? 'Power' : p >= 52 ? 'Established' : p >= 40 ? 'Middle' : 'Building');
+// Big programs recruit: a prestige 90 program earns about +3 points a year,
+// a 20 about -2, which keeps true powers near the top while regression and
+// luck still bring most hot teams back.
+export const programBonus = p => Math.round((p - 50) / 13);
+
+// A new coach's first year is a roll: most hires land near what his prestige
+// promises, some take off, and some flop. A bigger program magnifies it
+// (more to work with, more pressure). `fit` is the multiplier, fixed for a
+// given school, coach and year so it doesn't change when the page redraws.
+export function hireFit(year, school, coachId) {
+  const r = rng(hashStr(`fit|${year}|${school}|${coachId}`));
+  return clamp(1 + normal(r) * 0.65, -0.6, 1.9);
+}
+export const fitLabel = f => (f >= 1.4 ? 'Great fit' : f >= 0.8 ? 'Good fit' : f >= 0.3 ? 'Slow start' : 'Rough fit');
 // Recompute every draft team's coach points from its coach right now (call
 // after any coaching change). `dev.coach0` is the coach who finished last season.
 export function syncCoachBonus(league, teams = league.draft?.teams) {
   if (!teams) return;
-  const off = currentSeason(league)?.settings?.development === 'none';
-  const res = coachResumes(league);
+  const cur = currentSeason(league), off = cur?.settings?.development === 'none';
+  const year = league.draft?.year ?? (cur?.year ?? 0) + 1;
+  const res = coachResumes(league), prog = programPrestiges(league, teams);
   for (const t of Object.values(teams)) {
     if (!t.dev) continue;
     if (!('coach0' in t.dev)) t.dev.coach0 = t.coachId || null;
     const isNew = (t.coachId || null) !== t.dev.coach0;
     const pr = t.coachId ? coachPrestige(res[t.coachId]) : null;
-    // An empty job costs a point: no coach recruiting this offseason.
-    t.dev.cb = off ? 0 : t.coachId ? coachBonus(pr, isNew) : -1;
+    t.dev.prestige = prog[t.school];
+    t.dev.pb = off ? 0 : programBonus(prog[t.school]);
+    t.dev.fit = isNew && t.coachId ? hireFit(year, t.school, t.coachId) : null;
+    // A new hire: his prestige x 1.5, times how the fit turns out, a little
+    // bigger at a big program. An empty job costs a point (nobody recruiting).
+    const amp = 0.8 + prog[t.school] / 250;
+    t.dev.cb = off ? 0 : !t.coachId ? -1 : isNew ? Math.round(coachBonus(pr, true) * t.dev.fit * amp) : coachBonus(pr, false);
     t.dev.coachNew = isNew;
   }
 }
-// A team's whole allotment: results and luck, plus its coach.
-export const devTotal = t => (t.dev ? t.dev.pts + (t.dev.cb || 0) : 0);
+// A team's whole allotment: results and luck, its program, and its coach.
+export const devTotal = t => (t.dev ? t.dev.pts + (t.dev.pb || 0) + (t.dev.cb || 0) : 0);
 
 // Spread a team's points one at a time across the three ratings.
 export function spreadPoints(t, r) {

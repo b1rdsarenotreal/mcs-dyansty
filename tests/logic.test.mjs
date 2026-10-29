@@ -364,11 +364,22 @@ assert.deepEqual(draftWarnings(league), []);
     const weak = withDev.filter(t => t.coachId !== best).sort((a, b) => a.dev.pts - b.dev.pts)[0];
     const before = devTotal(weak), was = weak.coachId, from = Object.values(d.teams).find(t => t.coachId === best);
     hireCoach(d.teams, weak.school, best); syncCoachBonus(league);
-    assert.ok(devTotal(weak) > before, `${weak.school} gains points by hiring a big name (${before} -> ${devTotal(weak)})`);
-    assert.ok(weak.dev.coachNew);
+    const amp = 0.8 + weak.dev.prestige / 250;
+    assert.equal(weak.dev.cb, Math.round(coachBonus(coachPrestige(res[best]), true) * weak.dev.fit * amp), 'a new hire: prestige x 1.5, times his fit, a bit more at a big program');
+    assert.ok(coachBonus(coachPrestige(res[best]), true) * amp > coachBonus(coachPrestige(res[was]), false), `${weak.school} expects more from the big name`);
+    assert.ok(weak.dev.coachNew && weak.dev.fit > -1 && weak.dev.fit < 2);
     if (from) assert.equal(from.dev.cb, -1, 'the job he left is open, which costs a point');
     hireCoach(d.teams, weak.school, was); if (from) hireCoach(d.teams, from.school, best); syncCoachBonus(league);
     assert.equal(devTotal(weak), before, 'hiring the old coach back restores the points'); }
+  // Program prestige: recent success counts most; the champion is well above average.
+  { const { programPrestiges, programBonus, hireFit } = await import('../js/league.js');
+    const pp = programPrestiges(league, d.teams), vals = Object.values(pp).sort((a, b) => a - b), med = vals[vals.length >> 1];
+    assert.ok(pp[s.post.champion] > med + 10, `champion prestige ${pp[s.post.champion]} vs median ${med}`);
+    assert.ok(programBonus(90) > 0 && programBonus(50) === 0 && programBonus(15) < 0);
+    assert.ok(withDev.every(t => t.dev.pb === programBonus(t.dev.prestige)), 'program points come from prestige');
+    assert.equal(hireFit(2020, 'A', 'c1'), hireFit(2020, 'A', 'c1'), 'a hire\'s fit is fixed');
+    const fits = Array.from({ length: 400 }, (_, i) => hireFit(2020, 'S' + i, 'c'));
+    assert.ok(fits.some(f => f < 0.3) && fits.some(f => f > 1.4), 'some hires flop, some take off'); }
   const champ = d.teams[s.post.champion];
   const recs = records(s), byWp = withDev.filter(t => recs[t.school]).sort((a, b) => recs[b.school].w / (recs[b.school].w + recs[b.school].l) - recs[a.school].w / (recs[a.school].w + recs[a.school].l));
   const avg = l => l.reduce((n, t) => n + t.dev.pts, 0) / l.length;

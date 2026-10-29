@@ -892,3 +892,9 @@ button.bx-sg:hover { border-color: var(--muted); }
 .prestige.p-proven { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
 .prestige.p-struggling { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
 .pts-why { white-space: nowrap; font-size: 11px; }
+.prog-tag { font-weight: 600; color: var(--ink); opacity: .75; }
+.badge.fit { margin-left: 6px; }
+.badge.fit-great { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.badge.fit-good { background: color-mix(in srgb, var(--good) 10%, transparent); color: var(--good); }
+.badge.fit-slow { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); }
+.badge.fit-rough { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
