@@ -1,14 +1,14 @@
 // League (dynasty) lifecycle: creating the league, saving results,
 // simulating, adding teams and conferences, and rolling into new seasons.
 
-import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261028161105';
-import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor, confRounds, confSeriesCounts } from './schedule.js?v=20261028161105';
-import { simulateGame, estimateHitsErrors } from './sim.js?v=20261028161105';
-import { generatePoll, releaseDuePolls } from './polls.js?v=20261028161105';
-import { replayRatings, ensureBase } from './ratings.js?v=20261028161105';
-import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames } from './postseason.js?v=20261028161105';
-import { isFinal, records, INDEPENDENT } from './standings.js?v=20261028161105';
-import { rng, normal, clamp, hashStr } from './util.js?v=20261028161105';
+import { START_YEAR, CONFERENCES, COACHES, seedTeams, makeTeam, fillSite } from './data.js?v=20261028212240';
+import { generateSchedule, blankGame, DAY_ORDER, DEFAULT_REG_WEEKS, confWeeksFor, confRounds, confSeriesCounts } from './schedule.js?v=20261028212240';
+import { simulateGame, estimateHitsErrors } from './sim.js?v=20261028212240';
+import { generatePoll, releaseDuePolls } from './polls.js?v=20261028212240';
+import { replayRatings, ensureBase } from './ratings.js?v=20261028212240';
+import { progress, lockField, postWeeks, allEvents, regWeeksOf, DEFAULT_NCAA, pickConfHosts, postseasonFinish, citySiteNames, wsTeams } from './postseason.js?v=20261028212240';
+import { isFinal, records, INDEPENDENT } from './standings.js?v=20261028212240';
+import { rng, normal, clamp, hashStr } from './util.js?v=20261028212240';
 
 export const SCHEMA_VERSION = 4;
 
@@ -259,8 +259,9 @@ export function rebuildSchedule(season, prev = null) {
 // Offseason development. Each team gets an allotment of rating points for
 // next season: more after a winning season, more again for beating what its
 // ratings predicted and for a deep postseason run, fewer for a team already
-// near the top (graduation pulls everyone toward 70), plus some luck. The points are spread across OFF, PIT and DEF automatically, and
-// the commissioner can move them around (or overrule them) in the Offseason.
+// near the top (graduation pulls everyone toward 70), plus some luck, plus
+// the head coach's prestige (see coachBonus). The commissioner places the
+// points on OFF, PIT and DEF in the Offseason.
 const DEV_LUCK = { none: 0, small: 3, normal: 5, big: 8 };
 const FINISH_BONUS = { 'National champion': 4.5, 'MCWS runner-up': 3.5, "Men's College World Series": 3, 'Super Regional': 2, 'Regional champion': 2, 'NCAA Regional': 1.5 };
 export const RATING_KEYS = ['off', 'pit', 'def'];
@@ -276,13 +277,67 @@ export function devPoints(team, season, r, level = 'normal', avgO = 70) {
   const pts = (played ? (wp - 0.5) * 8 + (wp - expected) * 18 : 0) + finish * 1.5 - 0.3 * (o - 70) + normal(r) * (DEV_LUCK[level] ?? DEV_LUCK.normal);
   return clamp(Math.round(pts), -15, 15);
 }
-// Spread `pts` one point at a time across the three ratings.
+// ---------- coaches and development ----------
+// Every coach's career in the dynasty: record, seasons, NCAA and MCWS trips, titles.
+export function coachResumes(league) {
+  const out = {};
+  for (const y of Object.keys(league.seasons).map(Number).sort((a, b) => a - b)) {
+    const se = league.seasons[y], recs = records(se), ws = new Set(wsTeams(se)), field = new Set((se.post?.field || []).map(f => f.team));
+    for (const t of Object.values(se.teams)) {
+      if (!t.coachId || !recs[t.school]) continue;
+      const c = (out[t.coachId] ||= { w: 0, l: 0, seasons: 0, ncaa: 0, mcws: 0, titles: 0 });
+      c.w += recs[t.school].w; c.l += recs[t.school].l; c.seasons++;
+      if (field.has(t.school)) c.ncaa++;
+      if (ws.has(t.school)) c.mcws++;
+      if (se.post?.champion === t.school) c.titles++;
+    }
+  }
+  return out;
+}
+// Prestige, 0-100 (50 = an average head coach): winning percentage, how often
+// his teams make the NCAA tournament, MCWS trips and national titles. A short
+// career counts for less, so a coach with one great season isn't an "Elite"
+// name yet. A coach with no seasons in the dynasty is a little below average.
+export function coachPrestige(res) {
+  if (!res || !res.seasons) return 45;
+  const g = res.w + res.l, pct = g ? res.w / g : 0.5;
+  const raw = (pct - 0.5) * 60 + (res.ncaa / res.seasons - 0.35) * 20 + Math.min(16, res.mcws * 4) + Math.min(21, res.titles * 7);
+  return clamp(Math.round(50 + raw * (res.seasons / (res.seasons + 2))), 0, 100);
+}
+export const prestigeLabel = p => (p >= 80 ? 'Elite' : p >= 66 ? 'Proven' : p >= 54 ? 'Solid' : p >= 44 ? 'Average' : 'Struggling');
+// Rating points a coach adds to (or takes from) a team's offseason allotment.
+// A new hire counts double what a coach who stays does: a big-name coach
+// arriving at a struggling program makes a jump more likely.
+export const COACH_NEW = 1.5, COACH_STAY = 0.75;
+export function coachBonus(prestige, isNew) {
+  return Math.round(((prestige - 50) / 10) * (isNew ? COACH_NEW : COACH_STAY));
+}
+// Recompute every draft team's coach points from its coach right now (call
+// after any coaching change). `dev.coach0` is the coach who finished last season.
+export function syncCoachBonus(league, teams = league.draft?.teams) {
+  if (!teams) return;
+  const off = currentSeason(league)?.settings?.development === 'none';
+  const res = coachResumes(league);
+  for (const t of Object.values(teams)) {
+    if (!t.dev) continue;
+    if (!('coach0' in t.dev)) t.dev.coach0 = t.coachId || null;
+    const isNew = (t.coachId || null) !== t.dev.coach0;
+    const pr = t.coachId ? coachPrestige(res[t.coachId]) : null;
+    // An empty job costs a point: no coach recruiting this offseason.
+    t.dev.cb = off ? 0 : t.coachId ? coachBonus(pr, isNew) : -1;
+    t.dev.coachNew = isNew;
+  }
+}
+// A team's whole allotment: results and luck, plus its coach.
+export const devTotal = t => (t.dev ? t.dev.pts + (t.dev.cb || 0) : 0);
+
+// Spread a team's points one at a time across the three ratings.
 export function spreadPoints(t, r) {
-  const d = t.dev;
+  const d = t.dev, total = devTotal(t);
   for (const k of RATING_KEYS) t[k] = d.start[k];
-  for (let i = 0; i < Math.abs(d.pts); i++) {
+  for (let i = 0; i < Math.abs(total); i++) {
     const k = RATING_KEYS[Math.floor(r() * 3)];
-    t[k] = clamp(t[k] + Math.sign(d.pts), 40, 99);
+    t[k] = clamp(t[k] + Math.sign(total), 40, 99);
   }
   t.base = { off: t.off, pit: t.pit, def: t.def };
 }
@@ -305,18 +360,19 @@ export function placeRemaining(t, r) {
 }
 export function pointsLeft(t) {
   if (!t.dev) return 0;
-  return t.dev.pts - RATING_KEYS.reduce((n, k) => n + (t[k] - t.dev.start[k]), 0);
+  return devTotal(t) - RATING_KEYS.reduce((n, k) => n + (t[k] - t.dev.start[k]), 0);
 }
 // Points start unplaced (the commissioner places them in the offseason);
 // `spread: true` places them at random, for seasons started without one.
-export function developTeams(teams, year, level = 'normal', season = null, { spread = false } = {}) {
+export function developTeams(teams, year, level = 'normal', season = null, { spread = false, league = null } = {}) {
   const r = rng(hashStr(`dev-${year}`));
   const out = JSON.parse(JSON.stringify(teams));
   const list = Object.values(out), avgO = list.reduce((n, t) => n + 0.4 * t.off + 0.4 * t.pit + 0.2 * t.def, 0) / (list.length || 1);
   for (const t of list) {
-    t.dev = { pts: devPoints(t, season, r, level, avgO), start: { off: t.off, pit: t.pit, def: t.def } };
-    if (spread) spreadPoints(t, r);
+    t.dev = { pts: devPoints(t, season, r, level, avgO), start: { off: t.off, pit: t.pit, def: t.def }, coach0: t.coachId || null };
   }
+  if (league && level !== 'none') syncCoachBonus(league, out);
+  if (spread) for (const t of list) spreadPoints(t, r);
   return out;
 }
 
@@ -329,7 +385,7 @@ export function beginOffseason(league) {
   const prev = currentSeason(league);
   if (prev.phase !== 'complete') throw new Error('Finish the season first.');
   if (!league.draft || league.draft.year !== prev.year + 1) {
-    league.draft = { year: prev.year + 1, teams: developTeams(prev.teams, prev.year + 1, prev.settings.development, prev), removed: {}, moves: [] };
+    league.draft = { year: prev.year + 1, teams: developTeams(prev.teams, prev.year + 1, prev.settings.development, prev, { league }), removed: {}, moves: [] };
   }
   return league.draft;
 }
@@ -370,7 +426,7 @@ export function draftWarnings(league) {
 export function startNextSeason(league) {
   const prev = currentSeason(league);
   const year = prev.year + 1;
-  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development, prev, { spread: true });
+  const teams = league.draft?.year === year ? league.draft.teams : developTeams(prev.teams, year, prev.settings.development, prev, { spread: true, league });
   if (Object.keys(teams).length < 16) throw new Error('The NCAA field needs at least 16 teams.');
   const moves = league.draft?.moves || [];
   delete league.draft;

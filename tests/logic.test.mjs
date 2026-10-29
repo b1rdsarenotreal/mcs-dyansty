@@ -346,11 +346,29 @@ assert.deepEqual(draftWarnings(league), []);
 {
   const withDev = Object.values(d.teams).filter(t => t.dev);
   assert.ok(withDev.length >= 40, 'returning teams get rating points');
-  assert.ok(withDev.every(t => pointsLeft(t) === t.dev.pts), 'points start unplaced');
+  const { devTotal, syncCoachBonus, coachPrestige, coachBonus, coachResumes } = await import('../js/league.js');
+  syncCoachBonus(league);
+  assert.ok(withDev.every(t => pointsLeft(t) === devTotal(t)), 'points start unplaced');
   { const { placeRemaining, clearPoints } = await import('../js/league.js');
     const u = withDev.find(x => x.dev.pts > 2 && x.off < 90 && x.pit < 90 && x.def < 90);
     if (u) { u.off += 1; placeRemaining(u, Math.random); assert.equal(pointsLeft(u), 0, 'auto places the rest'); assert.ok(u.off >= u.dev.start.off + 1, 'keeps manual placement');
-      clearPoints(u); assert.equal(pointsLeft(u), u.dev.pts, 'reset'); } }
+      clearPoints(u); assert.equal(pointsLeft(u), devTotal(u), 'reset'); } }
+  // Coach prestige: winning, NCAA trips and titles raise it; a new hire counts double.
+  assert.equal(coachPrestige(null), 45);
+  const avgC = coachPrestige({ w: 150, l: 150, seasons: 5, ncaa: 2, mcws: 0, titles: 0 }), star = coachPrestige({ w: 230, l: 70, seasons: 5, ncaa: 5, mcws: 3, titles: 2 });
+  assert.ok(avgC >= 45 && avgC <= 55 && star >= 85, `prestige: average ${avgC}, star ${star}`);
+  assert.ok(coachPrestige({ w: 50, l: 10, seasons: 1, ncaa: 1, mcws: 1, titles: 1 }) < star, 'one great season counts for less than a long run');
+  assert.ok(coachBonus(star, true) > coachBonus(star, false) && coachBonus(star, false) > 0 && coachBonus(30, true) < 0);
+  // Hiring the most prestigious coach at a struggling team raises its points.
+  { const res = coachResumes(league), best = Object.keys(res).sort((a, b) => coachPrestige(res[b]) - coachPrestige(res[a]))[0];
+    const weak = withDev.filter(t => t.coachId !== best).sort((a, b) => a.dev.pts - b.dev.pts)[0];
+    const before = devTotal(weak), was = weak.coachId, from = Object.values(d.teams).find(t => t.coachId === best);
+    hireCoach(d.teams, weak.school, best); syncCoachBonus(league);
+    assert.ok(devTotal(weak) > before, `${weak.school} gains points by hiring a big name (${before} -> ${devTotal(weak)})`);
+    assert.ok(weak.dev.coachNew);
+    if (from) assert.equal(from.dev.cb, -1, 'the job he left is open, which costs a point');
+    hireCoach(d.teams, weak.school, was); if (from) hireCoach(d.teams, from.school, best); syncCoachBonus(league);
+    assert.equal(devTotal(weak), before, 'hiring the old coach back restores the points'); }
   const champ = d.teams[s.post.champion];
   const recs = records(s), byWp = withDev.filter(t => recs[t.school]).sort((a, b) => recs[b.school].w / (recs[b.school].w + recs[b.school].l) - recs[a.school].w / (recs[a.school].w + recs[a.school].l));
   const avg = l => l.reduce((n, t) => n + t.dev.pts, 0) / l.length;
