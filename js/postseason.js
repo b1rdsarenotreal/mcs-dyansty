@@ -12,10 +12,10 @@
 //     bracket winners).
 // The format is locked into the season when the field is announced.
 
-import { blankGame, DAY_ORDER } from './schedule.js?v=20261028213424';
-import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, regSeasonChamps, quadrants } from './standings.js?v=20261028213424';
-import { generatePoll } from './polls.js?v=20261028213424';
-import { hashStr } from './util.js?v=20261028213424';
+import { blankGame, DAY_ORDER } from './schedule.js?v=20261030234521';
+import { records, rpi, confStandings, conferences, isFinal, winnerOf, loserOf, regularSeasonDone, regSeasonChamp, regSeasonChamps, quadrants } from './standings.js?v=20261030234521';
+import { generatePoll } from './polls.js?v=20261030234521';
+import { hashStr } from './util.js?v=20261030234521';
 
 // ---------- tournament format ----------
 
@@ -811,6 +811,7 @@ export function lockField(season) {
     id: `reg-${i + 1}`, kind: regionalKind(teams.length), seeds: teams, host: teams[0], nodes: regionalNodes(teams.length), champion: null,
     name: `${siteName(season, teams[0])} Regional`, path: i,
   }));
+  uniqueSiteNames(p.regionals, 'Regional');
   season.phase = 'regionals';
 }
 
@@ -820,10 +821,20 @@ const nationalSeed = (season, t) => season.post.field?.find(f => f.team === t)?.
 // regional pairs with the last host's. The higher national seed hosts.
 function buildSupers(season) {
   const regs = season.post.regionals, n = regs.length;
-  return Array.from({ length: n / 2 }, (_, i) => {
+  return uniqueSiteNames(Array.from({ length: n / 2 }, (_, i) => {
     const pair = [regs[i].champion, regs[n - 1 - i].champion].sort((a, b) => nationalSeed(season, a) - nationalSeed(season, b));
     return { id: `sup-${i + 1}`, kind: 'series', seeds: pair, host: pair[0], nodes: seriesNodes(), champion: null, name: `${siteName(season, pair[0])} Super Regional`, path: i };
-  });
+  }), 'Super Regional');
+}
+// Two hosts in one city (UCLA and Loyola Marymount, say): the second site
+// is named after its school so the names stay different.
+function uniqueSiteNames(events, kind) {
+  const seen = new Set();
+  for (const ev of events) {
+    if (seen.has(ev.name)) ev.name = `${ev.host} ${kind}`;
+    seen.add(ev.name);
+  }
+  return events;
 }
 
 // Teams reaching the MCWS, in bracket-path order (path k = national seed k+1's side).

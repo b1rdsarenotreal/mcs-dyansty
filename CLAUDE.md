@@ -12,21 +12,18 @@ This app has a twin: **SACAA Dynasty** ([b1rdsarenotreal/sacaa-dynasty](https://
 
 These stay different on purpose. Never copy them across:
 
-(Shared code that is written to handle independents, such as the `rival()` check in `js/schedule.js`, is MCS-only too; when porting schedule changes to SACAA, port them without the independent handling.)
-
 | | MCS Dynasty | SACAA Dynasty |
 |---|---|---|
 | Teams, conferences, coaches, colors, ratings, start year (`js/data.js`) | 45 teams, 6 conferences, 2016 | 56 teams, 7 conferences, 2030 |
 | Championship name | Men's College World Series (MCWS) | National Championships (no abbreviation) |
 | Default venue | Firestone Stadium, Akron, Ohio | Devon Park, Oklahoma City, Oklahoma |
+| Home fields (`SITES` in `js/data.js`: each school's stadium and city) | MCS schools | SACAA schools |
 | Save and logo-cache keys (`js/store.js`, `js/logos.js`) | `mcs-dynasty`, `mcs-logo-table-v1` | `sacaa-dynasty`, `sacaa-logo-table-v1` |
 | Team and conference names used in `tests/` | MCS teams (Oklahoma, Big Ten, ...) | SACAA teams (UCLA, Pac-10, ...) |
 | README sections "The league" and "Ratings" (how starting ratings were made) | | |
-| Postseason column in team and coach histories | Regional name and round lost, linked to the bracket (`postseasonDetail`, `#/postseason/<year>/<tab>/<event>` route, `evAnchor` ids), plus a second line with the NCAA W-L and conference tournament W-L and round (`postseasonRecord`). The owner asked for the records line in MCS only. | Regional name and round lost, linked to the bracket (`postseasonDetail`). No records line. |
 | Color palette (the `:root` tokens at the top of `css/styles.css`, stat-band label colors, active tabs) | Night-game navy top bar | Lighter sky blue top bar (`--board: #2c71c7`), sky-tinted background. The owner asked for this in SACAA only. |
-| Independent teams (`INDEPENDENT` in `js/standings.js`, the Independents standings card, offseason/conference-page guards) | Supported: teams can be Independent (no conference games, title, tournament or automatic bid) | Not added. The owner asked for independents in MCS only. |
-| Home fields (`SITES` and `fillSite` in `js/data.js`, `gameVenue` in `js/postseason.js`, stadium and city on team pages, schedule rows, game details, host lines and the team forms; regionals and super regionals named after the host city via `siteName` and `citySiteNames` in `js/postseason.js`; regional midweek pairing via `js/geo.js` and `nearPairs` in `js/schedule.js`, which needs the cities) | Every team has a stadium and city, and NCAA sites are named after the host city (East Lansing Regional). The owner asked for this in MCS only for now. | Not added yet. |
-| Team page, season tab layout (`renderTeamPage`, `.team-season` / `.team-ratings` CSS, `teamScheduleRows` / `gameDate` and the `.ts-*` CSS) | Full-width season card, then full-width Ratings, then Schedule & results as athletics-site rows (date block, logos, vs./at, location, result; event header bars), then Poll history. The owner asked for this in MCS only. | Ratings and season cards side by side, Poll history above the schedule (a plain table) |
+
+Everything else is shared, including independents, home fields and city-named NCAA sites, regional midweek pairing (`js/geo.js`, whose city table covers both leagues' home cities), the team page layout and the postseason records line. As of the October 2026 sync, the two apps' engine files differ only in the user-visible wording above.
 
 Internal identifiers such as `mcws`, `mcwsVenue` and `mcwsName` are shared by both apps. Keep them the same so code ports cleanly. Only text the user sees differs.
 
